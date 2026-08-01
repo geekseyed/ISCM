@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35806.99 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{C3305D52-D9D9-49EF-83F3-AC7A5673BE78}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{4D6B2D6C-C1F0-4D24-B5E4-6B2EE9CAABF6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISCM.Domain", "ISCM.Domain\ISCM.Domain.csproj", "{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F87C0E22-3C00-4127-BD8A-FB395884257C}
+	EndGlobalSection
+EndGlobal
