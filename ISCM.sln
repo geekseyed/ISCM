@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISCM.Domain", "ISCM.Domain\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISCM.Application", "ISCM.Application\ISCM.Application.csproj", "{7D32197C-DD34-4CB1-8BE3-4E2C22D1EB59}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ISCM.Infrastructure", "ISCM.Infrastructure\ISCM.Infrastructure.csproj", "{DF173B7C-B0EE-4BF5-8804-C58E5B847091}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{7D32197C-DD34-4CB1-8BE3-4E2C22D1EB59}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7D32197C-DD34-4CB1-8BE3-4E2C22D1EB59}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7D32197C-DD34-4CB1-8BE3-4E2C22D1EB59}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF173B7C-B0EE-4BF5-8804-C58E5B847091}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF173B7C-B0EE-4BF5-8804-C58E5B847091}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF173B7C-B0EE-4BF5-8804-C58E5B847091}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF173B7C-B0EE-4BF5-8804-C58E5B847091}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -34,6 +40,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{DD1EA1E0-907B-4E1F-BCDD-911ACCCEF126} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 		{7D32197C-DD34-4CB1-8BE3-4E2C22D1EB59} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{DF173B7C-B0EE-4BF5-8804-C58E5B847091} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {F87C0E22-3C00-4127-BD8A-FB395884257C}
