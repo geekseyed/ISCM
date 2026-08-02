@@ -1,8 +1,9 @@
-﻿using System;
+﻿using ISCM.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading.Tasks;   
 
 namespace ISCM.Domain.Entities;
 
@@ -12,7 +13,7 @@ public class Asset
 
     public string Name { get; set; } = string.Empty;
 
-    public string Type { get; set; } = string.Empty;
+    public AssetType Type { get; set; }
 
     public string OperatingSystem { get; set; } = string.Empty;
 
