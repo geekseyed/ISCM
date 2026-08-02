@@ -1,25 +1,37 @@
-﻿using ISCM.Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;   
+﻿using ISCM.Domain.Common;
+using ISCM.Domain.Enums;
 
 namespace ISCM.Domain.Entities;
 
-public class Asset
+public class Asset : BaseEntity
 {
-    public Guid Id { get; set; }
+    public string Name { get; private set; } = string.Empty;
 
-    public string Name { get; set; } = string.Empty;
+    public AssetType Type { get; private set; }
 
-    public AssetType Type { get; set; }
+    public string OperatingSystem { get; private set; } = string.Empty;
 
-    public string OperatingSystem { get; set; } = string.Empty;
+    public string IPAddress { get; private set; } = string.Empty;
 
-    public string IPAddress { get; set; } = string.Empty;
+    public string Location { get; private set; } = string.Empty;
 
-    public string Location { get; set; } = string.Empty;
 
-    public DateTime CreatedAt { get; set; }
+    private Asset()
+    {
+    }
+
+
+    public Asset(
+        string name,
+        AssetType type,
+        string operatingSystem,
+        string ipAddress,
+        string location)
+    {
+        Name = name;
+        Type = type;
+        OperatingSystem = operatingSystem;
+        IPAddress = ipAddress;
+        Location = location;
+    }
 }
