@@ -1,6 +1,8 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
+
 namespace ISCM.Infrastructure.Reporting;
 
 public class HtmlReportGenerator : IReportService
@@ -13,40 +15,38 @@ public class HtmlReportGenerator : IReportService
         string fileName = $"DefenDoor_Report_{safeHostname}_{timestamp}.html";
 
         // ۲. ترکیب مسیر پوشه با نام فایل
-        // اگر پوشه وجود نداشت، آن را می‌سازد
         Directory.CreateDirectory(outputDirectory);
         string filePath = Path.Combine(outputDirectory, fileName);
 
-        // ۳. ساخت محتوای HTML (با استفاده از C# Raw String Literals در دات‌نت ۸)
-        string htmlContent = $"""
+        // ۳. ساخت محتوای HTML (با استفاده از $$ برای جلوگیری از تداخل با CSS)
+        string htmlContent = $$"""
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
-                <title>DefenDoor Scan Report - 
-        {scanResult.Hostname}</title>
+                <title>DefenDoor Scan Report - {{scanResult.Hostname}}</title>
                 <style>
-                    body {{font - family: Arial, sans-serif; background: #f4f7f6; padding: 20px; }}
-                    .container {{background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
-                    h1 {{color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
-                    .info {{margin - bottom: 20px; font-size: 16px; }}
-                    .info span {{font - weight: bold; color: #2c3e50; }}
-                    table {{width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                    th {{background: #34495e; color: white; padding: 10px; text-align: left; }}
-                    td {{padding: 10px; border-bottom: 1px solid #ddd; }}
-                    .pass {{color: #27ae60; font-weight: bold; }}
-                    .fail {{color: #e74c3c; font-weight: bold; }}
-                    .error {{color: #f39c12; font-weight: bold; }}
+                    body { font-family: Arial, sans-serif; background: #f4f7f6; padding: 20px; }
+                    .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                    h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+                    .info { margin-bottom: 20px; font-size: 16px; }
+                    .info span { font-weight: bold; color: #2c3e50; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th { background: #34495e; color: white; padding: 10px; text-align: left; }
+                    td { padding: 10px; border-bottom: 1px solid #ddd; }
+                    .pass { color: #27ae60; font-weight: bold; }
+                    .fail { color: #e74c3c; font-weight: bold; }
+                    .error { color: #f39c12; font-weight: bold; }
                 </style>
             </head>
             <body>
                 <div class="container">
                     <h1>DefenDoor Security Compliance Report</h1>
-                    <div class="info"><span>Hostname:</span> {scanResult.Hostname}</div>
-                    <div class="info"><span>IP Address:</span> {scanResult.IpAddress}</div>
-                    <div class="info"><span>OS Version:</span> {scanResult.OsVersion}</div>
-                    <div class="info"><span>Scan Date:</span> {scanResult.StartedAtUtc.LocalDateTime}</div>
-                    <div class="info"><span>Compliance Score:</span> {scanResult.ComplianceScore}% (Grade: {scanResult.Grade})</div>
+                    <div class="info"><span>Hostname:</span> {{scanResult.Hostname}}</div>
+                    <div class="info"><span>IP Address:</span> {{scanResult.IpAddress}}</div>
+                    <div class="info"><span>OS Version:</span> {{scanResult.OsVersion}}</div>
+                    <div class="info"><span>Scan Date:</span> {{scanResult.StartedAtUtc.LocalDateTime}}</div>
+                    <div class="info"><span>Compliance Score:</span> {{scanResult.ComplianceScore}}% (Grade: {{scanResult.Grade}})</div>
 
                     <h2>Findings</h2>
                     <table>
@@ -66,13 +66,13 @@ public class HtmlReportGenerator : IReportService
         foreach (var finding in scanResult.Findings)
         {
             string cssClass = finding.Status.ToString().ToLower();
-            htmlContent += $"""
+            htmlContent += $$"""
                             <tr>
-                                <td>{finding.CheckId}</td>
-                                <td>{finding.Name}</td>
-                                <td>{finding.CurrentValue}</td>
-                                <td>{finding.ExpectedValue}</td>
-                                <td class="{cssClass}">{finding.Status}</td>
+                                <td>{{finding.CheckId}}</td>
+                                <td>{{finding.Name}}</td>
+                                <td>{{finding.CurrentValue}}</td>
+                                <td>{{finding.ExpectedValue}}</td>
+                                <td class="{{cssClass}}">{{finding.Status}}</td>
                             </tr>
             """;
         }
@@ -85,10 +85,10 @@ public class HtmlReportGenerator : IReportService
             </html>
             """;
 
-        // ۵. ذخیره فایل روی دیسک (به صورت Async)
+        // ۵. ذخیره فایل روی دیسک
         await File.WriteAllTextAsync(filePath, htmlContent, Encoding.UTF8);
 
-        // ۶. برگرداندن مسیر فایل ساخته شده
+        // ۶. برگرداندن مسیر فایل
         return filePath;
     }
 }
