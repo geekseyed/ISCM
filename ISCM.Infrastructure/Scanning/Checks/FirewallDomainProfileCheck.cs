@@ -35,7 +35,7 @@ public class FirewallDomainProfileCheck : IHardeningCheck
                 if (registryValue != null)
                 {
                     // در رجیستری، 1 یعنی روشن، 0 یعنی خاموش
-                    bool is Enabled = registryValue.ToString() == "1";
+                    bool isEnabled = registryValue.ToString() == "1";
                     currentValue = isEnabled ? "Enabled" : "Disabled";
 
                     // مقایسه با استاندارد ما (باید روشن باشد)
@@ -75,4 +75,4 @@ public class FirewallDomainProfileCheck : IHardeningCheck
 
         return Task.FromResult(finding);
     }
-}}
+}
