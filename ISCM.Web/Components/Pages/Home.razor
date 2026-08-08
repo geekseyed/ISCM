@@ -3,6 +3,7 @@
 @using ISCM.Domain.Entities
 @using ISCM.Domain.Enums
 @inject IScanService ScanService
+@inject IReportService ReportService
 
 <PageTitle>DefenDoor Real Scanner Test</PageTitle>
 
@@ -61,6 +62,18 @@
                     }
                 </tbody>
             </table>
+
+            <hr style="margin-top: 30px;" />
+            <button @onclick="ExportReportAsync" disabled="@_isScanning" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 5px;">
+                Export Report to Disk
+            </button>
+
+            @if (_reportPath != null)
+            {
+                <div style="color: green; margin-top: 20px; font-weight: bold;">
+                    Report saved successfully at: @_reportPath
+                </div>
+            }
         </div>
     }
 </div>
@@ -69,6 +82,7 @@
     private ScanResult? _scanResult;
     private bool _isScanning;
     private string? _errorMessage;
+    private string? _reportPath;
 
     private async Task StartScanAsync()
     {
@@ -86,6 +100,31 @@
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isScanning = false;
+        }
+    }
+
+    private async Task ExportReportAsync()
+    {
+        if (_scanResult == null) return;
+
+        try
+        {
+            _isScanning = true; // استفاده مجدد از همون وضعیت برای غیرفعال کردن دکمه
+            StateHasChanged();
+
+            // مسیر ذخیره سازی: فعلاً پوشه Documents سیستم
+            string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "DefenDoorReports");
+
+            // تولید و ذخیره فایل
+            _reportPath = await ReportService.GenerateAndSaveReportAsync(_scanResult, outputDir);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save report: {ex.Message}";
         }
         finally
         {
