@@ -1,4 +1,5 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Infrastructure.Reporting;
 using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -18,6 +19,9 @@ builder.Services.AddTransient<IHardeningCheck, FirewallDomainProfileCheck>();
 
 // ۳. ثبت اسکنر اصلی
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
+
+// ۴. ثبت سیستم تولید گزارش (جدید)
+builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 
 var app = builder.Build();
 
