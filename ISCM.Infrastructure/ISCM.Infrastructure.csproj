@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Repositories\" />
     <Folder Include="Storage\" />
     <Folder Include="Persistence\" />
   </ItemGroup>
