@@ -1,7 +1,95 @@
 ﻿@page "/"
+@using ISCM.Application.Interfaces
+@using ISCM.Domain.Entities
+@using ISCM.Domain.Enums
+@inject IScanService ScanService
 
-<PageTitle>Home</PageTitle>
+<PageTitle>DefenDoor Real Scanner Test</PageTitle>
 
-<h1>Hello, world!</h1>
+<div style="padding: 40px; font-family: Tahoma; direction: ltr; text-align: left;">
+    <h1>DefenDoor Real Scanner Test</h1>
+    <p>This is a temporary UI to prove the scanner reads real Windows data.</p>
 
-Welcome to your new app.
+    <hr />
+
+    <button @onclick="StartScanAsync" disabled="@_isScanning" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00b4d8; color: white; border: none; border-radius: 5px;">
+        @if (_isScanning)
+        {
+            <text>Scanning...</text>
+        }
+        else
+        {
+            <text>Start Real Scan</text>
+        }
+    </button>
+
+    @if (_errorMessage != null)
+    {
+        <div style="color: red; margin-top: 20px;"><strong>Error:</strong> @_errorMessage</div>
+    }
+
+    @if (_scanResult != null)
+    {
+        <div style="margin-top: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6;">
+            <h2>Scan Result (Real Data)</h2>
+            <p><strong>Hostname:</strong> @_scanResult.Hostname</p>
+            <p><strong>IP Address:</strong> @_scanResult.IpAddress</p>
+            <p><strong>OS Version:</strong> @_scanResult.OsVersion</p>
+            <p><strong>Compliance Score:</strong> @_scanResult.ComplianceScore% (Grade: @_scanResult.Grade)</p>
+
+            <h3>Findings:</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                <thead>
+                    <tr style="background: #343a40; color: white;">
+                        <th style="padding: 10px; text-align: left;">Check ID</th>
+                        <th style="padding: 10px; text-align: left;">Name</th>
+                        <th style="padding: 10px; text-align: left;">Current Value</th>
+                        <th style="padding: 10px; text-align: left;">Expected</th>
+                        <th style="padding: 10px; text-align: left;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var finding in _scanResult.Findings)
+                    {
+                        <tr style="border-bottom: 1px solid #dee2e6;">
+                            <td style="padding: 10px;">@finding.CheckId</td>
+                            <td style="padding: 10px;">@finding.Name</td>
+                            <td style="padding: 10px; color: @(finding.Status == CheckStatus.Fail ? "red" : "green")">@finding.CurrentValue</td>
+                            <td style="padding: 10px;">@finding.ExpectedValue</td>
+                            <td style="padding: 10px; font-weight: bold;">@finding.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private ScanResult? _scanResult;
+    private bool _isScanning;
+    private string? _errorMessage;
+
+    private async Task StartScanAsync()
+    {
+        if (_isScanning) return;
+
+        try
+        {
+            _isScanning = true;
+            _errorMessage = null;
+            StateHasChanged(); // به UI می‌گوییم دکمه را Disable کند
+
+            // فراخوانی اسکنر واقعی ویندوز
+            _scanResult = await ScanService.RunScanAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isScanning = false;
+        }
+    }
+}
