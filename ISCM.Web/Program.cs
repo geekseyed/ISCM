@@ -16,11 +16,13 @@ builder.Services.AddSingleton<WindowsSystemInfoCollector>();
 
 // ۲. ثبت چک‌های امنیتی (هر چکی که ساختیم را اینجا اضافه می‌کنیم)
 builder.Services.AddTransient<IHardeningCheck, FirewallDomainProfileCheck>();
+builder.Services.AddTransient<IHardeningCheck, SmbV1ProtocolCheck>();
+builder.Services.AddTransient<IHardeningCheck, AutoRunDisabledCheck>();
 
 // ۳. ثبت اسکنر اصلی
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 
-// ۴. ثبت سیستم تولید گزارش (جدید)
+// ۴. ثبت سیستم تولید گزارش
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 
 var app = builder.Build();
