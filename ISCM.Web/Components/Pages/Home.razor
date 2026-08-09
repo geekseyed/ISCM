@@ -143,8 +143,15 @@
         border-radius: 4px;
     }
 
+    .status-ignored {
+        color: #94a3b8;
+        font-weight: bold;
+        background: rgba(148, 163, 184, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
     .btn-export {
-        background: #10b981;
         border: none;
         padding: 10px 20px;
         color: white;
@@ -246,17 +253,29 @@
                 </div>
             </div>
 
-            @* جایگزینی جدول طولانی با کامپوننت اختصاصی ما *@
             <FindingsTable Findings="@_scanResult.Findings" />
 
-            <button class="btn-export" @onclick="ExportReportAsync" disabled="@_isScanning">
-                📄 Export HTML Report
-            </button>
+            <div style="margin-top: 20px; display: flex; gap: 15px;">
+                <button class="btn-export" @onclick="ExportReportAsync" disabled="@_isScanning" style="background: #10b981;">
+                    📄 Export HTML Report
+                </button>
+
+                <button class="btn-export" @onclick="ExportJsonReportAsync" disabled="@_isScanning" style="background: #f59e0b;">
+                    📊 Export JSON Report
+                </button>
+            </div>
 
             @if (_reportPath != null)
             {
                 <div style="color: #10b981; margin-top: 15px; font-size: 14px;">
-                    ✅ Report saved successfully at: @_reportPath
+                    ✅ HTML Report saved successfully at: @_reportPath
+                </div>
+            }
+
+            @if (_jsonReportPath != null)
+            {
+                <div style="color: #f59e0b; margin-top: 10px; font-size: 14px;">
+                    ✅ JSON Report saved at: @_jsonReportPath
                 </div>
             }
         }
@@ -268,6 +287,7 @@
     private bool _isScanning;
     private string? _errorMessage;
     private string? _reportPath;
+    private string? _jsonReportPath;
     private string? _currentScanStatus;
 
     private async Task StartScanAsync()
@@ -279,6 +299,7 @@
             _isScanning = true;
             _errorMessage = null;
             _reportPath = null;
+            _jsonReportPath = null;
             _scanResult = null;
             _currentScanStatus = "Starting...";
             StateHasChanged();
@@ -317,7 +338,30 @@
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Failed to save report: {ex.Message}";
+            _errorMessage = $"Failed to save HTML report: {ex.Message}";
+        }
+        finally
+        {
+            _isScanning = false;
+        }
+    }
+
+    private async Task ExportJsonReportAsync()
+    {
+        if (_scanResult == null) return;
+
+        try
+        {
+            _isScanning = true;
+            StateHasChanged();
+
+            // ذخیره گزارش در مسیر اجرای نرم‌افزار (برای فلش)
+            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
+            _jsonReportPath = await ReportService.GenerateAndSaveJsonReportAsync(_scanResult, outputDir);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save JSON report: {ex.Message}";
         }
         finally
         {
