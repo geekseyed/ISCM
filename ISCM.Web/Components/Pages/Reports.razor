@@ -1,5 +1,9 @@
 ﻿@page "/reports"
 @rendermode InteractiveServer
+@using ISCM.Application.Interfaces
+@using ISCM.Web.Services
+@inject IReportService ReportService
+@inject ScanStateService StateService
 
 <PageTitle>DefenDoor - Reports</PageTitle>
 
@@ -12,11 +16,187 @@
         padding: 30px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     }
+
+    .summary-card {
+        background: #0f172a;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid #06b6d4;
+    }
+
+    .summary-label {
+        color: #94a3b8;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+
+    .summary-value {
+        color: #e2e8f0;
+        font-weight: bold;
+        font-size: 18px;
+        margin-top: 5px;
+    }
+
+    .btn-export {
+        border: none;
+        padding: 12px 25px;
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.3s;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+        .btn-export:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+    .loading-spinner {
+        border: 3px solid #334155;
+        border-top: 3px solid #fff;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
 </style>
 
 <div class="glass-panel">
-    <h2 style="color:#e2e8f0;">Reports & Export</h2>
-    <p style="color:#94a3b8; margin-top:20px;">
-        This section will contain the HTML and JSON export buttons in the next step.
-    </p>
+    <h2 style="color:#e2e8f0; margin-bottom:20px;">Reports & Export Center</h2>
+
+    @if (StateService.CurrentScanResult == null)
+    {
+        <p style="color:#94a3b8; text-align:center; padding:40px;">
+            No scan data available for reporting. <br /> Please go to <a href="/" style="color:#06b6d4;">Dashboard</a> and run a scan first.
+        </p>
+    }
+    else
+    {
+        var result = StateService.CurrentScanResult;
+
+        <div class="summary-card">
+            <div style="display: flex; justify-content: space-between;">
+                <div>
+                    <div class="summary-label">Target Hostname</div>
+                    <div class="summary-value">@result.Hostname</div>
+                </div>
+                <div>
+                    <div class="summary-label">IP Address</div>
+                    <div class="summary-value">@result.IpAddress</div>
+                </div>
+                <div>
+                    <div class="summary-label">Scan Date</div>
+                    <div class="summary-value">@result.StartedAtUtc.LocalDateTime.ToString("g")</div>
+                </div>
+                <div>
+                    <div class="summary-label">Compliance Score</div>
+                    <div class="summary-value" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore% (Grade @result.Grade)</div>
+                </div>
+            </div>
+        </div>
+
+        <p style="color:#94a3b8; margin-bottom:15px;">
+            Select an export format below. The report will be saved in the <strong style="color:#e2e8f0;">Reports</strong> folder next to the application (e.g., on your USB flash drive).
+        </p>
+
+        <div style="display: flex; gap: 20px; margin-top: 30px;">
+            <button class="btn-export" @onclick="ExportHtmlAsync" disabled="@_isExporting" style="background: #10b981;">
+                @if (_isExporting && _exportType == "HTML")
+                {
+                    <div class="loading-spinner"></div>
+                    <span>Generating HTML...</span>
+                }
+                else
+                {
+                    <span>📄 Export HTML Report</span>
+                }
+            </button>
+
+            <button class="btn-export" @onclick="ExportJsonAsync" disabled="@_isExporting" style="background: #f59e0b;">
+                @if (_isExporting && _exportType == "JSON")
+                {
+                    <div class="loading-spinner"></div>
+                    <span>Generating JSON...</span>
+                }
+                else
+                {
+                    <span>📊 Export JSON Report</span>
+                }
+            </button>
+        </div>
+
+        @if (_errorMessage != null)
+        {
+            <div style="color: #ef4444; margin-top: 20px;">⚠️ @_errorMessage</div>
+        }
+
+        @if (_savedFilePath != null)
+        {
+            <div style="color: #10b981; margin-top: 20px; background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 8px;">
+                ✅ <strong>Success!</strong> Report saved successfully at:<br />
+                <code style="color: #06b6d4; word-break: break-all;">@_savedFilePath</code>
+            </div>
+        }
+    }
 </div>
+
+@code {
+    private bool _isExporting;
+    private string? _exportType;
+    private string? _savedFilePath;
+    private string? _errorMessage;
+
+    private async Task ExportHtmlAsync()
+    {
+        await ExecuteExportAsync("HTML", ReportService.GenerateAndSaveReportAsync);
+    }
+
+    private async Task ExportJsonAsync()
+    {
+        await ExecuteExportAsync("JSON", ReportService.GenerateAndSaveJsonReportAsync);
+    }
+
+    // یک متد عمومی برای جلوگیری از تکرار کد (DRY Principle)
+    private async Task ExecuteExportAsync(string type, Func<ISCM.Domain.Entities.ScanResult, string, Task<string>> exportMethod)
+    {
+        if (StateService.CurrentScanResult == null) return;
+
+        try
+        {
+            _isExporting = true;
+            _exportType = type;
+            _errorMessage = null;
+            _savedFilePath = null;
+            StateHasChanged();
+
+            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
+            _savedFilePath = await exportMethod(StateService.CurrentScanResult, outputDir);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save {type} report: {ex.Message}";
+        }
+        finally
+        {
+            _isExporting = false;
+            _exportType = null;
+        }
+    }
+}
