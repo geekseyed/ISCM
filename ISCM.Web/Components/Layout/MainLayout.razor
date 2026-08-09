@@ -1,9 +1,72 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<style>
+    body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        margin: 0;
+        padding: 0;
+    }
 
-<div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
+    .top-nav {
+        background-color: #111827;
+        padding: 10px 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #334155;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    .nav-brand {
+        font-weight: bold;
+        color: #06b6d4;
+        text-shadow: 0 0 5px #06b6d4;
+        font-size: 20px;
+    }
+
+    .nav-links {
+        display: flex;
+        gap: 20px;
+    }
+
+    .nav-link {
+        color: #94a3b8;
+        text-decoration: none;
+        padding: 8px 15px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: 0.2s;
+    }
+
+        .nav-link:hover {
+            color: #e2e8f0;
+            background-color: #1e293b;
+        }
+
+        .nav-link.active {
+            color: #06b6d4;
+            background-color: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+    .main-content {
+        max-width: 1200px;
+        margin: 30px auto;
+        padding: 0 20px;
+    }
+</style>
+
+<div class="top-nav">
+    <div class="nav-brand">🛡️ DefenDoor</div>
+    <div class="nav-links">
+        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+        <NavLink class="nav-link" href="/findings">Findings</NavLink>
+        <NavLink class="nav-link" href="/reports">Reports</NavLink>
+    </div>
+</div>
+
+<div class="main-content">
+    @Body
 </div>
