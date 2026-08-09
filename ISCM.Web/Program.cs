@@ -35,6 +35,11 @@ builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 
 // ۵. ثبت سرویس اشتراک وضعیت اسکن (جدید)
 builder.Services.AddScoped<ScanStateService>();
+// 6. ثبت سرویس اشتراک وضعیت اسکن
+builder.Services.AddScoped<ScanStateService>();
+
+// 7. ثبت سرویس تاریخچه اسکن
+builder.Services.AddScoped<ScanHistoryService>();
 
 var app = builder.Build();
 
