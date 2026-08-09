@@ -1,0 +1,36 @@
+﻿@using ISCM.Domain.Entities
+@using ISCM.Domain.Enums
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+    <thead>
+        <tr>
+            <th style="text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155;">Check ID</th>
+            <th style="text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155;">Name</th>
+            <th style="text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155;">Current</th>
+            <th style="text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155;">Expected</th>
+            <th style="text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155;">Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var finding in Findings)
+        {
+            <tr>
+                <td style="color: #64748b; font-family: monospace; padding: 12px; border-bottom: 1px solid #334155;">@finding.CheckId</td>
+                <td style="padding: 12px; border-bottom: 1px solid #334155;">@finding.Name</td>
+                <td style="color: @(finding.Status == CheckStatus.Fail ? "#ef4444" : "#e2e8f0"); padding: 12px; border-bottom: 1px solid #334155;">@finding.CurrentValue</td>
+                <td style="color: #94a3b8; padding: 12px; border-bottom: 1px solid #334155;">@finding.ExpectedValue</td>
+                <td style="padding: 12px; border-bottom: 1px solid #334155;">
+                    <span class="status-@finding.Status.ToString().ToLower()" style="padding: 4px 8px; border-radius: 4px; font-weight: bold;">
+                        @finding.Status
+                    </span>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    // این کامپوننت یک لیست از نتایج را به عنوان ورودی (Parameter) می‌گیرد
+    [Parameter]
+    public IReadOnlyCollection<Finding> Findings { get; set; } = new List<Finding>();
+}
