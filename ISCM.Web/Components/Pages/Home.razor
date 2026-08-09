@@ -99,7 +99,6 @@
         font-family: monospace;
     }
 
-    /* استایل‌های جدول که توسط کامپوننت FindingsTable استفاده می‌شوند */
     table {
         width: 100%;
         border-collapse: collapse;
@@ -185,7 +184,6 @@
 </style>
 
 <div class="dashboard-container">
-
     <div class="header">
         <svg width="60" height="60" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 10px #06b6d4);">
             <path d="M50 5 L90 20 V50 C90 75 70 90 50 95 C30 90 10 75 10 50 V20 Z" fill="rgba(15, 23, 42, 0.8)" stroke="#06b6d4" stroke-width="3" />
@@ -196,7 +194,6 @@
     </div>
 
     <div class="glass-panel">
-
         <div style="text-align: center; margin-bottom: 30px;">
             <button class="btn-scan" @onclick="StartScanAsync" disabled="@_isScanning">
                 @if (_isScanning)
@@ -293,7 +290,6 @@
     private async Task StartScanAsync()
     {
         if (_isScanning) return;
-
         try
         {
             _isScanning = true;
@@ -326,13 +322,10 @@
     private async Task ExportReportAsync()
     {
         if (_scanResult == null) return;
-
         try
         {
             _isScanning = true;
             StateHasChanged();
-
-            // ذخیره گزارش در مسیر اجرای نرم‌افزار (برای فلش)
             string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
             _reportPath = await ReportService.GenerateAndSaveReportAsync(_scanResult, outputDir);
         }
@@ -349,13 +342,10 @@
     private async Task ExportJsonReportAsync()
     {
         if (_scanResult == null) return;
-
         try
         {
             _isScanning = true;
             StateHasChanged();
-
-            // ذخیره گزارش در مسیر اجرای نرم‌افزار (برای فلش)
             string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
             _jsonReportPath = await ReportService.GenerateAndSaveJsonReportAsync(_scanResult, outputDir);
         }
