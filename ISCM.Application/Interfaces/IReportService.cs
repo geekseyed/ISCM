@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 using ISCM.Domain.Entities;
 
 namespace ISCM.Application.Interfaces;
-
 public interface IReportService
 {
-    // این متد مسیر فایل ذخیره شده را برمی‌گرداند
+    // متد تولید گزارش HTML
     Task<string> GenerateAndSaveReportAsync(ScanResult scanResult, string outputDirectory);
+
+    // متد جدید: تولید گزارش JSON
+    Task<string> GenerateAndSaveJsonReportAsync(ScanResult scanResult, string outputDirectory);
 }
