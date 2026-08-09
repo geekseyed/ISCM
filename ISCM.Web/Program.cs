@@ -4,6 +4,7 @@ using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
 using ISCM.Infrastructure.Scanning.Collectors;
 using ISCM.Web.Components;
+using ISCM.Web.Services; // اضافه شد
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,19 +15,14 @@ builder.Services.AddRazorComponents()
 // ۱. ثبت Collector اطلاعات سیستم
 builder.Services.AddSingleton<WindowsSystemInfoCollector>();
 
-// ۲. ثبت چک‌های امنیتی (هر چکی که ساختیم را اینجا اضافه می‌کنیم)
+// ۲. ثبت چک‌های امنیتی
 builder.Services.AddTransient<IHardeningCheck, FirewallDomainProfileCheck>();
 builder.Services.AddTransient<IHardeningCheck, SmbV1ProtocolCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoRunDisabledCheck>();
-
-
-//   افزودن چهار چک لیست جدید  :
 builder.Services.AddTransient<IHardeningCheck, WindowsDefenderCheck>();
 builder.Services.AddTransient<IHardeningCheck, GuestAccountCheck>();
 builder.Services.AddTransient<IHardeningCheck, UacCheck>();
 builder.Services.AddTransient<IHardeningCheck, UsbStorageCheck>();
-
-// گام دهم : افزودن چک لیست جدید برای بررسی وضعیت بروزرسانی ویندوز و فعال بودن سرویس Windows Update 
 builder.Services.AddTransient<IHardeningCheck, WindowsUpdateCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoLogonCheck>();
 builder.Services.AddTransient<IHardeningCheck, RdpNlaCheck>();
@@ -36,6 +32,9 @@ builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 
 // ۴. ثبت سیستم تولید گزارش
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
+
+// ۵. ثبت سرویس اشتراک وضعیت اسکن (جدید)
+builder.Services.AddScoped<ScanStateService>();
 
 var app = builder.Build();
 
