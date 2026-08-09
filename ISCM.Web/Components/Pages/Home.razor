@@ -44,31 +44,70 @@
             transform: none;
         }
 
-    .info-grid {
+    .score-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        background: #0f172a;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #334155;
+    }
+
+    /* استایل‌های کارت‌های دسته‌بندی */
+    .category-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 20px;
-        margin: 30px 0;
+        margin-top: 30px;
     }
 
-    .info-card {
-        background: rgba(15, 23, 42, 0.6);
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #06b6d4;
+    .category-card {
+        background: rgba(15, 23, 42, 0.8);
+        padding: 20px;
+        border-radius: 12px;
+        border-top: 4px solid #06b6d4;
+        text-align: center;
+        transition: 0.3s;
     }
 
-    .info-label {
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .category-card.fail {
+            border-top-color: #ef4444;
+        }
+
+        .category-card.pass {
+            border-top-color: #10b981;
+        }
+
+    .category-title {
         color: #94a3b8;
-        font-size: 12px;
-        margin-bottom: 5px;
+        font-size: 14px;
+        margin-bottom: 10px;
         text-transform: uppercase;
+        font-weight: bold;
     }
 
-    .info-value {
-        color: #e2e8f0;
+    .category-stats {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        font-size: 13px;
+    }
+
+    .stat-pass {
+        color: #10b981;
         font-weight: bold;
-        font-family: monospace;
+    }
+
+    .stat-fail {
+        color: #ef4444;
+        font-weight: bold;
     }
 
     .loading-spinner {
@@ -125,35 +164,39 @@
     @if (StateService.CurrentScanResult != null)
     {
         var result = StateService.CurrentScanResult;
-        <div class="info-grid">
-            <div class="info-card">
-                <div class="info-label">Hostname</div>
-                <div class="info-value">@result.Hostname</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">IP Address</div>
-                <div class="info-value">@result.IpAddress</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">OS Version</div>
-                <div class="info-value" style="font-size: 12px;">@result.OsVersion</div>
-            </div>
-        </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px;">
+        <div class="score-container">
             <div>
                 <span style="font-size: 14px; color: #94a3b8;">Compliance Score:</span>
-                <span style="font-size: 32px; font-weight: bold; color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444"); margin-left: 10px;">@result.ComplianceScore%</span>
-                <span style="font-size: 20px; color: #06b6d4; margin-left: 10px;">(Grade @result.Grade)</span>
+                <span style="font-size: 36px; font-weight: bold; color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444"); margin-left: 10px;">@result.ComplianceScore%</span>
+                <span style="font-size: 24px; color: #06b6d4; margin-left: 10px;">(Grade @result.Grade)</span>
             </div>
-            <div>
-                <span style="color: #10b981; font-weight: bold; margin-right: 10px;">PASS: @result.PassCount</span>
-                <span style="color: #ef4444; font-weight: bold; margin-right: 10px;">FAIL: @result.FailCount</span>
+            <div style="display: flex; gap: 20px; font-size: 16px;">
+                <span class="stat-pass">PASS: @result.PassCount</span>
+                <span class="stat-fail">FAIL: @result.FailCount</span>
                 <span style="color: #f59e0b; font-weight: bold;">WARN: @result.WarningCount</span>
             </div>
         </div>
 
-        <p style="text-align:center; color:#94a3b8; margin-top:20px;">
+        <!-- بخش کارت‌های دسته‌بندی (Category Breakdown) -->
+        <h3 style="color: #e2e8f0; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 10px;">Category Breakdown</h3>
+        <div class="category-grid">
+            @foreach (var group in CategoryBreakdown)
+            {
+                var hasFail = group.FailCount > 0;
+                var cardClass = hasFail ? "fail" : "pass";
+
+                <div class="category-card @cardClass">
+                    <div class="category-title">@group.Category</div>
+                    <div class="category-stats">
+                        <span class="stat-pass">@group.PassCount Pass</span>
+                        <span class="stat-fail">@group.FailCount Fail</span>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <p style="text-align:center; color:#94a3b8; margin-top:30px;">
             Go to the <a href="/findings" style="color:#06b6d4; text-decoration:none; font-weight:bold;">Findings</a> tab to see detailed results.
         </p>
     }
@@ -164,9 +207,20 @@
     private string? _errorMessage;
     private string? _currentScanStatus;
 
+    // مدل داده‌ای برای گروه‌بندی
+    public class CategoryStat
+    {
+        public string Category { get; set; } = "";
+        public int PassCount { get; set; }
+        public int FailCount { get; set; }
+    }
+
+    // پراپرتی برای نگهداری دیتای گروه‌بندی شده
+    private List<CategoryStat> CategoryBreakdown { get; set; } = new();
+
     protected override void OnInitialized()
     {
-        // اگر قبلا اسکن شده بود، هیچ کاری نمی‌کنیم
+        CalculateCategoryBreakdown();
     }
 
     private async Task StartScanAsync()
@@ -187,9 +241,10 @@
             });
 
             var scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
-
-            // ذخیره نتیجه در سرویس مشترک تا تب‌های دیگر هم ببینند
             StateService.CurrentScanResult = scanResult;
+
+            // بعد از پایان اسکن، دیتای دسته‌بندی را محاسبه کن
+            CalculateCategoryBreakdown();
 
             _currentScanStatus = null;
         }
@@ -201,5 +256,25 @@
         {
             _isScanning = false;
         }
+    }
+
+    // متدی برای گروه‌بندی نتایج با استفاده از LINQ
+    private void CalculateCategoryBreakdown()
+    {
+        CategoryBreakdown.Clear();
+        if (StateService.CurrentScanResult == null) return;
+
+        // استفاده از LINQ برای گروه‌بندی نتایج بر اساس دسته‌بندی
+        var groupedData = StateService.CurrentScanResult.Findings
+            .GroupBy(f => f.Category)
+            .Select(g => new CategoryStat
+                {
+                    Category = g.Key.ToString(),
+                    PassCount = g.Count(f => f.Status == CheckStatus.Pass),
+                    FailCount = g.Count(f => f.Status == CheckStatus.Fail)
+                })
+            .ToList();
+
+        CategoryBreakdown = groupedData;
     }
 }
