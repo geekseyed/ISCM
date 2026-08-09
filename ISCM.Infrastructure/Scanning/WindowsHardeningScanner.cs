@@ -45,11 +45,11 @@ public class WindowsHardeningScanner : IScanService
             {
                 var errorFinding = new Finding(
                     check.CheckId,
-                    "Unknown Check",
+                    "Scanner Execution Error",
                     CheckCategory.System,
                     CheckSeverity.High,
                     CheckStatus.Error,
-                    "Crash",
+                    $"CRASH: {ex.GetType().Name} - {ex.Message}", // اپدیت شده
                     "N/A",
                     "The check failed to execute.",
                     ex.Message
