@@ -19,6 +19,14 @@ builder.Services.AddTransient<IHardeningCheck, FirewallDomainProfileCheck>();
 builder.Services.AddTransient<IHardeningCheck, SmbV1ProtocolCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoRunDisabledCheck>();
 
+
+//   افزودن چهار چک لیست جدید  :
+builder.Services.AddTransient<IHardeningCheck, WindowsDefenderCheck>();
+builder.Services.AddTransient<IHardeningCheck, GuestAccountCheck>();
+builder.Services.AddTransient<IHardeningCheck, UacCheck>();
+builder.Services.AddTransient<IHardeningCheck, UsbStorageCheck>();
+
+
 // ۳. ثبت اسکنر اصلی
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 
