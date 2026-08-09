@@ -1,0 +1,83 @@
+﻿@page "/settings"
+@rendermode InteractiveServer
+@using ISCM.Web.Services
+@inject ScanStateService StateService
+
+<PageTitle>DefenDoor - Settings</PageTitle>
+
+<style>
+    .glass-panel {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #334155;
+    }
+
+    .info-label {
+        color: #94a3b8;
+    }
+
+    .info-value {
+        color: #e2e8f0;
+        font-weight: bold;
+    }
+
+    .check-badge {
+        background: rgba(6, 182, 212, 0.2);
+        color: #06b6d4;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-family: monospace;
+    }
+</style>
+
+<div class="glass-panel">
+    <h2 style="color:#e2e8f0; margin-bottom:20px;">Application Settings</h2>
+
+    <div style="margin-bottom: 30px;">
+        <h3 style="color: #06b6d4; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px;">About DefenDoor</h3>
+        <div class="info-row">
+            <span class="info-label">Application Name:</span>
+            <span class="info-value">DefenDoor (ISCM)</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Version:</span>
+            <span class="info-value">1.0.0 Beta</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Developer:</span>
+            <span class="info-value">Seyed Hossein Hosseini</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Report Storage Path:</span>
+            <span class="info-value" style="font-family: monospace; font-size: 12px;">AppDirectory/Reports/</span>
+        </div>
+    </div>
+
+    <div>
+        <h3 style="color: #06b6d4; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px;">Supported Hardening Checks</h3>
+        @if (StateService.CurrentScanResult != null)
+        {
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                @foreach (var finding in StateService.CurrentScanResult.Findings)
+                {
+                    <span class="check-badge">@finding.CheckId: @finding.Name</span>
+                }
+            </div>
+        }
+        else
+        {
+            <p style="color:#94a3b8;">Run a scan to see the list of active security checks.</p>
+        }
+    </div>
+</div>
