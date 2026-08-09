@@ -3,41 +3,13 @@
 @using ISCM.Application.Interfaces
 @using ISCM.Domain.Entities
 @using ISCM.Domain.Enums
+@using ISCM.Web.Services
 @inject IScanService ScanService
-@inject IReportService ReportService
+@inject ScanStateService StateService
 
-<PageTitle>DefenDoor - Industrial Security Compliance</PageTitle>
+<PageTitle>DefenDoor - Dashboard</PageTitle>
 
 <style>
-    body {
-        background-color: #0f172a;
-        color: #e2e8f0;
-        font-family: 'Segoe UI', Tahoma, sans-serif;
-    }
-
-    .dashboard-container {
-        max-width: 1200px;
-        margin: 40px auto;
-        padding: 20px;
-    }
-
-    .header {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: column;
-        margin-bottom: 40px;
-    }
-
-    .neon-text {
-        color: #e2e8f0;
-        text-shadow: 0 0 5px #06b6d4, 0 0 15px #06b6d4, 0 0 25px #06b6d4;
-        letter-spacing: 2px;
-        font-size: 32px;
-        margin-top: 10px;
-        font-weight: bold;
-    }
-
     .glass-panel {
         background: rgba(30, 41, 59, 0.7);
         backdrop-filter: blur(12px);
@@ -99,67 +71,6 @@
         font-family: monospace;
     }
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 20px;
-    }
-
-    th {
-        text-align: left;
-        padding: 12px;
-        background: #0f172a;
-        color: #06b6d4;
-        border-bottom: 2px solid #334155;
-    }
-
-    td {
-        padding: 12px;
-        border-bottom: 1px solid #334155;
-    }
-
-    .status-pass {
-        color: #10b981;
-        font-weight: bold;
-        background: rgba(16, 185, 129, 0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    .status-fail {
-        color: #ef4444;
-        font-weight: bold;
-        background: rgba(239, 68, 68, 0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    .status-warning {
-        color: #f59e0b;
-        font-weight: bold;
-        background: rgba(245, 158, 11, 0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    .status-ignored {
-        color: #94a3b8;
-        font-weight: bold;
-        background: rgba(148, 163, 184, 0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-    }
-
-    .btn-export {
-        border: none;
-        padding: 10px 20px;
-        color: white;
-        font-weight: bold;
-        border-radius: 6px;
-        cursor: pointer;
-        margin-top: 20px;
-    }
-
     .loading-spinner {
         border: 4px solid #334155;
         border-top: 4px solid #06b6d4;
@@ -183,120 +94,89 @@
     }
 </style>
 
-<div class="dashboard-container">
-    <div class="header">
-        <svg width="60" height="60" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 10px #06b6d4);">
-            <path d="M50 5 L90 20 V50 C90 75 70 90 50 95 C30 90 10 75 10 50 V20 Z" fill="rgba(15, 23, 42, 0.8)" stroke="#06b6d4" stroke-width="3" />
-            <path d="M35 50 L45 60 L65 35" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 5px #ffffff);" />
-        </svg>
-        <div class="neon-text">DefenDoor</div>
-        <div style="color: #64748b; margin-top: 5px;">Industrial Security Compliance Manager</div>
+<div class="glass-panel">
+    <div style="text-align: center; margin-bottom: 30px;">
+        <h2 style="color:#e2e8f0; margin-bottom:20px;">System Security Dashboard</h2>
+        <button class="btn-scan" @onclick="StartScanAsync" disabled="@_isScanning">
+            @if (_isScanning)
+            {
+                <span>Scanning System...</span>
+                <div class="loading-spinner"></div>
+            }
+            else
+            {
+                <span>⚡ Start Real Scan</span>
+            }
+        </button>
+
+        @if (_isScanning && _currentScanStatus != null)
+        {
+            <div style="color: #06b6d4; margin-top: 15px; font-family: monospace; font-size: 14px;">
+                ⚙️ @_currentScanStatus
+            </div>
+        }
     </div>
 
-    <div class="glass-panel">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <button class="btn-scan" @onclick="StartScanAsync" disabled="@_isScanning">
-                @if (_isScanning)
-                {
-                    <span>Scanning System...</span>
-                    <div class="loading-spinner"></div>
-                }
-                else
-                {
-                    <span>⚡ Start Real Scan</span>
-                }
-            </button>
+    @if (_errorMessage != null)
+    {
+        <div style="color: #ef4444; text-align: center; margin-bottom: 20px;">⚠️ @_errorMessage</div>
+    }
 
-            @if (_isScanning && _currentScanStatus != null)
-            {
-                <div style="color: #06b6d4; margin-top: 15px; font-family: monospace; font-size: 14px;">
-                    ⚙️ @_currentScanStatus
-                </div>
-            }
+    @if (StateService.CurrentScanResult != null)
+    {
+        var result = StateService.CurrentScanResult;
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-label">Hostname</div>
+                <div class="info-value">@result.Hostname</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">IP Address</div>
+                <div class="info-value">@result.IpAddress</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">OS Version</div>
+                <div class="info-value" style="font-size: 12px;">@result.OsVersion</div>
+            </div>
         </div>
 
-        @if (_errorMessage != null)
-        {
-            <div style="color: #ef4444; text-align: center; margin-bottom: 20px;">⚠️ @_errorMessage</div>
-        }
-
-        @if (_scanResult != null)
-        {
-            <div class="info-grid">
-                <div class="info-card">
-                    <div class="info-label">Hostname</div>
-                    <div class="info-value">@_scanResult.Hostname</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">IP Address</div>
-                    <div class="info-value">@_scanResult.IpAddress</div>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">OS Version</div>
-                    <div class="info-value" style="font-size: 12px;">@_scanResult.OsVersion</div>
-                </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px;">
+            <div>
+                <span style="font-size: 14px; color: #94a3b8;">Compliance Score:</span>
+                <span style="font-size: 32px; font-weight: bold; color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444"); margin-left: 10px;">@result.ComplianceScore%</span>
+                <span style="font-size: 20px; color: #06b6d4; margin-left: 10px;">(Grade @result.Grade)</span>
             </div>
-
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #0f172a; padding: 15px; border-radius: 8px;">
-                <div>
-                    <span style="font-size: 14px; color: #94a3b8;">Compliance Score:</span>
-                    <span style="font-size: 32px; font-weight: bold; color: @(_scanResult.ComplianceScore > 70 ? "#10b981" : "#ef4444"); margin-left: 10px;">@_scanResult.ComplianceScore%</span>
-                    <span style="font-size: 20px; color: #06b6d4; margin-left: 10px;">(Grade @_scanResult.Grade)</span>
-                </div>
-                <div>
-                    <span class="status-pass" style="margin-right: 10px;">PASS: @_scanResult.PassCount</span>
-                    <span class="status-fail" style="margin-right: 10px;">FAIL: @_scanResult.FailCount</span>
-                    <span class="status-warning">WARN: @_scanResult.WarningCount</span>
-                </div>
+            <div>
+                <span style="color: #10b981; font-weight: bold; margin-right: 10px;">PASS: @result.PassCount</span>
+                <span style="color: #ef4444; font-weight: bold; margin-right: 10px;">FAIL: @result.FailCount</span>
+                <span style="color: #f59e0b; font-weight: bold;">WARN: @result.WarningCount</span>
             </div>
+        </div>
 
-            <FindingsTable Findings="@_scanResult.Findings" />
-
-            <div style="margin-top: 20px; display: flex; gap: 15px;">
-                <button class="btn-export" @onclick="ExportReportAsync" disabled="@_isScanning" style="background: #10b981;">
-                    📄 Export HTML Report
-                </button>
-
-                <button class="btn-export" @onclick="ExportJsonReportAsync" disabled="@_isScanning" style="background: #f59e0b;">
-                    📊 Export JSON Report
-                </button>
-            </div>
-
-            @if (_reportPath != null)
-            {
-                <div style="color: #10b981; margin-top: 15px; font-size: 14px;">
-                    ✅ HTML Report saved successfully at: @_reportPath
-                </div>
-            }
-
-            @if (_jsonReportPath != null)
-            {
-                <div style="color: #f59e0b; margin-top: 10px; font-size: 14px;">
-                    ✅ JSON Report saved at: @_jsonReportPath
-                </div>
-            }
-        }
-    </div>
+        <p style="text-align:center; color:#94a3b8; margin-top:20px;">
+            Go to the <a href="/findings" style="color:#06b6d4; text-decoration:none; font-weight:bold;">Findings</a> tab to see detailed results.
+        </p>
+    }
 </div>
 
 @code {
-    private ScanResult? _scanResult;
     private bool _isScanning;
     private string? _errorMessage;
-    private string? _reportPath;
-    private string? _jsonReportPath;
     private string? _currentScanStatus;
+
+    protected override void OnInitialized()
+    {
+        // اگر قبلا اسکن شده بود، هیچ کاری نمی‌کنیم
+    }
 
     private async Task StartScanAsync()
     {
         if (_isScanning) return;
+
         try
         {
             _isScanning = true;
             _errorMessage = null;
-            _reportPath = null;
-            _jsonReportPath = null;
-            _scanResult = null;
             _currentScanStatus = "Starting...";
             StateHasChanged();
 
@@ -306,52 +186,16 @@
                 StateHasChanged();
             });
 
-            _scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
+            var scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
+
+            // ذخیره نتیجه در سرویس مشترک تا تب‌های دیگر هم ببینند
+            StateService.CurrentScanResult = scanResult;
+
             _currentScanStatus = null;
         }
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isScanning = false;
-        }
-    }
-
-    private async Task ExportReportAsync()
-    {
-        if (_scanResult == null) return;
-        try
-        {
-            _isScanning = true;
-            StateHasChanged();
-            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
-            _reportPath = await ReportService.GenerateAndSaveReportAsync(_scanResult, outputDir);
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Failed to save HTML report: {ex.Message}";
-        }
-        finally
-        {
-            _isScanning = false;
-        }
-    }
-
-    private async Task ExportJsonReportAsync()
-    {
-        if (_scanResult == null) return;
-        try
-        {
-            _isScanning = true;
-            StateHasChanged();
-            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
-            _jsonReportPath = await ReportService.GenerateAndSaveJsonReportAsync(_scanResult, outputDir);
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Failed to save JSON report: {ex.Message}";
         }
         finally
         {

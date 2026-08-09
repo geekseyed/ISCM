@@ -1,0 +1,186 @@
+﻿@page "/findings"
+@rendermode InteractiveServer
+@using ISCM.Domain.Entities
+@using ISCM.Domain.Enums
+@using ISCM.Web.Services
+@inject ScanStateService StateService
+
+<PageTitle>DefenDoor - Findings</PageTitle>
+
+<style>
+    .glass-panel {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .filter-btn {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #e2e8f0;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+
+        .filter-btn.active {
+            background: #06b6d4;
+            color: white;
+        }
+
+    .search-box {
+        background: #0f172a;
+        border: 1px solid #334155;
+        padding: 8px 15px;
+        border-radius: 6px;
+        color: white;
+        width: 300px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+
+    th {
+        text-align: left;
+        padding: 12px;
+        background: #0f172a;
+        color: #06b6d4;
+        border-bottom: 2px solid #334155;
+    }
+
+    td {
+        padding: 12px;
+        border-bottom: 1px solid #334155;
+    }
+
+    .status-pass {
+        color: #10b981;
+        font-weight: bold;
+        background: rgba(16, 185, 129, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-fail {
+        color: #ef4444;
+        font-weight: bold;
+        background: rgba(239, 68, 68, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-warning {
+        color: #f59e0b;
+        font-weight: bold;
+        background: rgba(245, 158, 11, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-ignored {
+        color: #94a3b8;
+        font-weight: bold;
+        background: rgba(148, 163, 184, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+</style>
+
+<div class="glass-panel">
+    <h2 style="color:#e2e8f0; margin-bottom:20px;">Security Findings Details</h2>
+
+    @if (StateService.CurrentScanResult == null)
+    {
+        <p style="color:#94a3b8; text-align:center; padding:40px;">
+            No scan data available. Please go to <a href="/" style="color:#06b6d4;">Dashboard</a> and run a scan first.
+        </p>
+    }
+    else
+    {
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px;">
+                <button class='filter-btn @(SelectedFilter == "All" ? "active" : "")' @onclick='() => FilterFindings("All")'>All</button>
+                <button class='filter-btn @(SelectedFilter == "Pass" ? "active" : "")' @onclick='() => FilterFindings("Pass")'>Pass</button>
+                <button class='filter-btn @(SelectedFilter == "Fail" ? "active" : "")' @onclick='() => FilterFindings("Fail")'>Fail</button>
+                <button class='filter-btn @(SelectedFilter == "Warning" ? "active" : "")' @onclick='() => FilterFindings("Warning")'>Warning</button>
+            </div>
+            <input type="text" class="search-box" placeholder="Search by ID or Name..." @bind="SearchTerm" @bind:event="oninput" />
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Check ID</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Current Value</th>
+                    <th>Expected</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var finding in FilteredFindings)
+                {
+                    <tr>
+                        <td style="color: #64748b; font-family: monospace;">@finding.CheckId</td>
+                        <td>@finding.Name</td>
+                        <td style="color: #94a3b8;">@finding.Category</td>
+                        <td style="color: @(finding.Status == CheckStatus.Fail ? "#ef4444" : "#e2e8f0");">@finding.CurrentValue</td>
+                        <td style="color: #94a3b8;">@finding.ExpectedValue</td>
+                        <td>
+                            <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (!FilteredFindings.Any())
+        {
+            <p style="color:#94a3b8; text-align:center; margin-top:20px;">No findings match your filter or search.</p>
+        }
+    }
+</div>
+
+@code {
+    private string SelectedFilter = "All";
+    private string SearchTerm = "";
+
+    // لیست فیلتر شده بر اساس دکمه‌ها و جستجو
+    private IEnumerable<Finding> FilteredFindings
+    {
+        get
+        {
+            if (StateService.CurrentScanResult == null) return new List<Finding>();
+
+            var findings = StateService.CurrentScanResult.Findings.AsEnumerable();
+
+            if (SelectedFilter != "All")
+            {
+                findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                findings = findings.Where(f =>
+                    f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    f.CheckId.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return findings;
+        }
+    }
+
+    private void FilterFindings(string filter)
+    {
+        SelectedFilter = filter;
+    }
+}
