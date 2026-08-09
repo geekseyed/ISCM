@@ -6,6 +6,7 @@
 @using ISCM.Web.Services
 @inject IScanService ScanService
 @inject ScanStateService StateService
+@inject ScanHistoryService HistoryService
 
 <PageTitle>DefenDoor - Dashboard</PageTitle>
 
@@ -242,6 +243,11 @@
 
             var scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
             StateService.CurrentScanResult = scanResult;
+
+            StateService.CurrentScanResult = scanResult;
+
+            // ثبت این اسکن در تاریخچه
+            HistoryService.AddScan(scanResult);
 
             // بعد از پایان اسکن، دیتای دسته‌بندی را محاسبه کن
             CalculateCategoryBreakdown();
