@@ -26,6 +26,10 @@ builder.Services.AddTransient<IHardeningCheck, GuestAccountCheck>();
 builder.Services.AddTransient<IHardeningCheck, UacCheck>();
 builder.Services.AddTransient<IHardeningCheck, UsbStorageCheck>();
 
+// گام دهم : افزودن چک لیست جدید برای بررسی وضعیت بروزرسانی ویندوز و فعال بودن سرویس Windows Update 
+builder.Services.AddTransient<IHardeningCheck, WindowsUpdateCheck>();
+builder.Services.AddTransient<IHardeningCheck, AutoLogonCheck>();
+builder.Services.AddTransient<IHardeningCheck, RdpNlaCheck>();
 
 // ۳. ثبت اسکنر اصلی
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
