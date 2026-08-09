@@ -10,5 +10,8 @@ namespace ISCM.Application.Interfaces;
 
 public interface IScanService
 {
-    Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full);
+    // اضافه کردن پارامتر IProgress برای ارسال وضعیت به UI
+    Task<ScanResult> RunScanAsync(
+        ScanMode mode = ScanMode.Full,
+        IProgress<string>? progress = null);
 }
