@@ -335,7 +335,7 @@
             _isScanning = true;
             StateHasChanged();
 
-            string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "DefenDoorReports");
+            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
             _reportPath = await ReportService.GenerateAndSaveReportAsync(_scanResult, outputDir);
         }
         catch (Exception ex)
