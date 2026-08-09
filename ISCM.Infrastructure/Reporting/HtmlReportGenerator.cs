@@ -6,26 +6,24 @@ using System.Text.Json;
 using System.IO;
 using System.Linq;
 using System.Text.Encodings.Web;
-
-
-
-
+using System.IO;
+using System.Linq;
 namespace ISCM.Infrastructure.Reporting;
 
 public class HtmlReportGenerator : IReportService
 {
+    // ---------------------------------------------------------
+    // متد تولید گزارش HTML (قبلاً داشتیم)
+    // ---------------------------------------------------------
     public async Task<string> GenerateAndSaveReportAsync(ScanResult scanResult, string outputDirectory)
     {
-        // ۱. ساخت نام فایل بر اساس نام سیستم و زمان
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string safeHostname = string.IsNullOrWhiteSpace(scanResult.Hostname) ? "UnknownHost" : scanResult.Hostname;
         string fileName = $"DefenDoor_Report_{safeHostname}_{timestamp}.html";
 
-        // ۲. ترکیب مسیر پوشه با نام فایل
         Directory.CreateDirectory(outputDirectory);
         string filePath = Path.Combine(outputDirectory, fileName);
 
-        // ۳. ساخت محتوای HTML (با استفاده از $$ برای جلوگیری از تداخل با CSS)
         string htmlContent = $$"""
             <!DOCTYPE html>
             <html lang="en">
@@ -70,7 +68,6 @@ public class HtmlReportGenerator : IReportService
                         <tbody>
             """;
 
-        // ۴. اضافه کردن تک‌تک نتایج به جدول HTML
         foreach (var finding in scanResult.Findings)
         {
             string cssClass = finding.Status.ToString().ToLower();
@@ -93,10 +90,7 @@ public class HtmlReportGenerator : IReportService
             </html>
             """;
 
-        // ۵. ذخیره فایل روی دیسک
         await File.WriteAllTextAsync(filePath, htmlContent, Encoding.UTF8);
-
-        // ۶. برگرداندن مسیر فایل
         return filePath;
     }
 
@@ -118,7 +112,7 @@ public class HtmlReportGenerator : IReportService
         var jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // این خط باعث میشه کلمات فارسی علامت سوال نشن
         };
 
         // ۴. ساخت یک آبجکت ناشناس (Anonymous Object) برای خروجی تمیز JSON
