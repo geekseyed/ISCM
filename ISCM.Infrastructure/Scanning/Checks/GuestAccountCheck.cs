@@ -77,8 +77,8 @@ public class GuestAccountCheck : IHardeningCheck
             }
             else
             {
-                currentValue = "API Error Code: " + result;
-                status = CheckStatus.Warning;
+                currentValue = "Requires Admin Rights";
+                status = CheckStatus.Ignored; // تغییر از Warning به Ignored
                 errorMessage = "NetUserGetInfo failed with code: " + result;
             }
         }

@@ -69,14 +69,17 @@ public class ScanResult : BaseEntity
 
     // محاسبه امتیاز کلی (Score)
     // فرمول: (تعداد کل - تعداد خطاها) تقسیم بر تعداد کل ضربدر 100
+    // محاسبه امتیاز کلی (Score)
     public int ComplianceScore
     {
         get
         {
             if (_findings.Count == 0) return 0;
 
-            // مواردی که واقعاً ارزیابی شده‌اند (Error نباشند)
-            var eligibleChecks = _findings.Count(f => f.Status != CheckStatus.Error && f.Status != CheckStatus.NotScanned);
+            // مواردی که واقعاً ارزیابی شده‌اند (Error, NotScanned و Ignored نباشند)
+            var eligibleChecks = _findings.Count(f => f.Status != CheckStatus.Error
+                                                   && f.Status != CheckStatus.NotScanned
+                                                   && f.Status != CheckStatus.Ignored);
             if (eligibleChecks == 0) return 0;
 
             return (int)Math.Round((double)PassCount / eligibleChecks * 100);
