@@ -52,4 +52,4 @@ public class WindowsUpdateCheck : IHardeningCheck
 
         return Task.FromResult(new Finding(CheckId, Name, Category, Severity, status, currentValue, "Disabled (Manual)", "Disable automatic updates to prevent untested patches in OT environments.", errorMessage));
     }
-}}
+}
