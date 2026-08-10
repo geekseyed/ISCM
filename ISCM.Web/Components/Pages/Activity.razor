@@ -11,14 +11,64 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 30px;
+        padding: 20px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        flex-shrink: 0;
+    }
+
+    .btn-back {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #06b6d4;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .btn-clear {
+        background: #ef4444;
+        border: none;
+        padding: 8px 20px;
+        color: white;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .btn-clear:hover {
+            background: #dc2626;
+        }
+
+        .btn-clear:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+    .table-container {
+        flex-grow: 1;
+        overflow-y: auto;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
     }
 
     table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 20px;
     }
 
     th {
@@ -27,6 +77,9 @@
         background: #0f172a;
         color: #06b6d4;
         border-bottom: 2px solid #334155;
+        position: sticky;
+        top: 0;
+        z-index: 1;
     }
 
     td {
@@ -38,11 +91,19 @@
         padding: 4px 12px;
         border-radius: 12px;
         font-weight: bold;
+        background: rgba(6, 182, 212, 0.2);
+        color: #06b6d4;
     }
 </style>
 
 <div class="glass-panel">
-    <h2 style="color:#e2e8f0; margin-bottom:20px;">Scan Activity Log</h2>
+    <div class="header-row">
+        <h2 style="color:#e2e8f0;">Scan Activity Log</h2>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-clear" @onclick="ClearHistory" disabled="@(!HistoryService.History.Any())">🗑️ Clear History</button>
+            <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
+        </div>
+    </div>
 
     @if (!HistoryService.History.Any())
     {
@@ -52,29 +113,39 @@
     }
     else
     {
-        <p style="color:#94a3b8; margin-bottom:10px;">Total scans in this session: @HistoryService.History.Count</p>
-        <table>
-            <thead>
-                <tr>
-                    <th>Scan Time</th>
-                    <th>Hostname</th>
-                    <th>Compliance Score</th>
-                    <th>Grade</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var entry in HistoryService.History)
-                {
+        <div style="color:#64748b; font-size:13px; margin-bottom:10px; flex-shrink:0;">Total scans in this session: @HistoryService.History.Count</div>
+
+        <div class="table-container">
+            <table>
+                <thead>
                     <tr>
-                        <td style="color: #94a3b8;">@entry.ScanTime.ToString("g")</td>
-                        <td style="color: #e2e8f0; font-family: monospace;">@entry.Hostname</td>
-                        <td style="color: @(entry.ComplianceScore > 70 ? "#10b981" : "#ef4444"); font-weight: bold;">@entry.ComplianceScore%</td>
-                        <td>
-                            <span class="grade-badge" style="background: rgba(6, 182, 212, 0.2); color: #06b6d4;">@entry.Grade</span>
-                        </td>
+                        <th>Scan Time</th>
+                        <th>Hostname</th>
+                        <th>OS Version</th>
+                        <th>Score</th>
+                        <th>Grade</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var entry in HistoryService.History)
+                    {
+                        <tr>
+                            <td style="color: #94a3b8;">@entry.ScanTime.ToString("g")</td>
+                            <td style="color: #e2e8f0; font-family: monospace;">@entry.Hostname</td>
+                            <td style="color: #94a3b8; font-size: 13px;">@entry.OsVersion</td>
+                            <td style="color: @(entry.ComplianceScore > 70 ? "#10b981" : "#ef4444"); font-weight: bold;">@entry.ComplianceScore%</td>
+                            <td><span class="grade-badge">@entry.Grade</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 </div>
+
+@code {
+    private void ClearHistory()
+    {
+        HistoryService.ClearHistory();
+    }
+}
