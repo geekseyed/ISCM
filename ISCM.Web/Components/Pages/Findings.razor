@@ -63,7 +63,7 @@
         padding: 8px 15px;
         border-radius: 6px;
         color: white;
-        width: 300px;
+        width: 250px;
     }
 
     .table-container {
@@ -80,18 +80,20 @@
 
     th {
         text-align: left;
-        padding: 12px;
+        padding: 10px;
         background: #0f172a;
         color: #06b6d4;
         border-bottom: 2px solid #334155;
         position: sticky;
         top: 0;
         z-index: 1;
+        font-size: 13px;
     }
 
     td {
-        padding: 12px;
+        padding: 10px;
         border-bottom: 1px solid #334155;
+        font-size: 13px;
     }
 
     tr {
@@ -133,6 +135,32 @@
         background: rgba(148, 163, 184, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
+    }
+
+    .sev-high {
+        color: #ef4444;
+        font-weight: bold;
+    }
+
+    .sev-critical {
+        color: #dc2626;
+        font-weight: bold;
+    }
+
+    .sev-medium {
+        color: #f59e0b;
+    }
+
+    .sev-low {
+        color: #94a3b8;
+    }
+
+    .fix-method {
+        color: #06b6d4;
+        font-family: monospace;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
     }
 
     .drawer-overlay {
@@ -213,35 +241,22 @@
         line-height: 1.5;
     }
 
-    .code-box {
-        background: #0f172a;
-        padding: 10px;
-        border-radius: 6px;
-        font-family: monospace;
-        color: #f59e0b;
-        font-size: 12px;
-        word-break: break-all;
-    }
-
-    .filter-badge {
-        background: rgba(6, 182, 212, 0.2);
-        color: #06b6d4;
-        padding: 5px 15px;
-        border-radius: 15px;
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        font-weight: bold;
-        margin-bottom: 10px;
-    }
-
-    .clear-filter {
-        color: #ef4444;
+    .btn-ignore {
+        background: #f59e0b;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: bold;
-        text-decoration: none;
+        width: 100%;
+        margin-top: 20px;
     }
+
+        .btn-ignore:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
 </style>
 
 <div class="glass-panel">
@@ -250,19 +265,9 @@
         <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
     </div>
 
-    @if (!string.IsNullOrEmpty(SelectedCategory))
-    {
-        <div class="filter-badge" style="flex-shrink: 0; margin-bottom: 10px;">
-            <span>Filtered by Category: @SelectedCategory</span>
-            <a href="/findings" class="clear-filter">✕ Clear Filter</a>
-        </div>
-    }
-
     @if (StateService.CurrentScanResult == null)
     {
-        <p style="color:#94a3b8; text-align:center; padding:40px;">
-            No scan data available. Please go to <a href="/" style="color:#06b6d4;">Dashboard</a> and run a scan first.
-        </p>
+        <p style="color:#94a3b8; text-align:center; padding:40px;">No scan data available. Please go to <a href="/" style="color:#06b6d4;">Dashboard</a> and run a scan first.</p>
     }
     else
     {
@@ -271,18 +276,18 @@
                 <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All</button>
                 <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass</button>
                 <button class="filter-btn @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail</button>
-                <button class="filter-btn @(SelectedFilter == "Warning" ? "active" : "")" @onclick="SetFilterWarning">Warning</button>
             </div>
-            <input type="text" class="search-box" placeholder="Search by ID or Name..." @bind="SearchTerm" @bind:event="oninput" />
+            <input type="text" class="search-box" placeholder="Search..." @bind="SearchTerm" @bind:event="oninput" />
         </div>
 
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Check ID</th>
+                        <th>ID</th>
                         <th>Name</th>
-                        <th>Current Value</th>
+                        <th>Severity</th>
+                        <th>Fix Method</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -292,19 +297,13 @@
                         <tr @onclick="() => OpenDrawer(finding)">
                             <td style="color: #64748b; font-family: monospace;">@finding.CheckId</td>
                             <td>@finding.Name</td>
-                            <td style="color: @(finding.Status == CheckStatus.Fail ? "#ef4444" : "#e2e8f0");">@finding.CurrentValue</td>
-                            <td>
-                                <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
-                            </td>
+                            <td><span class="sev-@finding.Severity.ToString().ToLower()">@finding.Severity</span></td>
+                            <td><span class="fix-method">@GetFixMethod(finding.CheckId)</span></td>
+                            <td><span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span></td>
                         </tr>
                     }
                 </tbody>
             </table>
-
-            @if (!FilteredFindings.Any())
-            {
-                <p style="color:#94a3b8; text-align:center; margin-top:20px;">No findings match your filter or search.</p>
-            }
         </div>
     }
 </div>
@@ -317,49 +316,19 @@
             <div class="drawer-title">@SelectedFinding.Name</div>
             <button class="btn-close" @onclick="CloseDrawer">X</button>
         </div>
+        <div class="detail-section"><div class="detail-label">Check ID</div><div class="detail-value" style="font-family: monospace; color: #06b6d4;">@SelectedFinding.CheckId</div></div>
+        <div class="detail-section"><div class="detail-label">Status & Severity</div><div style="display: flex; gap: 10px; margin-top: 5px;"><span class="status-@SelectedFinding.Status.ToString().ToLower()">@SelectedFinding.Status</span><span style="color: #f59e0b; font-weight: bold;">@SelectedFinding.Severity</span></div></div>
+        <div class="detail-section"><div class="detail-label">Expected Value</div><div class="detail-value">@SelectedFinding.ExpectedValue</div></div>
+        <div class="detail-section"><div class="detail-label">Current Value</div><div class="detail-value" style="color: #ef4444;">@SelectedFinding.CurrentValue</div></div>
+        <div class="detail-section"><div class="detail-label">Recommendation</div><div class="detail-value">@SelectedFinding.Recommendation</div></div>
 
-        <div class="detail-section">
-            <div class="detail-label">Check ID</div>
-            <div class="detail-value" style="font-family: monospace; color: #06b6d4;">@SelectedFinding.CheckId</div>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Status & Severity</div>
-            <div style="display: flex; gap: 10px; margin-top: 5px;">
-                <span class="status-@SelectedFinding.Status.ToString().ToLower()">@SelectedFinding.Status</span>
-                <span style="color: #f59e0b; font-weight: bold;">@SelectedFinding.Severity</span>
-            </div>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Expected Value</div>
-            <div class="detail-value">@SelectedFinding.ExpectedValue</div>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Current Value (Observed)</div>
-            <div class="detail-value" style="color: #ef4444;">@SelectedFinding.CurrentValue</div>
-        </div>
-
-        @if (!string.IsNullOrEmpty(SelectedFinding.Description))
+        @if (SelectedFinding.Status != CheckStatus.Ignored)
         {
-            <div class="detail-section">
-                <div class="detail-label">Description</div>
-                <div class="detail-value">@SelectedFinding.Description</div>
-            </div>
+            <button class="btn-ignore" @onclick="IgnoreFinding">🚫 Ignore This Finding</button>
         }
-
-        <div class="detail-section">
-            <div class="detail-label">Recommendation</div>
-            <div class="detail-value">@SelectedFinding.Recommendation</div>
-        </div>
-
-        @if (!string.IsNullOrEmpty(SelectedFinding.RegistryPath))
+        else
         {
-            <div class="detail-section">
-                <div class="detail-label">Registry Source</div>
-                <div class="code-box">@SelectedFinding.RegistryPath</div>
-            </div>
+            <button class="btn-ignore" disabled>✓ Ignored</button>
         }
     </div>
 }
@@ -378,33 +347,36 @@
         {
             if (StateService.CurrentScanResult == null) return new List<Finding>();
             var findings = StateService.CurrentScanResult.Findings.AsEnumerable();
-
-            if (!string.IsNullOrEmpty(SelectedCategory))
-            {
-                findings = findings.Where(f => f.Category.ToString() == SelectedCategory);
-            }
-
-            if (SelectedFilter != "All")
-            {
-                findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
-            }
-
-            if (!string.IsNullOrWhiteSpace(SearchTerm))
-            {
-                findings = findings.Where(f =>
-                    f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    f.CheckId.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase));
-            }
-
+            if (!string.IsNullOrEmpty(SelectedCategory)) findings = findings.Where(f => f.Category.ToString() == SelectedCategory);
+            if (SelectedFilter != "All") findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
+            if (!string.IsNullOrWhiteSpace(SearchTerm)) findings = findings.Where(f => f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) || f.CheckId.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase));
             return findings;
         }
+    }
+
+    // استخراج ابزار رفع مشکل از روی آیدی چک
+    private string GetFixMethod(string checkId)
+    {
+        if (checkId.StartsWith("FW") || checkId.StartsWith("SMB")) return "powershell.exe";
+        if (checkId.StartsWith("GUEST") || checkId.StartsWith("ADM")) return "net.exe";
+        if (checkId.StartsWith("PWD") || checkId.StartsWith("AUD")) return "secpol.msc";
+        return "regedit.exe";
     }
 
     private void SetFilterAll() => SelectedFilter = "All";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
-    private void SetFilterWarning() => SelectedFilter = "Warning";
 
     private void OpenDrawer(Finding finding) => SelectedFinding = finding;
     private void CloseDrawer() => SelectedFinding = null;
+
+    private void IgnoreFinding()
+    {
+        if (SelectedFinding != null)
+        {
+            SelectedFinding.Ignore(); // فراخوانی متد از لایه Domain
+            StateService.LogAction($"User ignored finding: {SelectedFinding.CheckId}");
+            StateHasChanged();
+        }
+    }
 }
