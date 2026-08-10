@@ -2,13 +2,28 @@
 
 namespace ISCM.Web.Services;
 
-// این سرویس نتایج اسکن را در حافظه نگه می‌دارد تا همه تب‌ها به آن دسترسی داشته باشند
 public class ScanStateService
 {
     public ScanResult? CurrentScanResult { get; set; }
 
-    // رویدادی که وقتی اسکن تمام شد، صفحه را آپدیت می‌کند
+    // متغیرهای مربوط به وضعیت اسکن که در پس‌زمینه می‌مانند
+    public bool IsScanning { get; set; }
+    public List<string> ConsoleLogs { get; set; } = new();
+
     public event Action? OnChange;
+
+    public void SetScanning(bool isScanning)
+    {
+        IsScanning = isScanning;
+        if (!isScanning) ConsoleLogs.Clear(); // وقتی اسکن تمام شد یا لغو شد، لاگ‌ها پاک شوند
+        OnChange?.Invoke();
+    }
+
+    public void AddLog(string log)
+    {
+        ConsoleLogs.Add(log);
+        OnChange?.Invoke();
+    }
 
     public void SetScanResult(ScanResult result)
     {
