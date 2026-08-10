@@ -18,22 +18,21 @@ public class WindowsHardeningScanner : IScanService
 
     public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full, IProgress<string>? progress = null)
     {
-        // ارسال پیام به UI: شروع اسکن
         progress?.Report("Initializing scan engine...");
-        await Task.Delay(500); // نیم ثانیه مکث برای حس خوب
+        await Task.Delay(500);
 
-        var (hostname, ipAddress, osVersion) = _systemInfoCollector.Collect();
-        var scanResult = new ScanResult(hostname, ipAddress, osVersion, mode);
+        // دریافت ۴ مقدار از کلکتور (شامل OsBuild)
+        var (hostname, ipAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
+
+        // ساخت آبجکت ScanResult با ۵ پارامتر
+        var scanResult = new ScanResult(hostname, ipAddress, osVersion, osBuild, mode);
 
         progress?.Report("System information collected successfully.");
         await Task.Delay(500);
 
         foreach (var check in _checks)
         {
-            // ارسال نام چک فعلی به UI
             progress?.Report($"Checking {check.CheckId}: {check.Name}...");
-
-            // تاخیر عمدی ۱ ثانیه‌ای برای شبیه‌سازی اسکن واقعی
             await Task.Delay(1000);
 
             try
@@ -45,11 +44,11 @@ public class WindowsHardeningScanner : IScanService
             {
                 var errorFinding = new Finding(
                     check.CheckId,
-                    "Scanner Execution Error",
+                    "Unknown Check",
                     CheckCategory.System,
                     CheckSeverity.High,
                     CheckStatus.Error,
-                    $"CRASH: {ex.GetType().Name} - {ex.Message}", // اپدیت شده
+                    "Crash",
                     "N/A",
                     "The check failed to execute.",
                     ex.Message
