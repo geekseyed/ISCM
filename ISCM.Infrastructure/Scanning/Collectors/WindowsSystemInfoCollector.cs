@@ -19,20 +19,21 @@ public class WindowsSystemInfoCollector
             {
                 string productName = key.GetValue("ProductName")?.ToString() ?? "Windows";
                 string displayVersion = key.GetValue("DisplayVersion")?.ToString() ?? "";
-                string currentBuild = key.GetValue("CurrentBuild")?.ToString() ?? "0";
+                string currentBuildStr = key.GetValue("CurrentBuild")?.ToString() ?? "0";
                 string ubr = key.GetValue("UBR")?.ToString() ?? "0";
 
-                // اصلاح تنبلی مایکروسافت: اگر نسخه اصلی ۱۱ بود، نام را به ۱۱ تغییر بده
-                if (int.TryParse(key.GetValue("CurrentMajorVersionNumber")?.ToString(), out int majorVersion))
+                // راه‌حل قطعی: بررسی Build Number به جای نام
+                // ویندوز ۱۱ از بیلد 22000 شروع می‌شود. اگر بالاتر بود و نامش ۱۰ بود، یعنی مایکروسافت اشتباه کرده!
+                if (int.TryParse(currentBuildStr, out int currentBuildNum))
                 {
-                    if (majorVersion >= 11 && productName.Contains("Windows 10"))
+                    if (currentBuildNum >= 22000 && productName.Contains("Windows 10"))
                     {
                         productName = productName.Replace("Windows 10", "Windows 11");
                     }
                 }
 
                 osVersion = productName;
-                osBuild = $"Version {displayVersion} (OS Build {currentBuild}.{ubr})";
+                osBuild = $"Version {displayVersion} (OS Build {currentBuildStr}.{ubr})";
             }
         }
         catch { }
