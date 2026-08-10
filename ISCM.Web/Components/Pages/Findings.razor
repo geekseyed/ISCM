@@ -24,7 +24,6 @@
     .status-warning { color: #f59e0b; font-weight: bold; background: rgba(245, 158, 11, 0.1); padding: 4px 8px; border-radius: 4px; }
     .status-ignored { color: #94a3b8; font-weight: bold; background: rgba(148, 163, 184, 0.1); padding: 4px 8px; border-radius: 4px; }
 
-    /* استایل‌های پنجره کشویی (Drawer) */
     .drawer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; }
     .drawer-overlay.active { display: block; }
     
@@ -54,10 +53,10 @@
     {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div style="display: flex; gap: 10px;">
-                <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="() => FilterFindings("All")">All</button>
-                <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="() => FilterFindings("Pass")">Pass</button>
-                <button class="filter-btn @(SelectedFilter == "Fail" ? "active" : "")" @onclick="() => FilterFindings("Fail")">Fail</button>
-                <button class="filter-btn @(SelectedFilter == "Warning" ? "active" : "")" @onclick="() => FilterFindings("Warning")">Warning</button>
+                <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="() => FilterFindings('All')">All</button>
+                <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="() => FilterFindings('Pass')">Pass</button>
+                <button class="filter-btn @(SelectedFilter == "Fail" ? "active" : "")" @onclick="() => FilterFindings('Fail')">Fail</button>
+                <button class="filter-btn @(SelectedFilter == "Warning" ? "active" : "")" @onclick="() => FilterFindings('Warning')">Warning</button>
             </div>
             <input type="text" class="search-box" placeholder="Search by ID or Name..." @bind="SearchTerm" @bind:event="oninput" />
         </div>
@@ -93,7 +92,6 @@
     }
 </div>
 
-<!-- ساختار پنجره کشویی (Drawer) -->
 @if (SelectedFinding != null)
 {
     <div class="drawer-overlay active" @onclick="CloseDrawer"></div>
@@ -126,10 +124,13 @@
             <div class="detail-value" style="color: #ef4444;">@SelectedFinding.CurrentValue</div>
         </div>
 
-        <div class="detail-section">
-            <div class="detail-label">Description</div>
-            <div class="detail-value">@SelectedFinding.Description</div>
-        </div>
+        @if (!string.IsNullOrEmpty(SelectedFinding.Description))
+        {
+            <div class="detail-section">
+                <div class="detail-label">Description</div>
+                <div class="detail-value">@SelectedFinding.Description</div>
+            </div>
+        }
 
         <div class="detail-section">
             <div class="detail-label">Recommendation</div>
