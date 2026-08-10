@@ -11,8 +11,46 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 30px;
+        padding: 20px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+    }
+
+    .btn-back {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #06b6d4;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .content-scroll {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding-right: 10px;
+    }
+
+    .section-title {
+        color: #06b6d4;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 5px;
+        font-size: 16px;
     }
 
     .info-row {
@@ -42,42 +80,63 @@
 </style>
 
 <div class="glass-panel">
-    <h2 style="color:#e2e8f0; margin-bottom:20px;">Application Settings</h2>
-
-    <div style="margin-bottom: 30px;">
-        <h3 style="color: #06b6d4; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px;">About DefenDoor</h3>
-        <div class="info-row">
-            <span class="info-label">Application Name:</span>
-            <span class="info-value">DefenDoor (ISCM)</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Version:</span>
-            <span class="info-value">1.0.0 Beta</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Developer:</span>
-            <span class="info-value">Seyed Hossein Hosseini</span>
-        </div>
-        <div class="info-row">
-            <span class="info-label">Report Storage Path:</span>
-            <span class="info-value" style="font-family: monospace; font-size: 12px;">AppDirectory/Reports/</span>
-        </div>
+    <div class="header-row">
+        <h2 style="color:#e2e8f0;">Application Settings</h2>
+        <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
     </div>
 
-    <div>
-        <h3 style="color: #06b6d4; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 5px;">Supported Hardening Checks</h3>
-        @if (StateService.CurrentScanResult != null)
-        {
-            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                @foreach (var finding in StateService.CurrentScanResult.Findings)
-                {
-                    <span class="check-badge">@finding.CheckId: @finding.Name</span>
-                }
+    <div class="content-scroll">
+        <div style="margin-bottom: 30px;">
+            <h3 class="section-title">About DefenDoor</h3>
+            <div class="info-row">
+                <span class="info-label">Application Name:</span>
+                <span class="info-value">DefenDoor (ISCM)</span>
             </div>
-        }
-        else
-        {
-            <p style="color:#94a3b8;">Run a scan to see the list of active security checks.</p>
-        }
+            <div class="info-row">
+                <span class="info-label">Version:</span>
+                <span class="info-value">1.0.0 Beta</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Developer:</span>
+                <span class="info-value">Seyed Hossein Hosseini</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Report Storage Path:</span>
+                <span class="info-value" style="font-family: monospace; font-size: 12px;">AppDirectory/Reports/</span>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 30px;">
+            <h3 class="section-title">Architecture & Tech Stack</h3>
+            <div class="info-row">
+                <span class="info-label">Framework:</span>
+                <span class="info-value">.NET 8.0</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">UI Technology:</span>
+                <span class="info-value">Blazor Server</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Architecture Pattern:</span>
+                <span class="info-value">Clean Architecture</span>
+            </div>
+        </div>
+
+        <div>
+            <h3 class="section-title">Supported Hardening Checks</h3>
+            @if (StateService.CurrentScanResult != null)
+            {
+                <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    @foreach (var finding in StateService.CurrentScanResult.Findings)
+                    {
+                        <span class="check-badge">@finding.CheckId: @finding.Name</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <p style="color:#94a3b8;">Run a scan to see the list of active security checks.</p>
+            }
+        </div>
     </div>
 </div>
