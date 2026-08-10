@@ -7,8 +7,9 @@ public class ScanResult : BaseEntity
 {
     public string Hostname { get; private set; } = string.Empty;
     public string IpAddress { get; private set; } = string.Empty;
+    public string MacAddress { get; private set; } = string.Empty; // اضافه شد
     public string OsVersion { get; private set; } = string.Empty;
-    public string OsBuild { get; private set; } = string.Empty; // این اضافه شد
+    public string OsBuild { get; private set; } = string.Empty;
     public ScanMode Mode { get; private set; }
     public DateTimeOffset StartedAtUtc { get; private set; }
     public DateTimeOffset? CompletedAtUtc { get; private set; }
@@ -18,14 +19,15 @@ public class ScanResult : BaseEntity
 
     private ScanResult() { }
 
-    // OsBuild به سازنده (Constructor) اضافه شد
-    public ScanResult(string hostname, string ipAddress, string osVersion, string osBuild, ScanMode mode)
+    // MacAddress به سازنده اضافه شد
+    public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)
     {
         if (string.IsNullOrWhiteSpace(hostname))
             throw new ArgumentException("Hostname cannot be empty.", nameof(hostname));
 
         Hostname = hostname;
         IpAddress = ipAddress;
+        MacAddress = macAddress;
         OsVersion = osVersion;
         OsBuild = osBuild;
         Mode = mode;
@@ -74,4 +76,4 @@ public class ScanResult : BaseEntity
                    score >= 60 ? "D" : "F";
         }
     }
-}   
+}

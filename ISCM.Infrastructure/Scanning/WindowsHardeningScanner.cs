@@ -21,11 +21,11 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("Initializing scan engine...");
         await Task.Delay(500);
 
-        // دریافت ۴ مقدار از کلکتور (شامل OsBuild)
-        var (hostname, ipAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
+        // دریافت ۵ مقدار از کلکتور
+        var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
 
-        // ساخت آبجکت ScanResult با ۵ پارامتر
-        var scanResult = new ScanResult(hostname, ipAddress, osVersion, osBuild, mode);
+        // ساخت آبجکت ScanResult با ۶ پارامتر
+        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode);
 
         progress?.Report("System information collected successfully.");
         await Task.Delay(500);

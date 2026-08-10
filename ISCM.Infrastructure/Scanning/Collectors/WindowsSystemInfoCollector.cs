@@ -6,11 +6,14 @@ namespace ISCM.Infrastructure.Scanning.Collectors;
 
 public class WindowsSystemInfoCollector
 {
-    public (string Hostname, string IpAddress, string OsVersion, string OsBuild) Collect()
+    // خروجی تبدیل به ۵ آیتم شد (شامل MacAddress)
+    public (string Hostname, string IpAddress, string MacAddress, string OsVersion, string OsBuild) Collect()
     {
         string hostname = Environment.MachineName;
         string osVersion = "Windows";
         string osBuild = "Unknown Build";
+        string ipAddress = "N/A";
+        string macAddress = "N/A";
 
         try
         {
@@ -22,8 +25,6 @@ public class WindowsSystemInfoCollector
                 string currentBuildStr = key.GetValue("CurrentBuild")?.ToString() ?? "0";
                 string ubr = key.GetValue("UBR")?.ToString() ?? "0";
 
-                // راه‌حل قطعی: بررسی Build Number به جای نام
-                // ویندوز ۱۱ از بیلد 22000 شروع می‌شود. اگر بالاتر بود و نامش ۱۰ بود، یعنی مایکروسافت اشتباه کرده!
                 if (int.TryParse(currentBuildStr, out int currentBuildNum))
                 {
                     if (currentBuildNum >= 22000 && productName.Contains("Windows 10"))
@@ -38,7 +39,6 @@ public class WindowsSystemInfoCollector
         }
         catch { }
 
-        string ipAddress = "N/A";
         try
         {
             var networkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
@@ -54,6 +54,8 @@ public class WindowsSystemInfoCollector
                     if (ipv4 != null)
                     {
                         ipAddress = ipv4.Address.ToString();
+                        // خواندن MAC آدرس و فرمت کردن آن (XX-XX-XX-XX-XX-XX)
+                        macAddress = string.Join("-", ni.GetPhysicalAddress().GetAddressBytes().Select(b => b.ToString("X2")));
                         break;
                     }
                 }
@@ -61,6 +63,6 @@ public class WindowsSystemInfoCollector
         }
         catch { }
 
-        return (hostname, ipAddress, osVersion, osBuild);
+        return (hostname, ipAddress, macAddress, osVersion, osBuild);
     }
 }
