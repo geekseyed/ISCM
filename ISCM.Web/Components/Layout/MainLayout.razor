@@ -9,7 +9,6 @@
         height: 100%;
         overflow: hidden;
     }
-    /* حذف اسکرول اصلی */
 
     body {
         background-color: #0f172a;
@@ -23,6 +22,7 @@
         display: flex;
         flex-direction: column;
         height: 100vh;
+        overflow: hidden;
     }
 
     .app-header {
@@ -123,24 +123,25 @@
             border-radius: 0;
         }
 
-    /* قفل کردن تب‌ها موقع اسکن */
     .nav-locked {
         pointer-events: none;
         opacity: 0.4;
         cursor: not-allowed;
     }
 
+    /* تنظیم دقیق ارتفاع برای جلوگیری از اسکرول دوگانه */
     .main-content {
         flex-grow: 1;
-        overflow-y: auto;
+        overflow: hidden; /* خود کانتینر اصلی اسکرول نمی‌شود */
         padding: 20px 40px;
         max-width: 1400px;
         width: 100%;
         margin: 0 auto;
         box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
     }
 
-    /* استایل چراغ قرمز قطع ارتباط */
     .reconnect-modal {
         display: none;
         position: fixed;
@@ -192,11 +193,11 @@
     </div>
 
     <div class="top-nav">
-        <NavLink class="nav-link @(StateService.IsScanning ? "nav-locked" : "")" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink class="nav-link @(StateService.IsScanning ? "nav-locked" : "")" href="/findings">Findings</NavLink>
-        <NavLink class="nav-link @(StateService.IsScanning ? "nav-locked" : "")" href="/reports">Reports</NavLink>
-        <NavLink class="nav-link @(StateService.IsScanning ? "nav-locked" : "")" href="/activity">Activity</NavLink>
-        <NavLink class="nav-link @(StateService.IsScanning ? "nav-locked" : "")" href="/settings">Settings</NavLink>
+        <NavLink class="@GetNavClass()" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+        <NavLink class="@GetNavClass()" href="/findings">Findings</NavLink>
+        <NavLink class="@GetNavClass()" href="/reports">Reports</NavLink>
+        <NavLink class="@GetNavClass()" href="/activity">Activity</NavLink>
+        <NavLink class="@GetNavClass()" href="/settings">Settings</NavLink>
     </div>
 
     <div class="main-content">
@@ -204,10 +205,16 @@
     </div>
 </div>
 
-<!-- المان قطع ارتباط بلِیزور -->
 <div id="components-reconnect-modal" class="reconnect-modal">
     <div class="reconnect-box">
         <div style="font-size: 48px;">🔌</div>
         <div class="reconnect-text">ارتباط با سیستم میزبان قطع شد!</div>
     </div>
 </div>
+
+@code {
+    private string GetNavClass()
+    {
+        return StateService.IsScanning ? "nav-link nav-locked" : "nav-link";
+    }
+}

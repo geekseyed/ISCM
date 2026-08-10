@@ -13,18 +13,20 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 25px;
+        padding: 20px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        height: calc(100vh - 220px);
+        height: 100%;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
     }
 
     .header-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
         flex-shrink: 0;
     }
 
@@ -67,6 +69,8 @@
     .table-container {
         flex-grow: 1;
         overflow-y: auto;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
     }
 
     table {
@@ -82,6 +86,7 @@
         border-bottom: 2px solid #334155;
         position: sticky;
         top: 0;
+        z-index: 1;
     }
 
     td {
@@ -228,7 +233,7 @@
         gap: 10px;
         font-size: 13px;
         font-weight: bold;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
     }
 
     .clear-filter {
@@ -247,7 +252,7 @@
 
     @if (!string.IsNullOrEmpty(SelectedCategory))
     {
-        <div class="filter-badge">
+        <div class="filter-badge" style="flex-shrink: 0; margin-bottom: 10px;">
             <span>Filtered by Category: @SelectedCategory</span>
             <a href="/findings" class="clear-filter">✕ Clear Filter</a>
         </div>
@@ -261,7 +266,7 @@
     }
     else
     {
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
             <div style="display: flex; gap: 10px;">
                 <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All</button>
                 <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass</button>
