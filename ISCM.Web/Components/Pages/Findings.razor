@@ -8,44 +8,241 @@
 <PageTitle>DefenDoor - Findings</PageTitle>
 
 <style>
-    .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 30px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); }
-    .filter-btn { background: #334155; border: none; padding: 8px 20px; color: #e2e8f0; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-    .filter-btn.active { background: #06b6d4; color: white; }
-    .search-box { background: #0f172a; border: 1px solid #334155; padding: 8px 15px; border-radius: 6px; color: white; width: 300px; }
-    
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th { text-align: left; padding: 12px; background: #0f172a; color: #06b6d4; border-bottom: 2px solid #334155; }
-    td { padding: 12px; border-bottom: 1px solid #334155; }
-    tr { cursor: pointer; transition: 0.2s; }
-    tr:hover { background-color: rgba(6, 182, 212, 0.05); }
-    
-    .status-pass { color: #10b981; font-weight: bold; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px; }
-    .status-fail { color: #ef4444; font-weight: bold; background: rgba(239, 68, 68, 0.1); padding: 4px 8px; border-radius: 4px; }
-    .status-warning { color: #f59e0b; font-weight: bold; background: rgba(245, 158, 11, 0.1); padding: 4px 8px; border-radius: 4px; }
-    .status-ignored { color: #94a3b8; font-weight: bold; background: rgba(148, 163, 184, 0.1); padding: 4px 8px; border-radius: 4px; }
+    .glass-panel {
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 25px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        height: calc(100vh - 220px);
+        display: flex;
+        flex-direction: column;
+    }
 
-    .drawer-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; }
-    .drawer-overlay.active { display: block; }
-    
-    .drawer { position: fixed; top: 0; right: 0; width: 450px; height: 100%; background: #1e293b; box-shadow: -5px 0 15px rgba(0,0,0,0.5); z-index: 1001; transform: translateX(100%); transition: transform 0.3s ease-in-out; padding: 30px; overflow-y: auto; border-left: 2px solid #06b6d4; }
-    .drawer.open { transform: translateX(0); }
-    
-    .drawer-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
-    .drawer-title { color: #06b6d4; font-size: 20px; font-weight: bold; }
-    .btn-close { background: #ef4444; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; }
-    
-    .detail-section { margin-bottom: 20px; }
-    .detail-label { color: #64748b; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; }
-    .detail-value { color: #e2e8f0; font-size: 14px; line-height: 1.5; }
-    .code-box { background: #0f172a; padding: 10px; border-radius: 6px; font-family: monospace; color: #f59e0b; font-size: 12px; word-break: break-all; }
-    
-    .filter-badge { background: rgba(6, 182, 212, 0.2); color: #06b6d4; padding: 5px 15px; border-radius: 15px; display: inline-flex; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; margin-bottom: 15px; }
-    .clear-filter { color: #ef4444; cursor: pointer; font-weight: bold; text-decoration: none; }
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+    }
+
+    .btn-back {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #06b6d4;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .filter-btn {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #e2e8f0;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+
+        .filter-btn.active {
+            background: #06b6d4;
+            color: white;
+        }
+
+    .search-box {
+        background: #0f172a;
+        border: 1px solid #334155;
+        padding: 8px 15px;
+        border-radius: 6px;
+        color: white;
+        width: 300px;
+    }
+
+    .table-container {
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th {
+        text-align: left;
+        padding: 12px;
+        background: #0f172a;
+        color: #06b6d4;
+        border-bottom: 2px solid #334155;
+        position: sticky;
+        top: 0;
+    }
+
+    td {
+        padding: 12px;
+        border-bottom: 1px solid #334155;
+    }
+
+    tr {
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        tr:hover {
+            background-color: rgba(6, 182, 212, 0.05);
+        }
+
+    .status-pass {
+        color: #10b981;
+        font-weight: bold;
+        background: rgba(16, 185, 129, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-fail {
+        color: #ef4444;
+        font-weight: bold;
+        background: rgba(239, 68, 68, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-warning {
+        color: #f59e0b;
+        font-weight: bold;
+        background: rgba(245, 158, 11, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .status-ignored {
+        color: #94a3b8;
+        font-weight: bold;
+        background: rgba(148, 163, 184, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        display: none;
+    }
+
+        .drawer-overlay.active {
+            display: block;
+        }
+
+    .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 450px;
+        height: 100%;
+        background: #1e293b;
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        z-index: 1001;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-in-out;
+        padding: 30px;
+        overflow-y: auto;
+        border-left: 2px solid #06b6d4;
+    }
+
+        .drawer.open {
+            transform: translateX(0);
+        }
+
+    .drawer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+    }
+
+    .drawer-title {
+        color: #06b6d4;
+        font-size: 20px;
+        font-weight: bold;
+    }
+
+    .btn-close {
+        background: #ef4444;
+        color: white;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .detail-section {
+        margin-bottom: 20px;
+    }
+
+    .detail-label {
+        color: #64748b;
+        font-size: 12px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+
+    .detail-value {
+        color: #e2e8f0;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .code-box {
+        background: #0f172a;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: monospace;
+        color: #f59e0b;
+        font-size: 12px;
+        word-break: break-all;
+    }
+
+    .filter-badge {
+        background: rgba(6, 182, 212, 0.2);
+        color: #06b6d4;
+        padding: 5px 15px;
+        border-radius: 15px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+
+    .clear-filter {
+        color: #ef4444;
+        cursor: pointer;
+        font-weight: bold;
+        text-decoration: none;
+    }
 </style>
 
 <div class="glass-panel">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div class="header-row">
         <h2 style="color:#e2e8f0;">Security Findings Details</h2>
+        <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
     </div>
 
     @if (!string.IsNullOrEmpty(SelectedCategory))
@@ -64,7 +261,7 @@
     }
     else
     {
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-shrink: 0;">
             <div style="display: flex; gap: 10px;">
                 <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All</button>
                 <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass</button>
@@ -74,34 +271,36 @@
             <input type="text" class="search-box" placeholder="Search by ID or Name..." @bind="SearchTerm" @bind:event="oninput" />
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Check ID</th>
-                    <th>Name</th>
-                    <th>Current Value</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var finding in FilteredFindings)
-                {
-                    <tr @onclick="() => OpenDrawer(finding)">
-                        <td style="color: #64748b; font-family: monospace;">@finding.CheckId</td>
-                        <td>@finding.Name</td>
-                        <td style="color: @(finding.Status == CheckStatus.Fail ? "#ef4444" : "#e2e8f0");">@finding.CurrentValue</td>
-                        <td>
-                            <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
-                        </td>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Check ID</th>
+                        <th>Name</th>
+                        <th>Current Value</th>
+                        <th>Status</th>
                     </tr>
-                }
-            </tbody>
-        </table>
-        
-        @if (!FilteredFindings.Any())
-        {
-            <p style="color:#94a3b8; text-align:center; margin-top:20px;">No findings match your filter or search.</p>
-        }
+                </thead>
+                <tbody>
+                    @foreach (var finding in FilteredFindings)
+                    {
+                        <tr @onclick="() => OpenDrawer(finding)">
+                            <td style="color: #64748b; font-family: monospace;">@finding.CheckId</td>
+                            <td>@finding.Name</td>
+                            <td style="color: @(finding.Status == CheckStatus.Fail ? "#ef4444" : "#e2e8f0");">@finding.CurrentValue</td>
+                            <td>
+                                <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (!FilteredFindings.Any())
+            {
+                <p style="color:#94a3b8; text-align:center; margin-top:20px;">No findings match your filter or search.</p>
+            }
+        </div>
     }
 </div>
 
@@ -165,7 +364,6 @@
     private string SearchTerm = "";
     private Finding? SelectedFinding;
 
-    // دریافت پارامتر Category از URL (مثل /findings?category=System)
     [SupplyParameterFromQuery(Name = "category")]
     public string? SelectedCategory { get; set; }
 
@@ -174,10 +372,8 @@
         get
         {
             if (StateService.CurrentScanResult == null) return new List<Finding>();
-
             var findings = StateService.CurrentScanResult.Findings.AsEnumerable();
 
-            // فیلتر بر اساس دسته‌بندی دریافتی از داشبورد
             if (!string.IsNullOrEmpty(SelectedCategory))
             {
                 findings = findings.Where(f => f.Category.ToString() == SelectedCategory);
@@ -190,8 +386,8 @@
 
             if (!string.IsNullOrWhiteSpace(SearchTerm))
             {
-                findings = findings.Where(f => 
-                    f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) || 
+                findings = findings.Where(f =>
+                    f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
                     f.CheckId.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -204,13 +400,6 @@
     private void SetFilterFail() => SelectedFilter = "Fail";
     private void SetFilterWarning() => SelectedFilter = "Warning";
 
-    private void OpenDrawer(Finding finding)
-    {
-        SelectedFinding = finding;
-    }
-
-    private void CloseDrawer()
-    {
-        SelectedFinding = null;
-    }
+    private void OpenDrawer(Finding finding) => SelectedFinding = finding;
+    private void CloseDrawer() => SelectedFinding = null;
 }

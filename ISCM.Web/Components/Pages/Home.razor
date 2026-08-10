@@ -16,17 +16,17 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 30px;
+        padding: 25px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        margin-bottom: 30px;
+        margin-bottom: 20px;
     }
 
     .btn-scan {
         background: linear-gradient(45deg, #06b6d4, #3b82f6);
         border: none;
-        padding: 15px 40px;
+        padding: 12px 30px;
         color: white;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: bold;
         border-radius: 8px;
         cursor: pointer;
@@ -46,22 +46,36 @@
             transform: none;
         }
 
+    .btn-nav {
+        background: #334155;
+        border: none;
+        padding: 12px 30px;
+        color: #06b6d4;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        margin-left: 15px;
+    }
+
     .console-box {
         background: #000000;
         border: 1px solid #334155;
         border-radius: 8px;
-        padding: 15px;
-        height: 120px;
+        padding: 10px;
+        height: 100px;
         overflow-y: auto;
-        margin-top: 20px;
+        margin-top: 15px;
         font-family: 'Consolas', monospace;
-        font-size: 13px;
+        font-size: 12px;
         text-align: left;
     }
 
     .console-line {
         color: #10b981;
-        margin-bottom: 5px;
+        margin-bottom: 3px;
     }
 
     .console-time {
@@ -75,15 +89,15 @@
 
     .info-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-        margin-bottom: 30px;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 20px;
     }
 
     .info-card {
         background: rgba(15, 23, 42, 0.6);
-        padding: 20px;
-        border-radius: 12px;
+        padding: 15px;
+        border-radius: 10px;
         border-left: 4px solid #06b6d4;
     }
 
@@ -99,7 +113,7 @@
         color: #e2e8f0;
         font-weight: bold;
         font-family: monospace;
-        font-size: 16px;
+        font-size: 14px;
     }
 
     .score-container {
@@ -107,19 +121,19 @@
         justify-content: space-between;
         align-items: center;
         background: rgba(15, 23, 42, 0.8);
-        padding: 25px;
-        border-radius: 12px;
+        padding: 20px;
+        border-radius: 10px;
         border: 1px solid #334155;
-        margin-bottom: 30px;
+        margin-bottom: 20px;
     }
 
     .score-number {
-        font-size: 48px;
+        font-size: 42px;
         font-weight: 800;
     }
 
     .score-grade {
-        font-size: 24px;
+        font-size: 20px;
         color: #06b6d4;
         margin-left: 15px;
         background: rgba(6, 182, 212, 0.1);
@@ -130,13 +144,13 @@
     .category-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 20px;
+        gap: 15px;
     }
 
     .category-card {
         background: rgba(15, 23, 42, 0.8);
-        padding: 20px;
-        border-radius: 12px;
+        padding: 15px;
+        border-radius: 10px;
         border-top: 4px solid #06b6d4;
         text-align: center;
         transition: 0.3s;
@@ -161,8 +175,8 @@
 
     .category-title {
         color: #94a3b8;
-        font-size: 14px;
-        margin-bottom: 15px;
+        font-size: 13px;
+        margin-bottom: 10px;
         text-transform: uppercase;
         font-weight: bold;
     }
@@ -171,7 +185,7 @@
         display: flex;
         justify-content: center;
         gap: 15px;
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .stat-pass {
@@ -185,11 +199,11 @@
     }
 
     .loading-spinner {
-        border: 4px solid #334155;
-        border-top: 4px solid #06b6d4;
+        border: 3px solid #334155;
+        border-top: 3px solid #06b6d4;
         border-radius: 50%;
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
         animation: spin 1s linear infinite;
         display: inline-block;
         vertical-align: middle;
@@ -208,10 +222,9 @@
 </style>
 
 <div class="glass-panel">
-    <div style="text-align: center; margin-bottom: 30px;">
-        <h2 style="color:#e2e8f0; margin-bottom:20px; font-weight: 300; letter-spacing: 1px;">SYSTEM SECURITY DASHBOARD</h2>
-        <button class="btn-scan" @onclick="StartScanAsync" disabled="@_isScanning">
-            @if (_isScanning)
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button class="btn-scan" @onclick="StartScanAsync" disabled="@StateService.IsScanning">
+            @if (StateService.IsScanning)
             {
                 <span>Scanning System...</span>
                 <div class="loading-spinner"></div>
@@ -221,6 +234,10 @@
                 <span>⚡ Start Real Scan</span>
             }
         </button>
+        @if (StateService.CurrentScanResult != null && !StateService.IsScanning)
+        {
+            <a href="/findings" class="btn-nav">Go to Findings ➡️</a>
+        }
     </div>
 
     @if (_consoleLogs.Any())
@@ -242,7 +259,7 @@
     }
 </div>
 
-@if (!_isScanning && StateService.CurrentScanResult != null)
+@if (!StateService.IsScanning && StateService.CurrentScanResult != null)
 {
     var result = StateService.CurrentScanResult;
 
@@ -257,27 +274,31 @@
                 <div class="info-value">@result.IpAddress</div>
             </div>
             <div class="info-card">
-                <div class="info-label">OS Version</div>
-                <div class="info-value" style="font-size: 14px;">@result.OsVersion</div>
+                <div class="info-label">OS Edition</div>
+                <div class="info-value" style="font-size: 13px;">@result.OsVersion</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">OS Build</div>
+                <div class="info-value" style="font-size: 13px;">@result.OsBuild</div>
             </div>
         </div>
 
         <div class="score-container">
             <div>
-                <span style="color: #64748b; font-size: 14px;">COMPLIANCE SCORE</span><br />
+                <span style="color: #64748b; font-size: 12px;">COMPLIANCE SCORE</span><br />
                 <span class="score-number" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore%</span>
                 <span class="score-grade">Grade @result.Grade</span>
             </div>
             <div style="text-align: right;">
-                <div style="display: flex; gap: 25px; font-size: 18px;">
-                    <div><span class="stat-pass">@result.PassCount</span> <span style="color:#64748b; font-size:12px;">PASS</span></div>
-                    <div><span class="stat-fail">@result.FailCount</span> <span style="color:#64748b; font-size:12px;">FAIL</span></div>
-                    <div><span style="color: #f59e0b; font-weight: bold;">@result.WarningCount</span> <span style="color:#64748b; font-size:12px;">WARN</span></div>
+                <div style="display: flex; gap: 20px; font-size: 16px;">
+                    <div><span class="stat-pass">@result.PassCount</span> <span style="color:#64748b; font-size:11px;">PASS</span></div>
+                    <div><span class="stat-fail">@result.FailCount</span> <span style="color:#64748b; font-size:11px;">FAIL</span></div>
+                    <div><span style="color: #f59e0b; font-weight: bold;">@result.WarningCount</span> <span style="color:#64748b; font-size:11px;">WARN</span></div>
                 </div>
             </div>
         </div>
 
-        <h3 style="color: #94a3b8; margin-bottom: 15px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Category Breakdown</h3>
+        <h3 style="color: #94a3b8; margin-bottom: 15px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Category Breakdown</h3>
         <div class="category-grid">
             @foreach (var group in CategoryBreakdown)
             {
@@ -297,38 +318,23 @@
 }
 
 @code {
-    private bool _isScanning;
     private string? _errorMessage;
 
-    public class ConsoleLogEntry
-    {
-        public DateTime Time { get; set; }
-        public string Message { get; set; } = "";
-        public bool IsError { get; set; }
-    }
-
+    public class ConsoleLogEntry { public DateTime Time { get; set; } public string Message { get; set; } = ""; public bool IsError { get; set; } }
     private List<ConsoleLogEntry> _consoleLogs = new();
 
-    public class CategoryStat
-    {
-        public string Category { get; set; } = "";
-        public int PassCount { get; set; }
-        public int FailCount { get; set; }
-    }
+    public class CategoryStat { public string Category { get; set; } = ""; public int PassCount { get; set; } public int FailCount { get; set; } }
     private List<CategoryStat> CategoryBreakdown { get; set; } = new();
 
-    protected override void OnInitialized()
-    {
-        CalculateCategoryBreakdown();
-    }
+    protected override void OnInitialized() => CalculateCategoryBreakdown();
 
     private async Task StartScanAsync()
     {
-        if (_isScanning) return;
+        if (StateService.IsScanning) return;
 
         try
         {
-            _isScanning = true;
+            StateService.IsScanning = true; // قفل کردن تب‌ها
             _errorMessage = null;
             _consoleLogs.Clear();
             StateHasChanged();
@@ -352,7 +358,7 @@
         }
         finally
         {
-            _isScanning = false;
+            StateService.IsScanning = false; // باز کردن قفل تب‌ها
         }
     }
 
@@ -362,7 +368,6 @@
         if (StateService.CurrentScanResult == null) return;
 
         var allCategories = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>();
-
         CategoryBreakdown = allCategories.Select(c => new CategoryStat
             {
                 Category = c.ToString(),
