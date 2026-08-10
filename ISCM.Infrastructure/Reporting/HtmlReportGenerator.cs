@@ -1,20 +1,15 @@
 ﻿using System.IO;
+using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
-using System.Text.Json;
-using System.IO;
-using System.Linq;
-using System.Text.Encodings.Web;
-using System.IO;
-using System.Linq;
+
 namespace ISCM.Infrastructure.Reporting;
 
 public class HtmlReportGenerator : IReportService
 {
-    // ---------------------------------------------------------
-    // متد تولید گزارش HTML (قبلاً داشتیم)
-    // ---------------------------------------------------------
     public async Task<string> GenerateAndSaveReportAsync(ScanResult scanResult, string outputDirectory)
     {
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -50,7 +45,7 @@ public class HtmlReportGenerator : IReportService
                     <h1>DefenDoor Security Compliance Report</h1>
                     <div class="info"><span>Hostname:</span> {{scanResult.Hostname}}</div>
                     <div class="info"><span>IP Address:</span> {{scanResult.IpAddress}}</div>
-                    <div class="info"><span>OS Version:</span> {{scanResult.OsVersion}}</div>
+                    <div class="info"><span>OS Version:</span> {{scanResult.OsVersion}} ({{scanResult.OsBuild}})</div>
                     <div class="info"><span>Scan Date:</span> {{scanResult.StartedAtUtc.LocalDateTime}}</div>
                     <div class="info"><span>Compliance Score:</span> {{scanResult.ComplianceScore}}% (Grade: {{scanResult.Grade}})</div>
 
@@ -94,33 +89,27 @@ public class HtmlReportGenerator : IReportService
         return filePath;
     }
 
-    // ---------------------------------------------------------
-    // متد جدید: تولید گزارش JSON
-    // ---------------------------------------------------------
     public async Task<string> GenerateAndSaveJsonReportAsync(ScanResult scanResult, string outputDirectory)
     {
-        // ۱. ساخت نام فایل بر اساس نام سیستم و زمان
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string safeHostname = string.IsNullOrWhiteSpace(scanResult.Hostname) ? "UnknownHost" : scanResult.Hostname;
         string fileName = $"DefenDoor_Report_{safeHostname}_{timestamp}.json";
 
-        // ۲. ترکیب مسیر پوشه با نام فایل
         Directory.CreateDirectory(outputDirectory);
         string filePath = Path.Combine(outputDirectory, fileName);
 
-        // ۳. تنظیمات JSON برای خروجی خوانا و بدون بهم ریختگی کلمات فارسی
         var jsonOptions = new JsonSerializerOptions
         {
             WriteIndented = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping // این خط باعث میشه کلمات فارسی علامت سوال نشن
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
-        // ۴. ساخت یک آبجکت ناشناس (Anonymous Object) برای خروجی تمیز JSON
         var reportData = new
         {
             Hostname = scanResult.Hostname,
             IpAddress = scanResult.IpAddress,
             OsVersion = scanResult.OsVersion,
+            OsBuild = scanResult.OsBuild,
             ScanDate = scanResult.StartedAtUtc.LocalDateTime,
             ComplianceScore = scanResult.ComplianceScore,
             Grade = scanResult.Grade,
@@ -136,13 +125,30 @@ public class HtmlReportGenerator : IReportService
             })
         };
 
-        // ۵. تبدیل داده‌ها به فرمت JSON
         string jsonString = JsonSerializer.Serialize(reportData, jsonOptions);
-
-        // ۶. ذخیره فایل روی دیسک
         await File.WriteAllTextAsync(filePath, jsonString, Encoding.UTF8);
+        return filePath;
+    }
 
-        // ۷. برگرداندن مسیر فایل
+    // پیاده‌سازی متد جدید CSV
+    public async Task<string> GenerateAndSaveCsvReportAsync(ScanResult scanResult, string outputDirectory)
+    {
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        string safeHostname = string.IsNullOrWhiteSpace(scanResult.Hostname) ? "UnknownHost" : scanResult.Hostname;
+        string fileName = $"DefenDoor_Findings_{safeHostname}_{timestamp}.csv";
+
+        Directory.CreateDirectory(outputDirectory);
+        string filePath = Path.Combine(outputDirectory, fileName);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Check ID,Name,Category,Current Value,Expected Value,Status");
+
+        foreach (var f in scanResult.Findings)
+        {
+            sb.AppendLine($"\"{f.CheckId}\",\"{f.Name}\",\"{f.Category}\",\"{f.CurrentValue}\",\"{f.ExpectedValue}\",\"{f.Status}\"");
+        }
+
+        await File.WriteAllTextAsync(filePath, sb.ToString(), Encoding.UTF8);
         return filePath;
     }
 }
