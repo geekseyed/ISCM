@@ -13,43 +13,91 @@
         backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 30px;
+        padding: 25px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-shrink: 0;
+    }
+
+    .btn-back {
+        background: #334155;
+        border: none;
+        padding: 8px 20px;
+        color: #06b6d4;
+        font-weight: bold;
+        border-radius: 6px;
+        cursor: pointer;
+        text-decoration: none;
     }
 
     .summary-card {
         background: #0f172a;
         padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        border-left: 4px solid #06b6d4;
+        border-radius: 12px;
+        border: 1px solid #334155;
+        margin-bottom: 25px;
+        flex-shrink: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .summary-item {
+        text-align: center;
     }
 
     .summary-label {
-        color: #94a3b8;
-        font-size: 12px;
+        color: #64748b;
+        font-size: 11px;
         text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 5px;
     }
 
     .summary-value {
         color: #e2e8f0;
         font-weight: bold;
-        font-size: 18px;
-        margin-top: 5px;
+        font-size: 16px;
+        font-family: monospace;
+    }
+
+    .export-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        flex-shrink: 0;
+    }
+
+    .export-card {
+        background: rgba(15, 23, 42, 0.6);
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+        border-top: 4px solid #06b6d4;
     }
 
     .btn-export {
         border: none;
-        padding: 12px 25px;
+        padding: 12px 20px;
         color: white;
         font-weight: bold;
         border-radius: 8px;
         cursor: pointer;
         transition: 0.3s;
-        font-size: 16px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        font-size: 15px;
+        width: 100%;
+        margin-top: 15px;
     }
 
         .btn-export:disabled {
@@ -58,13 +106,15 @@
         }
 
     .loading-spinner {
-        border: 3px solid #334155;
+        border: 3px solid rgba(255,255,255,0.3);
         border-top: 3px solid #fff;
         border-radius: 50%;
         width: 16px;
         height: 16px;
         animation: spin 1s linear infinite;
         display: inline-block;
+        vertical-align: middle;
+        margin-left: 10px;
     }
 
     @@keyframes spin {
@@ -76,10 +126,22 @@
             transform: rotate(360deg);
         }
     }
+
+    .result-message {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 8px;
+        font-size: 14px;
+        word-break: break-all;
+        flex-shrink: 0;
+    }
 </style>
 
 <div class="glass-panel">
-    <h2 style="color:#e2e8f0; margin-bottom:20px;">Reports & Export Center</h2>
+    <div class="header-row">
+        <h2 style="color:#e2e8f0;">Reports & Export Center</h2>
+        <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
+    </div>
 
     @if (StateService.CurrentScanResult == null)
     {
@@ -92,66 +154,90 @@
         var result = StateService.CurrentScanResult;
 
         <div class="summary-card">
-            <div style="display: flex; justify-content: space-between;">
-                <div>
-                    <div class="summary-label">Target Hostname</div>
-                    <div class="summary-value">@result.Hostname</div>
-                </div>
-                <div>
-                    <div class="summary-label">IP Address</div>
-                    <div class="summary-value">@result.IpAddress</div>
-                </div>
-                <div>
-                    <div class="summary-label">Scan Date</div>
-                    <div class="summary-value">@result.StartedAtUtc.LocalDateTime.ToString("g")</div>
-                </div>
-                <div>
-                    <div class="summary-label">Compliance Score</div>
-                    <div class="summary-value" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore% (Grade @result.Grade)</div>
-                </div>
+            <div class="summary-item">
+                <div class="summary-label">Target Host</div>
+                <div class="summary-value">@result.Hostname</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">IP Address</div>
+                <div class="summary-value">@result.IpAddress</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Scan Date</div>
+                <div class="summary-value" style="font-size: 14px;">@result.StartedAtUtc.LocalDateTime.ToString("g")</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Compliance Score</div>
+                <div class="summary-value" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore% (Grade @result.Grade)</div>
             </div>
         </div>
 
         <p style="color:#94a3b8; margin-bottom:15px;">
-            Select an export format below. The report will be saved in the <strong style="color:#e2e8f0;">Reports</strong> folder next to the application (e.g., on your USB flash drive).
+            Select an export format. Files are saved in the <strong style="color:#e2e8f0;">Reports</strong> folder next to the application executable.
         </p>
 
-        <div style="display: flex; gap: 20px; margin-top: 30px;">
-            <button class="btn-export" @onclick="ExportHtmlAsync" disabled="@_isExporting" style="background: #10b981;">
-                @if (_isExporting && _exportType == "HTML")
-                {
-                    <div class="loading-spinner"></div>
-                    <span>Generating HTML...</span>
-                }
-                else
-                {
-                    <span>📄 Export HTML Report</span>
-                }
-            </button>
+        <div class="export-grid">
+            <div class="export-card" style="border-top-color: #10b981;">
+                <div style="color: #10b981; font-size: 40px;">📄</div>
+                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">HTML Report</h3>
+                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Interactive web report for viewing in browser.</p>
+                <button class="btn-export" @onclick="ExportHtmlAsync" disabled="@_isExporting" style="background: #10b981;">
+                    @if (_isExporting && _exportType == "HTML")
+                    {
+                        <span>Generating...<div class="loading-spinner"></div></span>
+                    }
+                    else
+                    {
+                        <span>Export HTML</span>
+                    }
+                </button>
+            </div>
 
-            <button class="btn-export" @onclick="ExportJsonAsync" disabled="@_isExporting" style="background: #f59e0b;">
-                @if (_isExporting && _exportType == "JSON")
-                {
-                    <div class="loading-spinner"></div>
-                    <span>Generating JSON...</span>
-                }
-                else
-                {
-                    <span>📊 Export JSON Report</span>
-                }
-            </button>
+            <div class="export-card" style="border-top-color: #f59e0b;">
+                <div style="color: #f59e0b; font-size: 40px;">📊</div>
+                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">JSON Report</h3>
+                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Structured data format for APIs and tools.</p>
+                <button class="btn-export" @onclick="ExportJsonAsync" disabled="@_isExporting" style="background: #f59e0b;">
+                    @if (_isExporting && _exportType == "JSON")
+                    {
+                        <span>Generating...<div class="loading-spinner"></div></span>
+                    }
+                    else
+                    {
+                        <span>Export JSON</span>
+                    }
+                </button>
+            </div>
+
+            <div class="export-card" style="border-top-color: #8b5cf6;">
+                <div style="color: #8b5cf6; font-size: 40px;">📃</div>
+                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">CSV Report</h3>
+                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Spreadsheet format for Excel and data analysis.</p>
+                <button class="btn-export" @onclick="ExportCsvAsync" disabled="@_isExporting" style="background: #8b5cf6;">
+                    @if (_isExporting && _exportType == "CSV")
+                    {
+                        <span>Generating...<div class="loading-spinner"></div></span>
+                    }
+                    else
+                    {
+                        <span>Export CSV</span>
+                    }
+                </button>
+            </div>
         </div>
 
         @if (_errorMessage != null)
         {
-            <div style="color: #ef4444; margin-top: 20px;">⚠️ @_errorMessage</div>
+            <div class="result-message" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                ⚠️ @_errorMessage
+            </div>
         }
 
         @if (_savedFilePath != null)
         {
-            <div style="color: #10b981; margin-top: 20px; background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 8px;">
-                ✅ <strong>Success!</strong> Report saved successfully at:<br />
-                <code style="color: #06b6d4; word-break: break-all;">@_savedFilePath</code>
+            <div class="result-message" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                ✅ <strong>Success!</strong> Report saved at:<br />
+                <code style="color: #06b6d4;">@_savedFilePath</code>
             </div>
         }
     }
@@ -163,17 +249,10 @@
     private string? _savedFilePath;
     private string? _errorMessage;
 
-    private async Task ExportHtmlAsync()
-    {
-        await ExecuteExportAsync("HTML", ReportService.GenerateAndSaveReportAsync);
-    }
+    private async Task ExportHtmlAsync() => await ExecuteExportAsync("HTML", ReportService.GenerateAndSaveReportAsync);
+    private async Task ExportJsonAsync() => await ExecuteExportAsync("JSON", ReportService.GenerateAndSaveJsonReportAsync);
+    private async Task ExportCsvAsync() => await ExecuteExportAsync("CSV", ReportService.GenerateAndSaveCsvReportAsync);
 
-    private async Task ExportJsonAsync()
-    {
-        await ExecuteExportAsync("JSON", ReportService.GenerateAndSaveJsonReportAsync);
-    }
-
-    // یک متد عمومی برای جلوگیری از تکرار کد (DRY Principle)
     private async Task ExecuteExportAsync(string type, Func<ISCM.Domain.Entities.ScanResult, string, Task<string>> exportMethod)
     {
         if (StateService.CurrentScanResult == null) return;
