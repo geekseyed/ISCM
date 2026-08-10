@@ -1,32 +1,41 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Net.NetworkInformation;
+﻿using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace ISCM.Infrastructure.Scanning.Collectors;
 
 public class WindowsSystemInfoCollector
 {
-    public (string Hostname, string IpAddress, string OsVersion) Collect()
+    public (string Hostname, string IpAddress, string OsVersion, string OsBuild) Collect()
     {
-        // 1. دریافت نام سیستم (Computer Name)
         string hostname = Environment.MachineName;
+        string osVersion = "Windows";
+        string osBuild = "Unknown Build";
 
-        // 2. دریافت نسخه ویندوز
-        string osVersion = RuntimeInformation.OSDescription;
+        try
+        {
+            // خواندن نام و بیلد دقیق ویندوز از رجیستری
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            if (key != null)
+            {
+                string productName = key.GetValue("ProductName")?.ToString() ?? "Windows";
+                string displayVersion = key.GetValue("DisplayVersion")?.ToString() ?? "";
+                string currentBuild = key.GetValue("CurrentBuild")?.ToString() ?? "0";
+                string ubr = key.GetValue("UBR")?.ToString() ?? "0";
 
-        // 3. دریافت آدرس IP (جستجو در کارت‌های شبکه)
+                osVersion = productName; // مثلا: Windows 11 Pro
+                osBuild = $"Version {displayVersion} (OS Build {currentBuild}.{ubr})";
+            }
+        }
+        catch { }
+
         string ipAddress = "N/A";
         try
         {
             var networkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
             foreach (var ni in networkInterfaces)
             {
-                // فقط کارت‌های شبکه‌ای که روشن و فعال هستند
                 if (ni.OperationalStatus == OperationalStatus.Up &&
                     ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 {
@@ -37,16 +46,13 @@ public class WindowsSystemInfoCollector
                     if (ipv4 != null)
                     {
                         ipAddress = ipv4.Address.ToString();
-                        break; // اولین IP مناسب را پیدا کردیم، از حلقه خارج می‌شویم
+                        break;
                     }
                 }
             }
         }
-        catch
-        {
-            // اگر به هر دلیلی IP خوانده نشد، همان N/A می‌ماند و برنامه کرش نمی‌کند
-        }
+        catch { }
 
-        return (hostname, ipAddress, osVersion);
+        return (hostname, ipAddress, osVersion, osBuild);
     }
 }
