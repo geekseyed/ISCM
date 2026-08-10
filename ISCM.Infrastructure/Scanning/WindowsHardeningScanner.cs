@@ -22,12 +22,16 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("Initializing scan engine...");
         await Task.Delay(500); // نیم ثانیه مکث برای حس خوب
 
-        var (hostname, ipAddress, osVersion) = _systemInfoCollector.Collect();
-        var scanResult = new ScanResult(hostname, ipAddress, osVersion, mode);
+        // ۱. خواندن اطلاعات پایه سیستم (آپدیت شد با ۴ خروجی)
+        var (hostname, ipAddress, osName, osBuild) = _systemInfoCollector.Collect();
+
+        // ۲. ساخت ظرف نتایج اسکن (آپدیت شد با فیلدهای جدید)
+        var scanResult = new ScanResult(hostname, ipAddress, osName, osBuild, mode);
 
         progress?.Report("System information collected successfully.");
         await Task.Delay(500);
 
+        // ۳. اجرای تک‌تک بررسی‌ها
         foreach (var check in _checks)
         {
             // ارسال نام چک فعلی به UI
@@ -43,13 +47,14 @@ public class WindowsHardeningScanner : IScanService
             }
             catch (Exception ex)
             {
+                // اگر یک چک کلاً کرش کرد، نرم‌افزار متوقف نشود، آن چک Error ثبت شود
                 var errorFinding = new Finding(
                     check.CheckId,
-                    "Scanner Execution Error",
+                    "Unknown Check",
                     CheckCategory.System,
                     CheckSeverity.High,
                     CheckStatus.Error,
-                    $"CRASH: {ex.GetType().Name} - {ex.Message}", // اپدیت شده
+                    $"CRASH: {ex.GetType().Name} - {ex.Message}",
                     "N/A",
                     "The check failed to execute.",
                     ex.Message
@@ -58,6 +63,7 @@ public class WindowsHardeningScanner : IScanService
             }
         }
 
+        // ۴. پایان اسکن
         progress?.Report("Finalizing scan and calculating compliance score...");
         await Task.Delay(500);
 
