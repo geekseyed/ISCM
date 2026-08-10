@@ -53,10 +53,10 @@
     {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div style="display: flex; gap: 10px;">
-                <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="() => FilterFindings('All')">All</button>
-                <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="() => FilterFindings('Pass')">Pass</button>
-                <button class="filter-btn @(SelectedFilter == "Fail" ? "active" : "")" @onclick="() => FilterFindings('Fail')">Fail</button>
-                <button class="filter-btn @(SelectedFilter == "Warning" ? "active" : "")" @onclick="() => FilterFindings('Warning')">Warning</button>
+                <button class="filter-btn @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All</button>
+                <button class="filter-btn @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass</button>
+                <button class="filter-btn @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail</button>
+                <button class="filter-btn @(SelectedFilter == "Warning" ? "active" : "")" @onclick="SetFilterWarning">Warning</button>
             </div>
             <input type="text" class="search-box" placeholder="Search by ID or Name..." @bind="SearchTerm" @bind:event="oninput" />
         </div>
@@ -152,6 +152,12 @@
     private string SearchTerm = "";
     private Finding? SelectedFinding;
 
+    // متدهای جداگانه برای فیلترها تا از ارسال پارامتر در onclick جلوگیری شود
+    private void SetFilterAll() => SelectedFilter = "All";
+    private void SetFilterPass() => SelectedFilter = "Pass";
+    private void SetFilterFail() => SelectedFilter = "Fail";
+    private void SetFilterWarning() => SelectedFilter = "Warning";
+
     private IEnumerable<Finding> FilteredFindings
     {
         get
@@ -174,11 +180,6 @@
 
             return findings;
         }
-    }
-
-    private void FilterFindings(string filter)
-    {
-        SelectedFilter = filter;
     }
 
     private void OpenDrawer(Finding finding)
