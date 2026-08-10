@@ -1,6 +1,5 @@
 ﻿using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
 namespace ISCM.Infrastructure.Scanning.Collectors;
@@ -15,7 +14,6 @@ public class WindowsSystemInfoCollector
 
         try
         {
-            // خواندن نام و بیلد دقیق ویندوز از رجیستری
             using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
             if (key != null)
             {
@@ -24,7 +22,16 @@ public class WindowsSystemInfoCollector
                 string currentBuild = key.GetValue("CurrentBuild")?.ToString() ?? "0";
                 string ubr = key.GetValue("UBR")?.ToString() ?? "0";
 
-                osVersion = productName; // مثلا: Windows 11 Pro
+                // اصلاح تنبلی مایکروسافت: اگر نسخه اصلی ۱۱ بود، نام را به ۱۱ تغییر بده
+                if (int.TryParse(key.GetValue("CurrentMajorVersionNumber")?.ToString(), out int majorVersion))
+                {
+                    if (majorVersion >= 11 && productName.Contains("Windows 10"))
+                    {
+                        productName = productName.Replace("Windows 10", "Windows 11");
+                    }
+                }
+
+                osVersion = productName;
                 osBuild = $"Version {displayVersion} (OS Build {currentBuild}.{ubr})";
             }
         }
