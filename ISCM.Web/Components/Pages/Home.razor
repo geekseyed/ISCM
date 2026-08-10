@@ -60,6 +60,45 @@
         margin-left: 15px;
     }
 
+    .context-selector {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+
+    .selector-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(15, 23, 42, 0.6);
+        padding: 10px 20px;
+        border-radius: 10px;
+    }
+
+    .selector-label {
+        color: #64748b;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+
+    .selector-btn {
+        background: #334155;
+        border: none;
+        padding: 6px 16px;
+        color: #94a3b8;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: 0.2s;
+    }
+
+        .selector-btn.active {
+            background: #06b6d4;
+            color: white;
+        }
+
     .console-box {
         background: #000000;
         border: 1px solid #334155;
@@ -81,10 +120,6 @@
     .console-time {
         color: #64748b;
         margin-right: 10px;
-    }
-
-    .console-error {
-        color: #ef4444;
     }
 
     .info-grid {
@@ -222,12 +257,28 @@
 </style>
 
 <div class="glass-panel">
+    <div class="context-selector">
+        <div class="selector-group">
+            <span class="selector-label">Zone:</span>
+            @foreach (var z in new[] { "MRDC", "AOC", "ERDC", "SRDC", "NRDC" })
+            {
+                <button class="selector-btn @(StateService.SelectedZone == z ? "active" : "")" @onclick="() => StateService.SelectedZone = z">@z</button>
+            }
+        </div>
+        <div class="selector-group">
+            <span class="selector-label">System:</span>
+            @foreach (var s in new[] { "سیستم مسئول شیفت", "سیستم کارشناس شیفت" })
+            {
+                <button class="selector-btn @(StateService.SelectedSystem == s ? "active" : "")" @onclick="() => StateService.SelectedSystem = s">@s</button>
+            }
+        </div>
+    </div>
+
     <div style="text-align: center; margin-bottom: 20px;">
         <button class="btn-scan" @onclick="StartScanAsync" disabled="@StateService.IsScanning">
             @if (StateService.IsScanning)
             {
-                <span>Scanning System...</span>
-                <div class="loading-spinner"></div>
+                <span>Scanning System...</span> <div class="loading-spinner"></div>
             }
             else
             {
@@ -247,40 +298,26 @@
             {
                 <div class="console-line">
                     <span class="console-time">[@log.Time.ToString("HH:mm:ss")]</span>
-                    <span class="@(log.IsError ? "console-error" : "")">@log.Message</span>
+                    <span>@log.Message</span>
                 </div>
             }
         </div>
-    }
-
-    @if (_errorMessage != null)
-    {
-        <div style="color: #ef4444; text-align: center; margin-top: 20px;">⚠️ @_errorMessage</div>
     }
 </div>
 
 @if (!StateService.IsScanning && StateService.CurrentScanResult != null)
 {
     var result = StateService.CurrentScanResult;
-
     <div class="glass-panel">
+        <div style="text-align: center; margin-bottom: 20px; color: #06b6d4; font-family: monospace; font-size: 14px;">
+            Hostname Context: @StateService.HostnameContext
+        </div>
+
         <div class="info-grid">
-            <div class="info-card">
-                <div class="info-label">Hostname</div>
-                <div class="info-value">@result.Hostname</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">IP Address</div>
-                <div class="info-value">@result.IpAddress</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">OS Edition</div>
-                <div class="info-value" style="font-size: 13px;">@result.OsVersion</div>
-            </div>
-            <div class="info-card">
-                <div class="info-label">OS Build</div>
-                <div class="info-value" style="font-size: 13px;">@result.OsBuild</div>
-            </div>
+            <div class="info-card"><div class="info-label">Hostname</div><div class="info-value">@result.Hostname</div></div>
+            <div class="info-card"><div class="info-label">IP Address</div><div class="info-value">@result.IpAddress</div></div>
+            <div class="info-card"><div class="info-label">OS Edition</div><div class="info-value" style="font-size: 13px;">@result.OsVersion</div></div>
+            <div class="info-card"><div class="info-label">OS Build</div><div class="info-value" style="font-size: 13px;">@result.OsBuild</div></div>
         </div>
 
         <div class="score-container">
@@ -303,9 +340,7 @@
             @foreach (var group in CategoryBreakdown)
             {
                 var hasFail = group.FailCount > 0;
-                var cardClass = hasFail ? "fail" : "pass";
-
-                <a href="@($"/findings?category={group.Category}")" class="category-card @cardClass">
+                <a href="@($"/findings?category={group.Category}")" class="category-card @(hasFail ? "fail" : "pass")">
                     <div class="category-title">@group.Category</div>
                     <div class="category-stats">
                         <span class="stat-pass">@group.PassCount Pass</span>
@@ -319,10 +354,8 @@
 
 @code {
     private string? _errorMessage;
-
-    public class ConsoleLogEntry { public DateTime Time { get; set; } public string Message { get; set; } = ""; public bool IsError { get; set; } }
+    public class ConsoleLogEntry { public DateTime Time { get; set; } public string Message { get; set; } = ""; }
     private List<ConsoleLogEntry> _consoleLogs = new();
-
     public class CategoryStat { public string Category { get; set; } = ""; public int PassCount { get; set; } public int FailCount { get; set; } }
     private List<CategoryStat> CategoryBreakdown { get; set; } = new();
 
@@ -331,13 +364,11 @@
     private async Task StartScanAsync()
     {
         if (StateService.IsScanning) return;
-
         try
         {
-            StateService.IsScanning = true; // قفل کردن تب‌ها
-            _errorMessage = null;
-            _consoleLogs.Clear();
-            StateHasChanged();
+            StateService.IsScanning = true;
+            _errorMessage = null; _consoleLogs.Clear(); StateHasChanged();
+            StateService.LogAction($"Scan started for {StateService.HostnameContext}");
 
             var progress = new Progress<string>(status =>
             {
@@ -348,17 +379,16 @@
             var scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
             StateService.CurrentScanResult = scanResult;
             HistoryService.AddScan(scanResult);
-
+            StateService.LogAction($"Scan completed. Score: {scanResult.ComplianceScore}%");
             CalculateCategoryBreakdown();
         }
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
-            _consoleLogs.Add(new ConsoleLogEntry { Time = DateTime.Now, Message = $"Error: {ex.Message}", IsError = true });
         }
         finally
         {
-            StateService.IsScanning = false; // باز کردن قفل تب‌ها
+            StateService.IsScanning = false;
         }
     }
 
@@ -366,9 +396,7 @@
     {
         CategoryBreakdown.Clear();
         if (StateService.CurrentScanResult == null) return;
-
-        var allCategories = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>();
-        CategoryBreakdown = allCategories.Select(c => new CategoryStat
+        CategoryBreakdown = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => new CategoryStat
             {
                 Category = c.ToString(),
                 PassCount = StateService.CurrentScanResult.Findings.Count(f => f.Category == c && f.Status == CheckStatus.Pass),
