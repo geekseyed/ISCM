@@ -3,38 +3,94 @@
 <style>
     body {
         background-color: #0f172a;
+        background-image: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        background-size: cover;
+        background-attachment: fixed;
         color: #e2e8f0;
         font-family: 'Segoe UI', Tahoma, sans-serif;
         margin: 0;
         padding: 0;
     }
 
-    .top-nav {
-        background-color: #111827;
-        padding: 10px 40px;
+    .app-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        padding: 20px 40px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(10px);
         border-bottom: 1px solid #334155;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
 
-    .nav-brand {
-        font-weight: bold;
-        color: #06b6d4;
-        text-shadow: 0 0 5px #06b6d4;
-        font-size: 20px;
-    }
-
-    .nav-links {
+    .brand-area {
         display: flex;
-        gap: 20px;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .logo-svg {
+        filter: drop-shadow(0 0 8px #06b6d4);
+    }
+
+    .neon-text {
+        color: #e2e8f0;
+        text-shadow: 0 0 5px #06b6d4, 0 0 15px #06b6d4, 0 0 25px #06b6d4;
+        letter-spacing: 1px;
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .subtitle {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(30, 41, 59, 0.5);
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 1px solid #334155;
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        background-color: #10b981;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #10b981;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.5;
+        }
+
+        100% {
+            opacity: 1;
+        }
+    }
+
+    .top-nav {
+        background: rgba(15, 23, 42, 0.6);
+        padding: 10px 40px;
+        display: flex;
+        gap: 10px;
+        border-bottom: 1px solid #1e293b;
     }
 
     .nav-link {
         color: #94a3b8;
         text-decoration: none;
-        padding: 8px 15px;
+        padding: 8px 20px;
         border-radius: 6px;
         font-weight: 500;
         transition: 0.2s;
@@ -42,31 +98,46 @@
 
         .nav-link:hover {
             color: #e2e8f0;
-            background-color: #1e293b;
+            background: rgba(51, 65, 85, 0.5);
         }
 
         .nav-link.active {
             color: #06b6d4;
-            background-color: rgba(6, 182, 212, 0.1);
-            border: 1px solid rgba(6, 182, 212, 0.3);
+            background: rgba(6, 182, 212, 0.1);
+            border-bottom: 2px solid #06b6d4;
+            border-radius: 0;
         }
 
     .main-content {
         max-width: 1200px;
-        margin: 30px auto;
+        margin: 40px auto;
         padding: 0 20px;
     }
 </style>
 
-<div class="top-nav">
-    <div class="nav-brand">🛡️ DefenDoor</div>
-    <div class="nav-links">
-        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink class="nav-link" href="/findings">Findings</NavLink>
-        <NavLink class="nav-link" href="/reports">Reports</NavLink>
-        <NavLink class="nav-link" href="/activity">Activity</NavLink>
-        <NavLink class="nav-link" href="/settings">Settings</NavLink>
+<div class="app-header">
+    <div class="brand-area">
+        <svg class="logo-svg" width="40" height="40" viewBox="0 0 100 100">
+            <path d="M50 5 L90 20 V50 C90 75 70 90 50 95 C30 90 10 75 10 50 V20 Z" fill="rgba(15, 23, 42, 0.8)" stroke="#06b6d4" stroke-width="3" />
+            <path d="M35 50 L45 60 L65 35" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 5px #ffffff);" />
+        </svg>
+        <div>
+            <div class="neon-text">DefenDoor</div>
+            <div class="subtitle">Industrial Security Compliance Manager</div>
+        </div>
     </div>
+    <div class="status-indicator">
+        <div class="status-dot"></div>
+        <span style="color: #10b981; font-weight: bold; font-size: 14px;">ارتباط برقراره</span>
+    </div>
+</div>
+
+<div class="top-nav">
+    <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+    <NavLink class="nav-link" href="/findings">Findings</NavLink>
+    <NavLink class="nav-link" href="/reports">Reports</NavLink>
+    <NavLink class="nav-link" href="/activity">Activity</NavLink>
+    <NavLink class="nav-link" href="/settings">Settings</NavLink>
 </div>
 
 <div class="main-content">
