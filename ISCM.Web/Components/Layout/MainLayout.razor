@@ -129,10 +129,12 @@
         cursor: not-allowed;
     }
 
-    /* تنظیم دقیق ارتفاع برای جلوگیری از اسکرول دوگانه */
+    /* تنظیمات کانتینر اصلی و مخفی کردن اسکرول بار */
     .main-content {
         flex-grow: 1;
-        overflow: hidden; /* خود کانتینر اصلی اسکرول نمی‌شود */
+        overflow-y: auto;
+        scrollbar-width: none; /* مخفی کردن در فایرفاکس */
+        -ms-overflow-style: none; /* مخفی کردن در اینترنت اکسپلورر و اج */
         padding: 20px 40px;
         max-width: 1400px;
         width: 100%;
@@ -141,6 +143,10 @@
         display: flex;
         flex-direction: column;
     }
+        /* مخفی کردن اسکرول بار در کروم و سافاری */
+        .main-content::-webkit-scrollbar {
+            display: none;
+        }
 
     .reconnect-modal {
         display: none;
