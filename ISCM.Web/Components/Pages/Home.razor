@@ -63,7 +63,6 @@
         margin-left: 10px;
     }
 
-    /* استایل‌های کنسول اسکن */
     .scan-console {
         background: #0a0e1a;
         border: 1px solid rgba(255,255,255,0.1);
@@ -130,15 +129,6 @@
         line-height: 1.5;
         color: #10b981;
     }
-
-        .console-body::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        .console-body::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.1);
-            border-radius: 2px;
-        }
 
     .console-summary {
         display: flex;
@@ -238,30 +228,121 @@
         font-size: 13px;
     }
 
+    /* استایل‌های حلقه امتیاز (Score Ring) */
     .score-container {
         display: flex;
         justify-content: space-between;
         align-items: center;
         background: rgba(15, 23, 42, 0.8);
-        padding: 12px;
+        padding: 15px;
         border-radius: 8px;
         border: 1px solid #334155;
         margin-bottom: 15px;
     }
 
-    .score-number {
-        font-size: 32px;
-        font-weight: 800;
+    .score-display {
+        display: flex;
+        align-items: center;
+        gap: 20px;
     }
 
-    .score-grade {
-        font-size: 16px;
-        color: #06b6d4;
-        margin-left: 10px;
-        background: rgba(6, 182, 212, 0.1);
-        padding: 4px 12px;
-        border-radius: 15px;
+    .score-ring {
+        position: relative;
+        width: 100px;
+        height: 100px;
+        flex-shrink: 0;
     }
+
+        .score-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .score-ring circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+    .ring-bg {
+        stroke: rgba(255, 255, 255, 0.1);
+    }
+
+    .ring-fill {
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.5s ease;
+    }
+
+    .score-value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+    }
+
+    .score-percent {
+        font-size: 24px;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .score-grade-text {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
+
+    .score-stats {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .stat-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #94a3b8;
+    }
+
+    .stat-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+        .stat-dot.pass {
+            background: #10b981;
+        }
+
+        .stat-dot.fail {
+            background: #ef4444;
+        }
+
+        .stat-dot.warn {
+            background: #f59e0b;
+        }
+
+    .stat-num {
+        font-size: 16px;
+        font-weight: 700;
+        font-family: 'Consolas', monospace;
+        margin-left: auto;
+    }
+
+        .stat-num.pass {
+            color: #10b981;
+        }
+
+        .stat-num.fail {
+            color: #ef4444;
+        }
+
+        .stat-num.warn {
+            color: #f59e0b;
+        }
 
     .category-grid {
         display: grid;
@@ -410,6 +491,11 @@
 @if (StateService.CurrentScanResult != null)
 {
     var result = StateService.CurrentScanResult;
+    var scoreColor = result.ComplianceScore > 70 ? "#10b981" : "#ef4444";
+    // محاسبه مقدار انیمیشن حلقه (Circumference = 2 * PI * 52 = 326.7)
+    double circumference = 326.7;
+    double offset = circumference - (circumference * result.ComplianceScore / 100.0);
+
     <div class="glass-panel">
         <div class="info-grid">
             <div class="info-card"><div class="info-label">Hostname</div><div class="info-value">@result.Hostname</div></div>
@@ -431,16 +517,21 @@
         </div>
 
         <div class="score-container">
-            <div>
-                <span style="color: #64748b; font-size: 11px;">COMPLIANCE SCORE</span><br />
-                <span class="score-number" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore%</span>
-                <span class="score-grade">Grade @result.Grade</span>
-            </div>
-            <div style="text-align: right;">
-                <div style="display: flex; gap: 15px; font-size: 14px;">
-                    <div><span class="stat-pass">@result.PassCount</span> <span style="color:#64748b; font-size:10px;">PASS</span></div>
-                    <div><span class="stat-fail">@result.FailCount</span> <span style="color:#64748b; font-size:10px;">FAIL</span></div>
-                    <div><span style="color: #f59e0b; font-weight: bold;">@result.WarningCount</span> <span style="color:#64748b; font-size:10px;">WARN</span></div>
+            <div class="score-display">
+                <div class="score-ring">
+                    <svg viewBox="0 0 120 120">
+                        <circle class="ring-bg" cx="60" cy="60" r="52" />
+                        <circle class="ring-fill" cx="60" cy="60" r="52" stroke-dasharray="@circumference" stroke-dashoffset="@offset" stroke="@scoreColor" />
+                    </svg>
+                    <div class="score-value">
+                        <div class="score-percent" style="color: @scoreColor;">@result.ComplianceScore%</div>
+                        <div class="score-grade-text">Grade @result.Grade</div>
+                    </div>
+                </div>
+                <div class="score-stats">
+                    <div class="stat-row"><span class="stat-dot pass"></span> Passed <span class="stat-num pass">@result.PassCount</span></div>
+                    <div class="stat-row"><span class="stat-dot fail"></span> Failed <span class="stat-num fail">@result.FailCount</span></div>
+                    <div class="stat-row"><span class="stat-dot warn"></span> Warning <span class="stat-num warn">@result.WarningCount</span></div>
                 </div>
             </div>
         </div>
