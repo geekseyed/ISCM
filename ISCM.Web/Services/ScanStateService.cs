@@ -1,7 +1,7 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
+using System.Diagnostics;
 using ISCM.Domain.Enums;
-using System.Globalization;
 
 namespace ISCM.Web.Services;
 
@@ -27,38 +27,11 @@ public class ScanStateService
     public List<string> EventLog { get; set; } = new();
     public List<string> ConsoleLogs { get; set; } = new();
 
-    // مدیریت تاریخ
-    public string ShamsiDate { get; set; } = "";
-    public string GregorianDate { get; set; } = "";
-
-    public void InitializeDates()
-    {
-        var pc = new PersianCalendar();
-        var now = DateTime.Now;
-        ShamsiDate = $"{pc.GetYear(now)}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
-        GregorianDate = now.ToString("yyyy/MM/dd");
-    }
-
-    public void UpdateShamsiDate(string newDate)
-    {
-        if (newDate != ShamsiDate)
-        {
-            LogAction($"Scan Date changed from {ShamsiDate} to {newDate}");
-            ShamsiDate = newDate;
-            try
-            {
-                var parts = newDate.Split('/');
-                if (parts.Length == 3 && int.TryParse(parts[0], out int y) && int.TryParse(parts[1], out int m) && int.TryParse(parts[2], out int d))
-                {
-                    var pc = new PersianCalendar();
-                    var gDate = pc.ToDateTime(y, m, d, 0, 0, 0, 0);
-                    GregorianDate = gDate.ToString("yyyy/MM/dd");
-                }
-            }
-            catch { }
-            OnChange?.Invoke();
-        }
-    }
+    // متغیرهای جدید برای نوار خلاصه
+    public string ScanDuration { get; set; } = "—";
+    public int TotalChecks { get; set; } = 0;
+    public string ConsoleStatusText { get; set; } = "Ready to scan";
+    public string ConsoleStatusClass { get; set; } = "";
 
     public void LogAction(string action)
     {
@@ -74,8 +47,17 @@ public class ScanStateService
         {
             IsScanning = true;
             ConsoleLogs.Clear();
+
+            // تنظیم وضعیت روی "در حال اسکن"
+            ConsoleStatusText = "Scanning...";
+            ConsoleStatusClass = "scanning";
+            ScanDuration = "...";
+            TotalChecks = 0;
+
             LogAction($"Scan started for {HostnameContext}");
             OnChange?.Invoke();
+
+            var stopwatch = Stopwatch.StartNew(); // شروع زمان‌سنج
 
             var progress = new Progress<string>(status =>
             {
@@ -84,13 +66,25 @@ public class ScanStateService
             });
 
             var scanResult = await _scanService.RunScanAsync(ScanMode.Full, progress);
+
+            stopwatch.Stop(); // توقف زمان‌سنج
+
             CurrentScanResult = scanResult;
             _historyService.AddScan(scanResult);
+
+            // ثبت مقادیر نهایی در نوار خلاصه
+            ScanDuration = $"{stopwatch.Elapsed.TotalSeconds:F1}s";
+            TotalChecks = scanResult.Findings.Count;
+            ConsoleStatusText = "Scan Complete";
+            ConsoleStatusClass = "complete";
+
             LogAction($"Scan completed. Score: {scanResult.ComplianceScore}%");
         }
         catch (Exception ex)
         {
             LogAction($"Error during scan: {ex.Message}");
+            ConsoleStatusText = "Scan Failed";
+            ConsoleStatusClass = "failed";
         }
         finally
         {

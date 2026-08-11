@@ -31,6 +31,9 @@
         cursor: pointer;
         transition: 0.3s;
         box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
     }
 
         .btn-scan:hover {
@@ -55,33 +58,138 @@
         border-radius: 8px;
         cursor: pointer;
         text-decoration: none;
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
         margin-left: 10px;
     }
 
-    .console-box {
-        background: #000000;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 8px;
-        height: 80px;
-        overflow-y: auto;
-        margin-top: 10px;
-        font-family: 'Consolas', monospace;
-        font-size: 11px;
-        text-align: left;
+    /* استایل‌های کنسول اسکن */
+    .scan-console {
+        background: #0a0e1a;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        margin-top: 15px;
+        overflow: hidden;
     }
 
-    .console-line {
+    .console-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px;
+        background: #1a2033;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    .console-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'Consolas', monospace;
+        font-size: 11px;
+    }
+
+        .console-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .console-status.scanning .dot {
+            background: #f59e0b;
+            animation: pulse 1s infinite;
+        }
+
+        .console-status.complete .dot {
+            background: #10b981;
+        }
+
+        .console-status.failed .dot {
+            background: #ef4444;
+        }
+
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.3;
+        }
+    }
+
+    .console-body {
+        height: 100px;
+        overflow-y: auto;
+        padding: 8px 14px;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        line-height: 1.5;
         color: #10b981;
-        margin-bottom: 2px;
+    }
+
+        .console-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .console-body::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+    .console-summary {
+        display: flex;
+        border-top: 1px solid rgba(255,255,255,0.1);
+        background: #1a2033;
+    }
+
+    .summary-item {
+        flex: 1;
+        padding: 8px 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        border-right: 1px solid rgba(255,255,255,0.06);
+    }
+
+        .summary-item:last-child {
+            border-right: none;
+        }
+
+    .summary-num {
+        font-size: 16px;
+        font-weight: 700;
+        font-family: 'Consolas', monospace;
+        color: #e2e8f0;
+    }
+
+        .summary-num.pass {
+            color: #10b981;
+        }
+
+        .summary-num.fail {
+            color: #ef4444;
+        }
+
+        .summary-num.warn {
+            color: #f59e0b;
+        }
+
+    .summary-label {
+        font-size: 9px;
+        color: #64748b;
+        text-transform: uppercase;
     }
 
     .info-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 10px;
-        margin-bottom: 10px;
+        margin: 15px 0;
     }
 
     .info-card {
@@ -109,7 +217,7 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
     }
 
     .date-card {
@@ -138,7 +246,7 @@
         padding: 12px;
         border-radius: 8px;
         border: 1px solid #334155;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
     }
 
     .score-number {
@@ -213,15 +321,13 @@
     }
 
     .loading-spinner {
-        border: 3px solid #334155;
-        border-top: 3px solid #06b6d4;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top: 3px solid #fff;
         border-radius: 50%;
         width: 14px;
         height: 14px;
         animation: spin 1s linear infinite;
         display: inline-block;
-        vertical-align: middle;
-        margin-left: 10px;
     }
 
     @@keyframes spin {
@@ -253,13 +359,50 @@
         }
     </div>
 
-    @if (StateService.ConsoleLogs.Any())
+    @if (StateService.ConsoleLogs.Any() || StateService.IsScanning || StateService.CurrentScanResult != null)
     {
-        <div class="console-box">
-            @foreach (var log in StateService.ConsoleLogs)
-            {
-                <div class="console-line">@log</div>
-            }
+        <div class="scan-console">
+            <div class="console-header">
+                <div class="console-status @StateService.ConsoleStatusClass">
+                    <div class="dot"></div>
+                    <span>@StateService.ConsoleStatusText</span>
+                </div>
+            </div>
+            <div class="console-body">
+                @if (!StateService.ConsoleLogs.Any() && !StateService.IsScanning)
+                {
+                    <div style="color: #64748b;">Click "Start Scan" to begin.</div>
+                }
+                else
+                {
+                    @foreach (var log in StateService.ConsoleLogs)
+                    {
+                        <div>@log</div>
+                    }
+                }
+            </div>
+            <div class="console-summary">
+                <div class="summary-item">
+                    <div class="summary-num pass">@(StateService.CurrentScanResult?.PassCount ?? 0)</div>
+                    <div class="summary-label">Passed</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-num fail">@(StateService.CurrentScanResult?.FailCount ?? 0)</div>
+                    <div class="summary-label">Failed</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-num warn">@(StateService.CurrentScanResult?.WarningCount ?? 0)</div>
+                    <div class="summary-label">Warning</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-num">@StateService.ScanDuration</div>
+                    <div class="summary-label">Duration</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-num">@StateService.TotalChecks</div>
+                    <div class="summary-label">Checks</div>
+                </div>
+            </div>
         </div>
     }
 </div>
@@ -336,25 +479,19 @@
 
     private void InitDates()
     {
-        // خواندن تاریخ واقعی سیستم
         var now = DateTime.Now;
         _gregorianDate = now.ToString("yyyy/MM/dd");
-
-        // تبدیل به شمسی
         var pc = new System.Globalization.PersianCalendar();
         _shamsiDate = $"{pc.GetYear(now)}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
         _previousShamsiDate = _shamsiDate;
     }
 
-    // این متد وقتی کاربر تاریخ شمسی را عوض می‌کند اجرا می‌شود
     private void OnShamsiDateChanged(ChangeEventArgs e)
     {
         var newDate = e.Value?.ToString() ?? "";
         if (newDate == _shamsiDate) return;
-
         _previousShamsiDate = _shamsiDate;
         _shamsiDate = newDate;
-
         try
         {
             var pc = new System.Globalization.PersianCalendar();
@@ -363,24 +500,15 @@
             {
                 var gDate = pc.ToDateTime(y, m, d, 0, 0, 0, 0);
                 _gregorianDate = gDate.ToString("yyyy/MM/dd");
-
-                // ثبت در لاگ ریز فعالیت‌ها (برای تب Activity و Reports در آینده)
                 StateService.LogAction($"Scan date changed from {_previousShamsiDate} to {_shamsiDate}");
             }
         }
-        catch
-        {
-            _gregorianDate = "Invalid Date";
-        }
+        catch { _gregorianDate = "Invalid Date"; }
     }
 
     private void HandleStateChanged()
     {
-        InvokeAsync(() =>
-        {
-            CalculateCategoryBreakdown();
-            StateHasChanged();
-        });
+        InvokeAsync(() => { CalculateCategoryBreakdown(); StateHasChanged(); });
     }
 
     private void CalculateCategoryBreakdown()
@@ -395,8 +523,5 @@
             }).ToList();
     }
 
-    public void Dispose()
-    {
-        StateService.OnChange -= HandleStateChanged;
-    }
+    public void Dispose() { StateService.OnChange -= HandleStateChanged; }
 }
