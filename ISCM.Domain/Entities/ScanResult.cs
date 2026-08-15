@@ -7,7 +7,7 @@ public class ScanResult : BaseEntity
 {
     public string Hostname { get; private set; } = string.Empty;
     public string IpAddress { get; private set; } = string.Empty;
-    public string MacAddress { get; private set; } = string.Empty; // اضافه شد
+    public string MacAddress { get; private set; } = string.Empty;
     public string OsVersion { get; private set; } = string.Empty;
     public string OsBuild { get; private set; } = string.Empty;
     public ScanMode Mode { get; private set; }
@@ -19,7 +19,6 @@ public class ScanResult : BaseEntity
 
     private ScanResult() { }
 
-    // MacAddress به سازنده اضافه شد
     public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)
     {
         if (string.IsNullOrWhiteSpace(hostname))
@@ -40,6 +39,16 @@ public class ScanResult : BaseEntity
         if (_findings.Any(x => x.CheckId == finding.CheckId))
             throw new InvalidOperationException($"Check '{finding.CheckId}' already exists in this scan.");
 
+        _findings.Add(finding);
+        MarkModified();
+    }
+
+    // EDIT: جایگزینی نتیجه یک چک پس از Rescan تکی (بدون خطای تکراری)
+    public void ReplaceFinding(Finding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        var existing = _findings.FirstOrDefault(x => x.CheckId == finding.CheckId);
+        if (existing != null) _findings.Remove(existing);
         _findings.Add(finding);
         MarkModified();
     }
