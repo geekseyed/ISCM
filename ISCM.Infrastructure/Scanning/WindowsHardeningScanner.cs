@@ -16,29 +16,36 @@ public class WindowsHardeningScanner : IScanService
         _checks = checks;
     }
 
+    // EDIT: پیاده‌سازی پراپرتی جدید قرارداد
+    public int TotalCheckCount => _checks.Count();
+
     public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full, IProgress<string>? progress = null)
     {
-        progress?.Report("Initializing scan engine...");
+        progress?.Report("[INFO] DefenDoor Scanner initialized");
         await Task.Delay(500);
 
-        // دریافت ۵ مقدار از کلکتور
-        var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
+        // EDIT: خط baseline همراه با تعداد قوانین (مطابق ویدیوی طرح)
+        progress?.Report($"[INFO] Loading baseline: windows11-pro-hardening.json ({TotalCheckCount} rules)");
+        await Task.Delay(300);
 
-        // ساخت آبجکت ScanResult با ۶ پارامتر
+        var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
         var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode);
 
-        progress?.Report("System information collected successfully.");
+        progress?.Report($"[INFO] Collecting system info... Hostname: {hostname}, IP: {ipAddress}");
+        progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
         await Task.Delay(500);
 
         foreach (var check in _checks)
         {
-            progress?.Report($"Checking {check.CheckId}: {check.Name}...");
             await Task.Delay(1000);
 
             try
             {
                 var finding = await check.EvaluateAsync();
                 scanResult.AddFinding(finding);
+
+                // EDIT: خط نتیجه رنگی، دقیقاً مطابق فرمت ویدیوی طرح
+                progress?.Report(BuildResultLine(finding));
             }
             catch (Exception ex)
             {
@@ -51,16 +58,37 @@ public class WindowsHardeningScanner : IScanService
                     "Crash",
                     "N/A",
                     "The check failed to execute.",
-                    ex.Message
-                );
+                    ex.Message);
                 scanResult.AddFinding(errorFinding);
+                progress?.Report($"[ERROR] {check.CheckId}: {check.Name} = Crash ({ex.Message})");
             }
         }
 
-        progress?.Report("Finalizing scan and calculating compliance score...");
+        progress?.Report("[INFO] Finalizing scan and calculating compliance score...");
         await Task.Delay(500);
 
         scanResult.CompleteScan();
         return scanResult;
+    }
+
+    // EDIT: ساخت خط نتیجه با Switch Expression (یک ویژگی مدرن C#):
+    // [PASS] FW-001: Firewall Domain Profile = Enabled (PASS)
+    // [FAIL] SMB-001: SMBv1 Protocol = Enabled (FAIL - expected Disabled)
+    // [WARN] PWD-001: Password Length = 8 (WARN - expected 14)
+    private static string BuildResultLine(Finding finding)
+    {
+        string tag = finding.Status switch
+        {
+            CheckStatus.Pass => "[PASS]",
+            CheckStatus.Fail => "[FAIL]",
+            CheckStatus.Warning => "[WARN]",
+            _ => "[INFO]"
+        };
+
+        string suffix = finding.Status == CheckStatus.Pass
+            ? "(PASS)"
+            : $"({finding.Status.ToString().ToUpper()} - expected {finding.ExpectedValue})";
+
+        return $"{tag} {finding.CheckId}: {finding.Name} = {finding.CurrentValue} {suffix}";
     }
 }
