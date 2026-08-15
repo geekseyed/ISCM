@@ -32,7 +32,6 @@ public class ScanStateService
     public string ConsoleStatusText { get; set; } = "Ready to scan";
     public string ConsoleStatusClass { get; set; } = "";
 
-    // EDIT: شمارنده زنده برای نمایش x/15 در ستون CHECKS حین اسکن
     public int CompletedChecks { get; private set; } = 0;
     public int ExpectedChecks { get; private set; } = 0;
 
@@ -53,6 +52,13 @@ public class ScanStateService
     public string DisplayIpAddress => _overrideIpAddress ?? CurrentScanResult?.IpAddress ?? "—";
     public string DisplayOsVersion => _overrideOsVersion ?? CurrentScanResult?.OsVersion ?? "—";
     public string DisplayOsBuild => _overrideOsBuild ?? CurrentScanResult?.OsBuild ?? "—";
+
+    // EDIT (مرحله ب): لیست سفید ابزارهای رفع مشکل — فقط این اجراها مجازند (امنیتی)
+    private static readonly HashSet<string> AllowedTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "secpol.msc", "regedit.exe", "powershell.exe", "net.exe",
+        "gpedit.msc", "lusrmgr.msc", "compmgmt.msc"
+    };
 
     public void StartEditingSystemInfo()
     {
@@ -86,6 +92,43 @@ public class ScanStateService
         OnChange?.Invoke();
     }
 
+    // EDIT (مرحله ب): اجرای امن ابزار رفع مشکل روی همین میزبان (UseShellExecute + لیست سفید)
+    public void LaunchFixTool(string tool)
+    {
+        if (!AllowedTools.Contains(tool))
+        {
+            LogAction($"Blocked unknown tool: {tool}");
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(tool) { UseShellExecute = true });
+            LogAction($"User launched fix tool: {tool}");
+        }
+        catch (Exception ex)
+        {
+            LogAction($"Failed to launch {tool}: {ex.Message}");
+        }
+    }
+
+    // EDIT (مرحله ب): اسکن مجددِ یک چک و جایگزینی نتیجه در CurrentScanResult
+    public async Task RescanSingleCheckAsync(string checkId)
+    {
+        if (CurrentScanResult == null || IsScanning) return;
+
+        try
+        {
+            var newFinding = await _scanService.RescanCheckAsync(checkId);
+            CurrentScanResult.ReplaceFinding(newFinding);
+            LogAction($"User rescanned {checkId} => {newFinding.Status}");
+        }
+        catch (Exception ex)
+        {
+            LogAction($"Rescan failed for {checkId}: {ex.Message}");
+        }
+    }
+
     public async Task ExecuteScanAsync()
     {
         if (IsScanning) return;
@@ -95,7 +138,6 @@ public class ScanStateService
             IsScanning = true;
             ConsoleLogs.Clear();
 
-            // EDIT: بازنشانی و مقداردهی شمارنده زنده از طریق قرارداد IScanService
             CompletedChecks = 0;
             ExpectedChecks = _scanService.TotalCheckCount;
 
@@ -113,7 +155,6 @@ public class ScanStateService
             {
                 ConsoleLogs.Add($"[{DateTime.Now:HH:mm:ss}] {status}");
 
-                // EDIT: هر خط نتیجه (PASS/FAIL/WARN/ERROR) یعنی یک چک کامل‌شده
                 if (status.StartsWith("[PASS]") || status.StartsWith("[FAIL]") ||
                     status.StartsWith("[WARN]") || status.StartsWith("[ERROR]"))
                 {
@@ -132,7 +173,6 @@ public class ScanStateService
             ScanDuration = $"{stopwatch.Elapsed.TotalSeconds:F1}s";
             TotalChecks = scanResult.Findings.Count;
 
-            // EDIT: متن وضعیت پایانی مطابق طرح: Scan Complete - 15/15 checks
             ConsoleStatusText = $"Scan Complete - {scanResult.Findings.Count}/{scanResult.Findings.Count} checks";
             ConsoleStatusClass = "complete";
 
