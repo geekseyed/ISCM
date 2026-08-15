@@ -18,8 +18,10 @@
         padding: 12px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         margin-bottom: 10px;
+        box-sizing: border-box;
     }
 
+    /* ── دکمه اسکن + انیمیشن Dot Wave ─────────────────────────── */
     .btn-scan {
         background: linear-gradient(45deg, #06b6d4, #3b82f6);
         border: none;
@@ -48,36 +50,63 @@
             transform: none;
         }
 
-    .btn-nav {
-        background: #334155;
-        border: none;
-        padding: 10px 25px;
-        color: #06b6d4;
-        font-size: 15px;
-        font-weight: bold;
-        border-radius: 8px;
-        cursor: pointer;
-        text-decoration: none;
+    /* EDIT: انیمیشن موج نقطه‌ها — فقط برای حالت Scanning (مطابق دمو 16-dots-wave) */
+    .dots-wave {
         display: inline-flex;
+        gap: 5px;
         align-items: center;
-        margin-left: 10px;
     }
 
-    .scan-console {
-        background: #0a0e1a;
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
-        margin-top: 10px;
-        overflow: hidden;
+        .dots-wave span {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #ffffff;
+            animation: dotWave 1.2s infinite ease-in-out;
+        }
+
+            .dots-wave span:nth-child(1) {
+                animation-delay: 0s;
+            }
+
+            .dots-wave span:nth-child(2) {
+                animation-delay: 0.1s;
+            }
+
+            .dots-wave span:nth-child(3) {
+                animation-delay: 0.2s;
+            }
+
+            .dots-wave span:nth-child(4) {
+                animation-delay: 0.3s;
+            }
+
+            .dots-wave span:nth-child(5) {
+                animation-delay: 0.4s;
+            }
+
+    @@keyframes dotWave {
+        0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.5;
+        }
+
+        30% {
+            transform: translateY(-6px);
+            opacity: 1;
+        }
     }
 
+    /* ── کنسول اسکن ────────────────────────────────────────────── */
     .console-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 6px 14px;
         background: #1a2033;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
         font-size: 12px;
         color: #94a3b8;
     }
@@ -121,24 +150,33 @@
     }
 
     .console-body {
-        height: 70px;
+        height: 180px;
         overflow-y: auto;
-        padding: 6px 14px;
+        padding: 10px 14px;
         font-family: 'Consolas', monospace;
         font-size: 12px;
-        line-height: 1.4;
+        line-height: 1.5;
         color: #10b981;
+        background: #0a0e1a;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .log-placeholder {
+        color: #64748b;
     }
 
     .console-summary {
         display: flex;
-        border-top: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-top: none;
+        border-radius: 0 0 8px 8px;
         background: #1a2033;
+        margin-bottom: 10px;
     }
 
     .summary-item {
         flex: 1;
-        padding: 6px 12px;
+        padding: 8px 12px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -175,71 +213,45 @@
         text-transform: uppercase;
     }
 
-    .info-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-        margin: 10px 0;
-    }
-
-    .info-card {
-        background: rgba(15, 23, 42, 0.6);
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 3px solid #06b6d4;
-    }
-
-    .info-label {
-        color: #64748b;
-        font-size: 10px;
-        margin-bottom: 3px;
-        text-transform: uppercase;
-    }
-
-    .info-value {
-        color: #e2e8f0;
-        font-weight: bold;
-        font-family: monospace;
-        font-size: 13px;
-    }
-
-    .date-grid {
+    /* ── چیدمان دو ستونه (Score + System Info) ─────────────────── */
+    .two-col {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-bottom: 10px;
     }
 
-    .date-card {
-        background: rgba(15, 23, 42, 0.6);
-        padding: 10px;
-        border-radius: 8px;
-        border-left: 3px solid #f59e0b;
+    .panel-title {
+        color: #94a3b8;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-weight: bold;
     }
 
-    .date-input {
-        background: #0f172a;
-        border: 1px solid #334155;
-        padding: 4px 8px;
-        border-radius: 4px;
-        color: white;
-        width: 100%;
-        font-family: monospace;
-        font-size: 13px;
-    }
-
-    .score-container {
+    .panel-title-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        background: rgba(15, 23, 42, 0.8);
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid #334155;
         margin-bottom: 10px;
     }
 
-    .score-display {
+    .btn-edit {
+        background: #334155;
+        border: none;
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: bold;
+        padding: 4px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+        .btn-edit:hover {
+            background: #475569;
+        }
+
+    /* ── حلقه امتیاز ───────────────────────────────────────────── */
+    .score-layout {
         display: flex;
         align-items: center;
         gap: 20px;
@@ -247,8 +259,8 @@
 
     .score-ring {
         position: relative;
-        width: 90px;
-        height: 90px;
+        width: 110px;
+        height: 110px;
         flex-shrink: 0;
     }
 
@@ -284,6 +296,7 @@
         font-size: 22px;
         font-weight: 800;
         line-height: 1;
+        color: #e2e8f0;
     }
 
     .score-grade-text {
@@ -293,9 +306,10 @@
     }
 
     .score-stats {
+        flex-grow: 1;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
     }
 
     .stat-row {
@@ -304,6 +318,8 @@
         gap: 8px;
         font-size: 13px;
         color: #94a3b8;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        padding-bottom: 6px;
     }
 
     .stat-dot {
@@ -325,10 +341,11 @@
         }
 
     .stat-num {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 700;
         font-family: 'Consolas', monospace;
         margin-left: auto;
+        color: #e2e8f0;
     }
 
         .stat-num.pass {
@@ -343,12 +360,13 @@
             color: #f59e0b;
         }
 
+    /* ── دونات ─────────────────────────────────────────────────── */
     .donut-section {
         display: flex;
         align-items: center;
         gap: 15px;
-        margin-top: 10px;
-        padding-top: 10px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
 
@@ -425,6 +443,68 @@
         color: #e2e8f0;
     }
 
+    /* ── جدول اطلاعات سیستم ────────────────────────────────────── */
+    .sys-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 9px 0;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+        font-size: 13px;
+    }
+
+    .sys-label {
+        color: #64748b;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
+
+    .sys-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+    }
+
+    .sys-input {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        width: 55%;
+    }
+
+    .edit-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .btn-save {
+        background: #10b981;
+        border: none;
+        color: white;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 6px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .btn-cancel {
+        background: #475569;
+        border: none;
+        color: white;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 6px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    /* ── کارت‌های دسته‌بندی با Progress Bar ────────────────────── */
     .category-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -433,167 +513,131 @@
 
     .category-card {
         background: rgba(15, 23, 42, 0.8);
-        padding: 10px;
+        border: 1px solid #334155;
         border-radius: 8px;
-        border-top: 3px solid #06b6d4;
-        text-align: center;
-        transition: 0.3s;
+        padding: 12px;
         text-decoration: none;
-        color: #e2e8f0;
         display: block;
+        transition: 0.3s;
     }
 
         .category-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            background: rgba(6, 182, 212, 0.1);
+            border-color: #06b6d4;
+            transform: translateY(-2px);
         }
 
-        .category-card.fail {
-            border-top-color: #ef4444;
-        }
-
-        .category-card.pass {
-            border-top-color: #10b981;
-        }
+    .category-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
 
     .category-title {
         color: #94a3b8;
         font-size: 11px;
-        margin-bottom: 5px;
+        font-weight: bold;
         text-transform: uppercase;
-        font-weight: bold;
     }
 
-    .category-stats {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-        font-size: 12px;
+    .category-pct {
+        font-weight: 800;
+        font-family: 'Consolas', monospace;
+        font-size: 14px;
     }
 
-    .stat-pass {
-        color: #10b981;
-        font-weight: bold;
+    .progress-track {
+        height: 4px;
+        background: #1e293b;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 8px;
     }
 
-    .stat-fail {
-        color: #ef4444;
-        font-weight: bold;
+    .progress-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.5s ease;
     }
 
-    .loading-spinner {
-        border: 3px solid rgba(255,255,255,0.3);
-        border-top: 3px solid #fff;
-        border-radius: 50%;
-        width: 14px;
-        height: 14px;
-        animation: spin 1s linear infinite;
-        display: inline-block;
-    }
-
-    @@keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
+    .category-sub {
+        color: #64748b;
+        font-size: 10px;
     }
 </style>
 
-<div class="glass-panel">
-    <div style="text-align: center; margin-bottom: 10px;">
-        <button class="btn-scan" @onclick="StateService.ExecuteScanAsync" disabled="@StateService.IsScanning">
-            @if (StateService.IsScanning)
-            {
-                <span>Scanning System...</span> <div class="loading-spinner"></div>
-            }
-            else
-            {
-                <span>⚡ Start Real Scan</span>
-            }
-        </button>
-        @if (StateService.CurrentScanResult != null && !StateService.IsScanning)
-        {
-            <a href="/findings" class="btn-nav">Go to Findings ➡️</a>
-        }
+@* ── کنسول اسکن + دکمه با انیمیشن Dot Wave ─────────────────────── *@
+<div class="console-header">
+    <div class="console-status @StateService.ConsoleStatusClass">
+        <div class="dot"></div>
+        <span>@StateService.ConsoleStatusText</span>
     </div>
-
-    @if (StateService.ConsoleLogs.Any() || StateService.IsScanning || StateService.CurrentScanResult != null)
+    <button class="btn-scan" @onclick="StateService.ExecuteScanAsync" disabled="@StateService.IsScanning">
+        @if (StateService.IsScanning)
+        {
+            <span class="dots-wave"><span></span><span></span><span></span><span></span><span></span></span>
+            <span>Scanning...</span>
+        }
+        else
+        {
+            <span>🔍 Start Scan</span>
+        }
+    </button>
+</div>
+<div class="console-body">
+    @if (!StateService.ConsoleLogs.Any() && !StateService.IsScanning)
     {
-        <div class="scan-console">
-            <div class="console-header">
-                <div class="console-status @StateService.ConsoleStatusClass">
-                    <div class="dot"></div>
-                    <span>@StateService.ConsoleStatusText</span>
-                </div>
-            </div>
-            <div class="console-body">
-                @if (!StateService.ConsoleLogs.Any() && !StateService.IsScanning)
-                {
-                    <div style="color: #64748b;">Click "Start Scan" to begin.</div>
-                }
-                else
-                {
-                    @foreach (var log in StateService.ConsoleLogs)
-                    {
-                        <div>@log</div>
-                    }
-                }
-            </div>
-            <div class="console-summary">
-                <div class="summary-item"><div class="summary-num pass">@(StateService.CurrentScanResult?.PassCount ?? 0)</div><div class="summary-label">Passed</div></div>
-                <div class="summary-item"><div class="summary-num fail">@(StateService.CurrentScanResult?.FailCount ?? 0)</div><div class="summary-label">Failed</div></div>
-                <div class="summary-item"><div class="summary-num warn">@(StateService.CurrentScanResult?.WarningCount ?? 0)</div><div class="summary-label">Warning</div></div>
-                <div class="summary-item"><div class="summary-num">@StateService.ScanDuration</div><div class="summary-label">Duration</div></div>
-                <div class="summary-item"><div class="summary-num">@StateService.TotalChecks</div><div class="summary-label">Checks</div></div>
-            </div>
-        </div>
+        <div class="log-placeholder">[--:--:--] Click "Start Scan" to begin.</div>
+    }
+    else
+    {
+        @foreach (var log in StateService.ConsoleLogs)
+        {
+            <div>@log</div>
+        }
     }
 </div>
+<div class="console-summary">
+    <div class="summary-item"><div class="summary-num pass">@PassedDisplay</div><div class="summary-label">Passed</div></div>
+    <div class="summary-item"><div class="summary-num fail">@FailedDisplay</div><div class="summary-label">Failed</div></div>
+    <div class="summary-item"><div class="summary-num warn">@WarningDisplay</div><div class="summary-label">Warning</div></div>
+    <div class="summary-item"><div class="summary-num">@StateService.ScanDuration</div><div class="summary-label">Duration</div></div>
+    <div class="summary-item"><div class="summary-num">@ChecksDisplay</div><div class="summary-label">Checks</div></div>
+</div>
 
-@if (StateService.CurrentScanResult != null)
-{
-    var result = StateService.CurrentScanResult;
-    var scoreColor = result.ComplianceScore > 70 ? "#10b981" : "#ef4444";
-    double circumference = 326.7;
-    double offset = circumference - (circumference * result.ComplianceScore / 100.0);
-
-    int totalChecks = result.Findings.Count;
-    double passPct = totalChecks > 0 ? (double)result.PassCount / totalChecks * 100 : 0;
-    double failPct = totalChecks > 0 ? (double)result.FailCount / totalChecks * 100 : 0;
-    double warnPct = totalChecks > 0 ? (double)result.WarningCount / totalChecks * 100 : 0;
-
-    <div class="glass-panel">
-        <div class="info-grid">
-            <div class="info-card"><div class="info-label">Hostname</div><div class="info-value">@result.Hostname</div></div>
-            <div class="info-card"><div class="info-label">IP Address</div><div class="info-value">@result.IpAddress</div></div>
-            <div class="info-card"><div class="info-label">MAC Address</div><div class="info-value">@result.MacAddress</div></div>
-            <div class="info-card"><div class="info-label">OS Edition</div><div class="info-value" style="font-size: 12px;">@result.OsVersion</div></div>
-            <div class="info-card"><div class="info-label">OS Build</div><div class="info-value" style="font-size: 12px;">@result.OsBuild</div></div>
-        </div>
-
-        <div class="date-grid">
-            <div class="date-card"><div class="info-label">Scan Date (Shamsi)</div><input type="text" class="date-input" value="@_shamsiDate" @onchange="OnShamsiDateChanged" /></div>
-            <div class="date-card" style="border-left-color: #475569;"><div class="info-label">Scan Date (Gregorian)</div><input type="text" class="date-input" value="@_gregorianDate" readonly style="cursor: not-allowed; color: #64748b;" /></div>
-        </div>
-
-        <div class="score-container">
-            <div class="score-display">
-                <div class="score-ring">
-                    <svg viewBox="0 0 120 120">
-                        <circle class="ring-bg" cx="60" cy="60" r="52" />
-                        <circle class="ring-fill" cx="60" cy="60" r="52" stroke-dasharray="@circumference" stroke-dashoffset="@offset" stroke="@scoreColor" />
-                    </svg>
-                    <div class="score-value"><div class="score-percent" style="color: @scoreColor;">@result.ComplianceScore%</div><div class="score-grade-text">Grade @result.Grade</div></div>
+@* ── دو پنل همیشه‌نمایان: امتیاز + اطلاعات سیستم ───────────────── *@
+<div class="two-col">
+    <div class="glass-panel" style="margin-bottom: 0;">
+        <div class="panel-title" style="margin-bottom: 12px;">Compliance Score</div>
+        <div class="score-layout">
+            <div class="score-ring">
+                <svg viewBox="0 0 120 120">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" />
+                    @if (StateService.CurrentScanResult != null)
+                    {
+                        <circle class="ring-fill" cx="60" cy="60" r="52"
+                                stroke-dasharray="@RingCircumference"
+                                stroke-dashoffset="@RingOffset"
+                                stroke="@ScoreColor" />
+                    }
+                </svg>
+                <div class="score-value">
+                    @if (StateService.CurrentScanResult != null)
+                    {
+                        <div class="score-percent" style="color: @ScoreColor;">@StateService.CurrentScanResult.ComplianceScore%</div>
+                        <div class="score-grade-text">Grade @StateService.CurrentScanResult.Grade</div>
+                    }
+                    else
+                    {
+                        <div class="score-percent">—</div>
+                        <div class="score-grade-text">—</div>
+                    }
                 </div>
-                <div class="score-stats">
-                    <div class="stat-row"><span class="stat-dot pass"></span> Passed <span class="stat-num pass">@result.PassCount</span></div>
-                    <div class="stat-row"><span class="stat-dot fail"></span> Failed <span class="stat-num fail">@result.FailCount</span></div>
-                    <div class="stat-row"><span class="stat-dot warn"></span> Warning <span class="stat-num warn">@result.WarningCount</span></div>
-                </div>
+            </div>
+            <div class="score-stats">
+                <div class="stat-row"><span class="stat-dot pass"></span> Passed <span class="stat-num pass">@ResultOr0(StateService.CurrentScanResult?.PassCount)</span></div>
+                <div class="stat-row"><span class="stat-dot fail"></span> Failed <span class="stat-num fail">@ResultOr0(StateService.CurrentScanResult?.FailCount)</span></div>
+                <div class="stat-row"><span class="stat-dot warn"></span> Warning <span class="stat-num warn">@ResultOr0(StateService.CurrentScanResult?.WarningCount)</span></div>
             </div>
         </div>
 
@@ -601,93 +645,143 @@
             <div class="donut-chart">
                 <svg viewBox="0 0 36 36">
                     <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3" />
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="@(passPct) @(100-passPct)" stroke-dashoffset="0" />
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="@(failPct) @(100-failPct)" stroke-dashoffset="@(-passPct)" />
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="@(warnPct) @(100-warnPct)" stroke-dashoffset="@(-(passPct + failPct))" />
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="@(PassPct) @(100-PassPct)" stroke-dashoffset="0" />
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ef4444" stroke-width="3" stroke-dasharray="@(FailPct) @(100-FailPct)" stroke-dashoffset="@(-PassPct)" />
+                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="@(WarnPct) @(100-WarnPct)" stroke-dashoffset="@(-(PassPct + FailPct))" />
                 </svg>
-                <div class="donut-center"><div class="donut-num">@totalChecks</div><div class="donut-label">Checks</div></div>
+                <div class="donut-center"><div class="donut-num">@TotalChecksCount</div><div class="donut-label">Checks</div></div>
             </div>
             <div class="donut-legend">
-                <div class="legend-item"><span class="legend-dot pass"></span> PASS <span class="legend-num">@result.PassCount</span></div>
-                <div class="legend-item"><span class="legend-dot fail"></span> FAIL <span class="legend-num">@result.FailCount</span></div>
-                <div class="legend-item"><span class="legend-dot warn"></span> WARN <span class="legend-num">@result.WarningCount</span></div>
+                <div class="legend-item"><span class="legend-dot pass"></span> PASS <span class="legend-num">@ResultOr0(StateService.CurrentScanResult?.PassCount)</span></div>
+                <div class="legend-item"><span class="legend-dot fail"></span> FAIL <span class="legend-num">@ResultOr0(StateService.CurrentScanResult?.FailCount)</span></div>
+                <div class="legend-item"><span class="legend-dot warn"></span> WARN <span class="legend-num">@ResultOr0(StateService.CurrentScanResult?.WarningCount)</span></div>
             </div>
         </div>
+    </div>
 
-        <h3 style="color: #94a3b8; margin: 10px 0; font-size: 12px; text-transform: uppercase;">Category Breakdown</h3>
-        <div class="category-grid">
-            @foreach (var group in CategoryBreakdown)
+    <div class="glass-panel" style="margin-bottom: 0;">
+        <div class="panel-title-row">
+            <div class="panel-title">System Information</div>
+            @if (!StateService.IsEditingSystemInfo)
             {
-                var hasFail = group.FailCount > 0;
-                <a href="@($"/findings?category={group.Category}")" class="category-card @(hasFail ? "fail" : "pass")">
-                    <div class="category-title">@group.Category</div>
-                    <div class="category-stats"><span class="stat-pass">@group.PassCount P</span><span class="stat-fail">@group.FailCount F</span></div>
-                </a>
+                <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo">Edit</button>
             }
         </div>
+
+        @if (StateService.IsEditingSystemInfo)
+        {
+            <div class="sys-row"><span class="sys-label">Hostname</span><input class="sys-input" @bind="StateService.DraftHostname" placeholder="Hostname" /></div>
+            <div class="sys-row"><span class="sys-label">IP Address</span><input class="sys-input" @bind="StateService.DraftIpAddress" placeholder="IP Address" /></div>
+            <div class="sys-row"><span class="sys-label">OS Version</span><input class="sys-input" @bind="StateService.DraftOsVersion" placeholder="OS Version" /></div>
+            <div class="sys-row"><span class="sys-label">Build</span><input class="sys-input" @bind="StateService.DraftOsBuild" placeholder="Build" /></div>
+            <div class="edit-actions">
+                <button class="btn-save" @onclick="StateService.SaveSystemInfoEdits">Save</button>
+                <button class="btn-cancel" @onclick="StateService.CancelSystemInfoEdits">Cancel</button>
+            </div>
+        }
+        else
+        {
+            <div class="sys-row"><span class="sys-label">Hostname</span><span class="sys-value">@StateService.DisplayHostname</span></div>
+            <div class="sys-row"><span class="sys-label">IP Address</span><span class="sys-value">@StateService.DisplayIpAddress</span></div>
+            <div class="sys-row"><span class="sys-label">OS Version</span><span class="sys-value">@StateService.DisplayOsVersion</span></div>
+            <div class="sys-row"><span class="sys-label">Build</span><span class="sys-value">@StateService.DisplayOsBuild</span></div>
+            <div class="sys-row"><span class="sys-label">Scan Time</span><span class="sys-value">@StateService.ScanTimeText</span></div>
+        }
     </div>
-}
+</div>
+
+@* ── کارت‌های دسته‌بندی با درصد و Progress Bar ─────────────────── *@
+<div class="category-grid" style="margin-top: 10px;">
+    @foreach (var group in CategoryBreakdown)
+    {
+        var pct = GetCategoryPercent(group);
+        var barColor = GetBarColor(pct);
+        <a href="@($"/findings?category={group.Category}")" class="category-card">
+            <div class="category-head">
+                <div class="category-title">@group.Category</div>
+                <div class="category-pct" style="color: @barColor;">@(group.HasResult ? $"{pct}%" : "—")</div>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" style="width: @(group.HasResult ? pct : 0)%; background: @barColor;"></div>
+            </div>
+            <div class="category-sub">
+                @(group.HasResult ? $"{group.PassCount} pass {group.FailCount} issues" : "0 pass 0 fail")
+            </div>
+        </a>
+    }
+</div>
 
 @code {
-    private string _shamsiDate = "";
-    private string _gregorianDate = "";
-    private string _previousShamsiDate = "";
+    // EDIT: مدل سبک برای آمار هر دسته‌بندی (فقط برای نمایش در UI)
+    public class CategoryStat
+    {
+        public string Category { get; set; } = "";
+        public int PassCount { get; set; }
+        public int FailCount { get; set; }
+        public bool HasResult { get; set; }
+    }
 
-    public class CategoryStat { public string Category { get; set; } = ""; public int PassCount { get; set; } public int FailCount { get; set; } }
     private List<CategoryStat> CategoryBreakdown { get; set; } = new();
 
     protected override void OnInitialized()
     {
         StateService.OnChange += HandleStateChanged;
-        InitDates();
         CalculateCategoryBreakdown();
-    }
-
-    private void InitDates()
-    {
-        var now = DateTime.Now;
-        _gregorianDate = now.ToString("yyyy/MM/dd");
-        var pc = new System.Globalization.PersianCalendar();
-        _shamsiDate = $"{pc.GetYear(now)}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
-        _previousShamsiDate = _shamsiDate;
-    }
-
-    private void OnShamsiDateChanged(ChangeEventArgs e)
-    {
-        var newDate = e.Value?.ToString() ?? "";
-        if (newDate == _shamsiDate) return;
-        _previousShamsiDate = _shamsiDate;
-        _shamsiDate = newDate;
-        try
-        {
-            var pc = new System.Globalization.PersianCalendar();
-            var parts = _shamsiDate.Split('/');
-            if (parts.Length == 3 && int.TryParse(parts[0], out int y) && int.TryParse(parts[1], out int m) && int.TryParse(parts[2], out int d))
-            {
-                var gDate = pc.ToDateTime(y, m, d, 0, 0, 0, 0);
-                _gregorianDate = gDate.ToString("yyyy/MM/dd");
-                StateService.LogAction($"Scan date changed from {_previousShamsiDate} to {_shamsiDate}");
-            }
-        }
-        catch { _gregorianDate = "Invalid Date"; }
     }
 
     private void HandleStateChanged()
     {
-        InvokeAsync(() => { CalculateCategoryBreakdown(); StateHasChanged(); });
+        InvokeAsync(() =>
+        {
+            CalculateCategoryBreakdown();
+            StateHasChanged();
+        });
     }
 
     private void CalculateCategoryBreakdown()
     {
-        CategoryBreakdown.Clear();
-        if (StateService.CurrentScanResult == null) return;
-        CategoryBreakdown = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => new CategoryStat
-            {
-                Category = c.ToString(),
-                PassCount = StateService.CurrentScanResult.Findings.Count(f => f.Category == c && f.Status == CheckStatus.Pass),
-                FailCount = StateService.CurrentScanResult.Findings.Count(f => f.Category == c && f.Status == CheckStatus.Fail)
-            }).ToList();
+        CategoryBreakdown = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c =>
+        {
+            var findings = StateService.CurrentScanResult?.Findings.Where(f => f.Category == c).ToList() ?? new List<Finding>();
+            return new CategoryStat
+                {
+                    Category = c.ToString(),
+                    PassCount = findings.Count(f => f.Status == CheckStatus.Pass),
+                    FailCount = findings.Count(f => f.Status == CheckStatus.Fail),
+                    HasResult = StateService.CurrentScanResult != null
+                };
+        }).ToList();
     }
 
-    public void Dispose() { StateService.OnChange -= HandleStateChanged; }
+    // EDIT: درصد = Pass تقسیم بر (Pass + Fail) — دقیقاً مطابق منطق طرح (3 pass 2 fail = 60%)
+    private static int GetCategoryPercent(CategoryStat s)
+        => (s.PassCount + s.FailCount) == 0 ? 0 : (int)Math.Round((double)s.PassCount / (s.PassCount + s.FailCount) * 100);
+
+    // EDIT: رنگ نوار پیشرفت — سبز برای ۱۰۰٪، نارنجی برای ۵۰٪ به بالا، قرمز برای کمتر
+    private static string GetBarColor(int pct)
+        => pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
+
+    // ── مقادیر نمایشی نوار خلاصه (Placeholder قبل از اسکن) ──
+    private string PassedDisplay => StateService.CurrentScanResult?.PassCount.ToString() ?? "—";
+    private string FailedDisplay => StateService.CurrentScanResult?.FailCount.ToString() ?? "—";
+    private string WarningDisplay => StateService.CurrentScanResult?.WarningCount.ToString() ?? "—";
+    private string ChecksDisplay => StateService.CurrentScanResult != null ? $"{StateService.TotalChecks}/{StateService.TotalChecks}" : "—";
+
+    // ── محاسبات حلقه امتیاز و دونات ──
+    private const double RingCircumference = 326.7;
+    private double RingOffset => StateService.CurrentScanResult == null ? RingCircumference
+        : RingCircumference - (RingCircumference * StateService.CurrentScanResult.ComplianceScore / 100.0);
+    private string ScoreColor => StateService.CurrentScanResult != null && StateService.CurrentScanResult.ComplianceScore > 70 ? "#10b981" : "#ef4444";
+
+    private int TotalChecksCount => StateService.CurrentScanResult?.Findings.Count ?? 0;
+    private double PassPct => TotalChecksCount > 0 ? (double)(StateService.CurrentScanResult?.PassCount ?? 0) / TotalChecksCount * 100 : 0;
+    private double FailPct => TotalChecksCount > 0 ? (double)(StateService.CurrentScanResult?.FailCount ?? 0) / TotalChecksCount * 100 : 0;
+    private double WarnPct => TotalChecksCount > 0 ? (double)(StateService.CurrentScanResult?.WarningCount ?? 0) / TotalChecksCount * 100 : 0;
+
+    private static int ResultOr0(int? value) => value ?? 0;
+
+    public void Dispose()
+    {
+        StateService.OnChange -= HandleStateChanged;
+    }
 }
