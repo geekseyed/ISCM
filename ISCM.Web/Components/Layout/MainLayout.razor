@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @using ISCM.Web.Services
 @inject ScanStateService StateService
+@inject ThemeService ThemeService
+@implements IDisposable
 
 <style>
     html, body {
@@ -12,19 +14,24 @@
 
     body {
         background-color: #0f172a;
+        color: #e2e8f0;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+    }
+
+    /* ── کانتینر اصلی (تم تاریک پیش‌فرض) ─────────────────────────── */
+    .app-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        background-color: #0f172a;
         background-image: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
         background-size: cover;
         color: #e2e8f0;
         font-family: 'Segoe UI', Tahoma, sans-serif;
     }
 
-    .app-container {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        overflow: hidden;
-    }
-
+    /* ── هدر جدید مطابق طرح ────────────────────────────────────────── */
     .app-header {
         display: flex;
         justify-content: space-between;
@@ -34,65 +41,102 @@
         backdrop-filter: blur(10px);
         border-bottom: 1px solid #334155;
         flex-shrink: 0;
+        position: relative;
     }
 
-    .brand-area {
+    .header-left {
         display: flex;
         align-items: center;
-        gap: 15px;
+        gap: 10px;
+    }
+
+    .host-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid #334155;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #e2e8f0;
+    }
+
+        .host-pill .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+        }
+
+    .path-pill {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid #334155;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    /* EDIT: لوگو و برند دقیقاً در مرکز هدر (مطابق طرح) */
+    .brand-center {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
 
     .logo-svg {
         filter: drop-shadow(0 0 8px #06b6d4);
     }
 
-    .neon-text {
+    .brand-name {
         color: #e2e8f0;
-        text-shadow: 0 0 5px #06b6d4, 0 0 15px #06b6d4, 0 0 25px #06b6d4;
-        letter-spacing: 1px;
-        font-size: 24px;
+        text-shadow: 0 0 5px #06b6d4, 0 0 15px #06b6d4;
+        font-size: 22px;
         font-weight: bold;
+        letter-spacing: 1px;
     }
 
-    .subtitle {
+    .brand-sub {
         color: #64748b;
-        font-size: 12px;
+        font-size: 10px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
         margin-top: 2px;
     }
 
-    .status-indicator {
+    .header-right {
         display: flex;
         align-items: center;
         gap: 10px;
+    }
+
+    /* EDIT: دکمه تغییر تم */
+    .theme-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         background: rgba(30, 41, 59, 0.5);
-        padding: 8px 16px;
-        border-radius: 20px;
         border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: bold;
+        transition: 0.2s;
     }
 
-    .status-dot {
-        width: 10px;
-        height: 10px;
-        background-color: #10b981;
-        border-radius: 50%;
-        box-shadow: 0 0 10px #10b981;
-        animation: pulse 2s infinite;
-    }
-
-    @@keyframes pulse {
-        0% {
-            opacity: 1;
+        .theme-btn:hover {
+            border-color: #06b6d4;
         }
 
-        50% {
-            opacity: 0.5;
-        }
-
-        100% {
-            opacity: 1;
-        }
-    }
-
+    /* ── ناوبری بالا + شمارنده‌ها ──────────────────────────────────── */
     .top-nav {
         background: rgba(15, 23, 42, 0.6);
         padding: 10px 40px;
@@ -123,18 +167,32 @@
             border-radius: 0;
         }
 
+    /* EDIT: بج شمارنده روی تب‌ها (Findings 0 / Activity 0) */
+    .nav-badge {
+        background: rgba(6, 182, 212, 0.15);
+        color: #06b6d4;
+        border-radius: 10px;
+        padding: 1px 8px;
+        font-size: 11px;
+        font-family: 'Consolas', monospace;
+        margin-left: 6px;
+    }
+
+    .nav-right {
+        margin-left: auto;
+    }
+
     .nav-locked {
         pointer-events: none;
         opacity: 0.4;
         cursor: not-allowed;
     }
 
-    /* تنظیمات کانتینر اصلی و مخفی کردن اسکرول بار */
     .main-content {
         flex-grow: 1;
         overflow-y: auto;
-        scrollbar-width: none; /* مخفی کردن در فایرفاکس */
-        -ms-overflow-style: none; /* مخفی کردن در اینترنت اکسپلورر و اج */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         padding: 20px 40px;
         max-width: 1400px;
         width: 100%;
@@ -143,7 +201,7 @@
         display: flex;
         flex-direction: column;
     }
-        /* مخفی کردن اسکرول بار در کروم و سافاری */
+
         .main-content::-webkit-scrollbar {
             display: none;
         }
@@ -178,32 +236,374 @@
         font-weight: bold;
         margin-top: 10px;
     }
+
+    /* ════════════════════════════════════════════════════════════════
+           EDIT: تم روشن — Override سراسری برای تمام صفحات
+           (به دلیل Specificity بالاتر، روی استایل‌های تک‌کلاسه صفحات غلبه می‌کند)
+           ════════════════════════════════════════════════════════════════ */
+    .app-container.light {
+        background: #f1f5f9;
+        color: #0f172a;
+    }
+
+        /* متن‌های Inline که رنگ روشن دارند، در تم روشن تیره می‌شوند */
+        .app-container.light h1, .app-container.light h2, .app-container.light h3 {
+            color: #0f172a !important;
+        }
+
+        .app-container.light p {
+            color: #475569 !important;
+        }
+
+        .app-container.light strong, .app-container.light b {
+            color: #0f172a !important;
+        }
+
+        .app-container.light .app-header {
+            background: rgba(255, 255, 255, 0.9);
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .host-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
+
+        .app-container.light .path-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
+
+        .app-container.light .brand-name {
+            color: #0f172a;
+            text-shadow: none;
+        }
+
+        .app-container.light .brand-sub {
+            color: #64748b;
+        }
+
+        .app-container.light .theme-btn {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
+
+            .app-container.light .theme-btn:hover {
+                border-color: #0891b2;
+            }
+
+        .app-container.light .top-nav {
+            background: rgba(255, 255, 255, 0.7);
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .nav-link {
+            color: #475569;
+        }
+
+            .app-container.light .nav-link:hover {
+                color: #0f172a;
+                background: rgba(226, 232, 240, 0.6);
+            }
+
+            .app-container.light .nav-link.active {
+                color: #0891b2;
+                background: rgba(6, 182, 212, 0.08);
+            }
+
+        .app-container.light .nav-badge {
+            background: rgba(6, 182, 212, 0.15);
+            color: #0891b2;
+        }
+
+        /* داشبورد */
+        .app-container.light .glass-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .app-container.light .console-header {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-bottom: none;
+            color: #475569;
+        }
+
+        .app-container.light .console-body {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
+
+        .app-container.light .log-placeholder {
+            color: #94a3b8;
+        }
+
+        .app-container.light .console-summary {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+        }
+
+        .app-container.light .summary-item {
+            border-right-color: #e2e8f0;
+        }
+
+        .app-container.light .summary-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .summary-label {
+            color: #64748b;
+        }
+
+        .app-container.light .panel-title {
+            color: #475569;
+        }
+
+        .app-container.light .btn-edit {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+            .app-container.light .btn-edit:hover {
+                background: #cbd5e1;
+            }
+
+        .app-container.light .stat-row {
+            color: #475569;
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .stat-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .score-percent {
+            color: #0f172a;
+        }
+
+        .app-container.light .score-grade-text {
+            color: #64748b;
+        }
+
+        .app-container.light .ring-bg {
+            stroke: rgba(15, 23, 42, 0.1);
+        }
+
+        .app-container.light .donut-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .donut-label {
+            color: #64748b;
+        }
+
+        .app-container.light .legend-item {
+            color: #475569;
+        }
+
+        .app-container.light .legend-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .sys-row {
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .sys-label {
+            color: #64748b;
+        }
+
+        .app-container.light .sys-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .sys-input {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+        }
+
+        .app-container.light .btn-cancel {
+            background: #94a3b8;
+        }
+
+        .app-container.light .category-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .category-card:hover {
+                border-color: #0891b2;
+            }
+
+        .app-container.light .category-title {
+            color: #475569;
+        }
+
+        .app-container.light .category-sub {
+            color: #64748b;
+        }
+
+        .app-container.light .progress-track {
+            background: #e2e8f0;
+        }
+
+        /* Findings */
+        .app-container.light .btn-back {
+            background: #e2e8f0;
+            color: #0891b2;
+        }
+
+        .app-container.light .filter-btn {
+            background: #e2e8f0;
+            color: #334155;
+        }
+
+            .app-container.light .filter-btn.active {
+                background: #06b6d4;
+                color: #ffffff;
+            }
+
+        .app-container.light .search-box {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+        }
+
+        .app-container.light .table-container {
+            border-color: #e2e8f0;
+        }
+
+        .app-container.light th {
+            background: #f8fafc;
+            color: #0891b2;
+            border-bottom-color: #cbd5e1;
+        }
+
+        .app-container.light td {
+            border-bottom-color: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .app-container.light tr:hover {
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .app-container.light .drawer {
+            background: #ffffff;
+            border-left-color: #0891b2;
+        }
+
+        .app-container.light .drawer-header {
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .drawer-title {
+            color: #0891b2;
+        }
+
+        .app-container.light .detail-label {
+            color: #64748b;
+        }
+
+        .app-container.light .detail-value {
+            color: #0f172a;
+        }
+
+        /* Reports */
+        .app-container.light .summary-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .summary-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .export-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-top-width: 4px;
+        }
+
+        /* Settings */
+        .app-container.light .section-title {
+            color: #0891b2;
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .info-row {
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .info-label {
+            color: #64748b;
+        }
+
+        .app-container.light .info-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .check-badge {
+            background: rgba(6, 182, 212, 0.1);
+            color: #0891b2;
+        }
+
+        /* Activity */
+        .app-container.light .log-box {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .log-line {
+            color: #059669;
+        }
+
+        .app-container.light .grade-badge {
+            background: rgba(6, 182, 212, 0.1);
+            color: #0891b2;
+        }
 </style>
 
-<div class="app-container">
+@* EDIT: کلاس light به صورت پویا روی کانتینر اصلی قرار می‌گیرد *@
+<div class="app-container @(ThemeService.IsDark ? "" : "light")">
     <div class="app-header">
-        <div class="brand-area">
+        <div class="header-left">
+            <div class="host-pill"><span class="dot"></span> Connected to Host</div>
+            <div class="path-pill">E:\DefenDoor\</div>
+        </div>
+
+        <div class="brand-center">
             <svg class="logo-svg" width="40" height="40" viewBox="0 0 100 100">
                 <path d="M50 5 L90 20 V50 C90 75 70 90 50 95 C30 90 10 75 10 50 V20 Z" fill="rgba(15, 23, 42, 0.8)" stroke="#06b6d4" stroke-width="3" />
                 <path d="M35 50 L45 60 L65 35" stroke="#ffffff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 0 5px #ffffff);" />
             </svg>
             <div>
-                <div class="neon-text">DefenDoor</div>
-                <div class="subtitle">Industrial Security Compliance Manager</div>
+                <div class="brand-name">DefenDoor</div>
+                <div class="brand-sub">Industrial Security Compliance</div>
             </div>
         </div>
-        <div class="status-indicator">
-            <div class="status-dot"></div>
-            <span style="color: #10b981; font-weight: bold; font-size: 14px;">ارتباط برقراره</span>
+
+        <div class="header-right">
+            <button class="theme-btn" @onclick="ThemeService.ToggleTheme">
+                @(ThemeService.IsDark ? "☀️ Dark" : "🌙 Light")
+            </button>
+            <div class="path-pill">v2.0 Beta</div>
         </div>
     </div>
 
     <div class="top-nav">
         <NavLink class="@GetNavClass()" href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink class="@GetNavClass()" href="/findings">Findings</NavLink>
+        <NavLink class="@GetNavClass()" href="/findings">Findings <span class="nav-badge">@FindingsCount</span></NavLink>
         <NavLink class="@GetNavClass()" href="/reports">Reports</NavLink>
-        <NavLink class="@GetNavClass()" href="/activity">Activity</NavLink>
         <NavLink class="@GetNavClass()" href="/settings">Settings</NavLink>
+        <NavLink class="@GetNavClass() nav-right" href="/activity">Activity <span class="nav-badge">@ActivityCount</span></NavLink>
     </div>
 
     <div class="main-content">
@@ -214,13 +614,38 @@
 <div id="components-reconnect-modal" class="reconnect-modal">
     <div class="reconnect-box">
         <div style="font-size: 48px;">🔌</div>
-        <div class="reconnect-text">ارتباط با سیستم میزبان قطع شد!</div>
+        <div class="reconnect-text">Connection to host lost!</div>
     </div>
 </div>
 
 @code {
+    protected override void OnInitialized()
+    {
+        // EDIT: سابسکرایب به هر دو سرویس تا تغییر تم یا تغییر وضعیت اسکن، هدر را فوراً به‌روز کند
+        StateService.OnChange += HandleStateChanged;
+        ThemeService.OnChange += HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    // EDIT: قفل تب‌ها حین اسکن (رفتار قبلی حفظ شد)
     private string GetNavClass()
     {
         return StateService.IsScanning ? "nav-link nav-locked" : "nav-link";
+    }
+
+    // EDIT: شمارنده تب Findings — تعداد یافته‌های آخرین اسکن
+    private int FindingsCount => StateService.CurrentScanResult?.Findings.Count ?? 0;
+
+    // EDIT: شمارنده تب Activity — تعداد رویدادهای ثبت‌شده
+    private int ActivityCount => StateService.EventLog.Count;
+
+    public void Dispose()
+    {
+        StateService.OnChange -= HandleStateChanged;
+        ThemeService.OnChange -= HandleStateChanged;
     }
 }
