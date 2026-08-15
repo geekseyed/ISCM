@@ -18,7 +18,6 @@
         font-family: 'Segoe UI', Tahoma, sans-serif;
     }
 
-    /* ── کانتینر اصلی (تم تاریک پیش‌فرض) ─────────────────────────── */
     .app-container {
         display: flex;
         flex-direction: column;
@@ -31,7 +30,6 @@
         font-family: 'Segoe UI', Tahoma, sans-serif;
     }
 
-    /* ── هدر جدید مطابق طرح ────────────────────────────────────────── */
     .app-header {
         display: flex;
         justify-content: space-between;
@@ -80,7 +78,6 @@
         color: #94a3b8;
     }
 
-    /* EDIT: لوگو و برند دقیقاً در مرکز هدر (مطابق طرح) */
     .brand-center {
         position: absolute;
         left: 50%;
@@ -116,7 +113,6 @@
         gap: 10px;
     }
 
-    /* EDIT: دکمه تغییر تم */
     .theme-btn {
         display: flex;
         align-items: center;
@@ -136,7 +132,6 @@
             border-color: #06b6d4;
         }
 
-    /* ── ناوبری بالا + شمارنده‌ها ──────────────────────────────────── */
     .top-nav {
         background: rgba(15, 23, 42, 0.6);
         padding: 10px 40px;
@@ -167,7 +162,6 @@
             border-radius: 0;
         }
 
-    /* EDIT: بج شمارنده روی تب‌ها (Findings 0 / Activity 0) */
     .nav-badge {
         background: rgba(6, 182, 212, 0.15);
         color: #06b6d4;
@@ -178,6 +172,7 @@
         margin-left: 6px;
     }
 
+    /* EDIT: کلاس nav-right حالا فقط داخل متد C# اضافه می‌شود، نه داخل مارک‌آپ */
     .nav-right {
         margin-left: auto;
     }
@@ -238,15 +233,13 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
-           EDIT: تم روشن — Override سراسری برای تمام صفحات
-           (به دلیل Specificity بالاتر، روی استایل‌های تک‌کلاسه صفحات غلبه می‌کند)
+           تم روشن — Override سراسری برای تمام صفحات
            ════════════════════════════════════════════════════════════════ */
     .app-container.light {
         background: #f1f5f9;
         color: #0f172a;
     }
 
-        /* متن‌های Inline که رنگ روشن دارند، در تم روشن تیره می‌شوند */
         .app-container.light h1, .app-container.light h2, .app-container.light h3 {
             color: #0f172a !important;
         }
@@ -319,7 +312,6 @@
             color: #0891b2;
         }
 
-        /* داشبورد */
         .app-container.light .glass-panel {
             background: #ffffff;
             border: 1px solid #e2e8f0;
@@ -454,7 +446,6 @@
             background: #e2e8f0;
         }
 
-        /* Findings */
         .app-container.light .btn-back {
             background: #e2e8f0;
             color: #0891b2;
@@ -516,7 +507,6 @@
             color: #0f172a;
         }
 
-        /* Reports */
         .app-container.light .summary-card {
             background: #ffffff;
             border: 1px solid #e2e8f0;
@@ -532,7 +522,6 @@
             border-top-width: 4px;
         }
 
-        /* Settings */
         .app-container.light .section-title {
             color: #0891b2;
             border-bottom-color: #e2e8f0;
@@ -555,7 +544,6 @@
             color: #0891b2;
         }
 
-        /* Activity */
         .app-container.light .log-box {
             background: #ffffff;
             border: 1px solid #e2e8f0;
@@ -571,7 +559,6 @@
         }
 </style>
 
-@* EDIT: کلاس light به صورت پویا روی کانتینر اصلی قرار می‌گیرد *@
 <div class="app-container @(ThemeService.IsDark ? "" : "light")">
     <div class="app-header">
         <div class="header-left">
@@ -603,7 +590,8 @@
         <NavLink class="@GetNavClass()" href="/findings">Findings <span class="nav-badge">@FindingsCount</span></NavLink>
         <NavLink class="@GetNavClass()" href="/reports">Reports</NavLink>
         <NavLink class="@GetNavClass()" href="/settings">Settings</NavLink>
-        <NavLink class="@GetNavClass() nav-right" href="/activity">Activity <span class="nav-badge">@ActivityCount</span></NavLink>
+        @* EDIT: رفع ارور complex content — کل مقدار class از یک متد C# می‌آید *@
+        <NavLink class="@GetActivityNavClass()" href="/activity">Activity <span class="nav-badge">@ActivityCount</span></NavLink>
     </div>
 
     <div class="main-content">
@@ -621,7 +609,6 @@
 @code {
     protected override void OnInitialized()
     {
-        // EDIT: سابسکرایب به هر دو سرویس تا تغییر تم یا تغییر وضعیت اسکن، هدر را فوراً به‌روز کند
         StateService.OnChange += HandleStateChanged;
         ThemeService.OnChange += HandleStateChanged;
     }
@@ -631,16 +618,20 @@
         InvokeAsync(StateHasChanged);
     }
 
-    // EDIT: قفل تب‌ها حین اسکن (رفتار قبلی حفظ شد)
     private string GetNavClass()
     {
         return StateService.IsScanning ? "nav-link nav-locked" : "nav-link";
     }
 
-    // EDIT: شمارنده تب Findings — تعداد یافته‌های آخرین اسکن
+    // EDIT: متد مجزا برای تب Activity — چون Attribute کامپوننت NavLink
+    // اجازه ترکیب «عبارت C# + متن خام» را نمی‌دهد، کل رشته کلاس اینجا ساخته می‌شود.
+    private string GetActivityNavClass()
+    {
+        return StateService.IsScanning ? "nav-link nav-locked nav-right" : "nav-link nav-right";
+    }
+
     private int FindingsCount => StateService.CurrentScanResult?.Findings.Count ?? 0;
 
-    // EDIT: شمارنده تب Activity — تعداد رویدادهای ثبت‌شده
     private int ActivityCount => StateService.EventLog.Count;
 
     public void Dispose()
