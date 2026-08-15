@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using ISCM.Application.Interfaces;
+﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
@@ -13,6 +7,9 @@ namespace ISCM.Infrastructure.Scanning.Checks;
 
 public class SmbV1ProtocolCheck : IHardeningCheck
 {
+    private const string RegistryPath = @"SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters";
+    private const string ValueName = "SMB1";
+
     public string CheckId => "SMB-001";
     public string Name => "SMBv1 Protocol";
     public CheckCategory Category => CheckCategory.Network;
@@ -26,14 +23,11 @@ public class SmbV1ProtocolCheck : IHardeningCheck
 
         try
         {
-            // مسیر رجیستری برای SMBv1
-            using var key = Registry.LocalMachine.OpenSubKey(
-                @"SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters");
+            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
 
             if (key != null)
             {
-                var registryValue = key.GetValue("SMB1");
-                // اگر مقدار 0 باشد یعنی غیرفعال است (Pass). اگر 1 یا خالی باشد یعنی فعال است (Fail)
+                var registryValue = key.GetValue(ValueName);
                 if (registryValue != null && registryValue.ToString() == "0")
                 {
                     currentValue = "Disabled";
@@ -57,18 +51,18 @@ public class SmbV1ProtocolCheck : IHardeningCheck
             status = CheckStatus.Error;
         }
 
-        var finding = new Finding(
-            CheckId,
-            Name,
-            Category,
-            Severity,
-            status,
-            currentValue,
-            "Disabled", // Expected Value
-            "Disable SMBv1 protocol via PowerShell or Group Policy to prevent vulnerabilities like EternalBlue.",
-            errorMessage
-        );
-
-        return Task.FromResult(finding);
+        return Task.FromResult(new Finding(
+            CheckId, Name, Category, Severity, status, currentValue,
+            expectedValue: "Disabled",
+            recommendation: "Disable SMBv1 protocol via PowerShell or Group Policy to prevent vulnerabilities like EternalBlue.",
+            errorMessage: errorMessage,
+            description: "SMBv1 is an outdated protocol with critical vulnerabilities (e.g., EternalBlue/WannaCry) and must be disabled.",
+            registryPath: $@"HKLM\{RegistryPath}\{ValueName}",
+            cisReference: "CIS 18.3.2",
+            riskScore: 90,
+            sourceType: "RegistryReader",
+            sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
+            fixTools: new List<string> { "powershell.exe", "OptionalFeatures.exe" }
+        ));
     }
 }
