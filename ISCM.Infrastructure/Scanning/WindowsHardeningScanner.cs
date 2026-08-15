@@ -16,7 +16,6 @@ public class WindowsHardeningScanner : IScanService
         _checks = checks;
     }
 
-    // EDIT: پیاده‌سازی پراپرتی جدید قرارداد
     public int TotalCheckCount => _checks.Count();
 
     public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full, IProgress<string>? progress = null)
@@ -24,7 +23,6 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("[INFO] DefenDoor Scanner initialized");
         await Task.Delay(500);
 
-        // EDIT: خط baseline همراه با تعداد قوانین (مطابق ویدیوی طرح)
         progress?.Report($"[INFO] Loading baseline: windows11-pro-hardening.json ({TotalCheckCount} rules)");
         await Task.Delay(300);
 
@@ -43,8 +41,6 @@ public class WindowsHardeningScanner : IScanService
             {
                 var finding = await check.EvaluateAsync();
                 scanResult.AddFinding(finding);
-
-                // EDIT: خط نتیجه رنگی، دقیقاً مطابق فرمت ویدیوی طرح
                 progress?.Report(BuildResultLine(finding));
             }
             catch (Exception ex)
@@ -71,10 +67,15 @@ public class WindowsHardeningScanner : IScanService
         return scanResult;
     }
 
-    // EDIT: ساخت خط نتیجه با Switch Expression (یک ویژگی مدرن C#):
-    // [PASS] FW-001: Firewall Domain Profile = Enabled (PASS)
-    // [FAIL] SMB-001: SMBv1 Protocol = Enabled (FAIL - expected Disabled)
-    // [WARN] PWD-001: Password Length = 8 (WARN - expected 14)
+    // EDIT: پیاده‌سازی Rescan تکی — چک موردنظر از بین چک‌های ثبت‌شده پیدا و اجرا می‌شود
+    public async Task<Finding> RescanCheckAsync(string checkId)
+    {
+        var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
+            ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
+
+        return await check.EvaluateAsync();
+    }
+
     private static string BuildResultLine(Finding finding)
     {
         string tag = finding.Status switch
