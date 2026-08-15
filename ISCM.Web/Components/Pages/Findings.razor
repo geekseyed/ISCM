@@ -22,7 +22,7 @@
         box-sizing: border-box;
     }
 
-    /* ── الف: جعبه جستجو با آیکون ───────────────────────────────── */
+    /* ── نوار بالا (مرحله الف) ──────────────────────────────────── */
     .search-wrap {
         position: relative;
         margin-bottom: 15px;
@@ -54,7 +54,6 @@
             color: #64748b;
         }
 
-    /* ── الف۲: تب‌های فیلتر وضعیت با شمارنده ─────────────────────── */
     .filter-tabs {
         display: flex;
         gap: 20px;
@@ -96,7 +95,6 @@
         color: #06b6d4;
     }
 
-    /* ── الف۳: ردیف دسته‌بندی + دکمه Back ────────────────────────── */
     .category-row {
         display: flex;
         justify-content: space-between;
@@ -141,45 +139,180 @@
         font-size: 12px;
     }
 
-    /* ── جدول موقت (در مرحله «ب» با کارت‌ها جایگزین می‌شود) ──────── */
-    .table-container {
+    /* ── ب: لیست کارت‌های یافته‌ها ───────────────────────────────── */
+    .findings-list {
         flex-grow: 1;
         overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        scrollbar-width: thin;
+        scrollbar-color: #164e63 #0f172a;
+    }
+
+    .finding-card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: rgba(15, 23, 42, 0.6);
         border: 1px solid #1e293b;
+        border-left: 3px solid #334155;
         border-radius: 8px;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    th {
-        text-align: left;
-        padding: 10px;
-        background: #0f172a;
-        color: #06b6d4;
-        border-bottom: 2px solid #334155;
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        font-size: 13px;
-    }
-
-    td {
-        padding: 10px;
-        border-bottom: 1px solid #334155;
-        font-size: 13px;
-    }
-
-    tr {
+        padding: 12px 14px;
         cursor: pointer;
         transition: 0.2s;
+        flex-shrink: 0;
     }
 
-        tr:hover {
-            background-color: rgba(6, 182, 212, 0.05);
+        .finding-card:hover {
+            background: rgba(6, 182, 212, 0.05);
+            border-color: #06b6d4;
         }
+
+    /* EDIT: نوار رنگی سمت چپ به رنگ وضعیت واقعی */
+    .border-pass {
+        border-left-color: #10b981 !important;
+    }
+
+    .border-fail {
+        border-left-color: #ef4444 !important;
+    }
+
+    .border-warning {
+        border-left-color: #f59e0b !important;
+    }
+
+    .border-ignored {
+        border-left-color: #94a3b8 !important;
+    }
+
+    .border-error {
+        border-left-color: #dc2626 !important;
+    }
+
+    .finding-main {
+        flex: 1 1 260px;
+        min-width: 0;
+    }
+
+    .finding-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .finding-name {
+        color: #e2e8f0;
+        font-weight: bold;
+        font-size: 13px;
+    }
+
+    .finding-id {
+        color: #64748b;
+        font-family: 'Consolas', monospace;
+        font-size: 11px;
+    }
+
+    /* EDIT: بج CIS — فقط وقتی داده واقعی داشته باشیم نمایش داده می‌شود */
+    .cis-badge {
+        color: #06b6d4;
+        border: 1px solid rgba(6, 182, 212, 0.4);
+        background: rgba(6, 182, 212, 0.08);
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .finding-source {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 4px;
+        font-family: 'Consolas', monospace;
+    }
+
+    /* EDIT: نمایش inline مقدار CURRENT (رنگی) و EXPECTED (سفید) */
+    .finding-values {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .fv-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+    }
+
+    .fv-current {
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+    }
+
+    .fv-pass {
+        color: #10b981;
+    }
+
+    .fv-fail {
+        color: #ef4444;
+    }
+
+    .fv-warning {
+        color: #f59e0b;
+    }
+
+    .fv-ignored {
+        color: #94a3b8;
+    }
+
+    .fv-error {
+        color: #dc2626;
+    }
+
+    .fv-expected {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+    }
+
+    /* EDIT: دکمه‌های اکشن هر ردیف */
+    .finding-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .action-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Consolas', monospace;
+        transition: 0.2s;
+        white-space: nowrap;
+    }
+
+        .action-btn:hover:not(:disabled) {
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+    /* EDIT: بج‌های سمت راست: وضعیت / شدت / ریسک */
+    .finding-badges {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
 
     .status-pass {
         color: #10b981;
@@ -187,6 +320,7 @@
         background: rgba(16, 185, 129, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
+        font-size: 10px;
     }
 
     .status-fail {
@@ -195,6 +329,7 @@
         background: rgba(239, 68, 68, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
+        font-size: 10px;
     }
 
     .status-warning {
@@ -203,6 +338,7 @@
         background: rgba(245, 158, 11, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
+        font-size: 10px;
     }
 
     .status-ignored {
@@ -211,32 +347,68 @@
         background: rgba(148, 163, 184, 0.1);
         padding: 4px 8px;
         border-radius: 4px;
+        font-size: 10px;
     }
 
-    .sev-high {
-        color: #ef4444;
-        font-weight: bold;
-    }
-
-    .sev-critical {
+    .status-error {
         color: #dc2626;
         font-weight: bold;
+        background: rgba(220, 38, 38, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
     }
 
-    .sev-medium {
+    .sev-badge {
+        font-size: 10px;
+        font-weight: bold;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+        .sev-badge.low {
+            color: #94a3b8;
+            background: rgba(148, 163, 184, 0.12);
+        }
+
+        .sev-badge.medium {
+            color: #e2e8f0;
+            background: rgba(226, 232, 240, 0.12);
+        }
+
+        .sev-badge.high {
+            color: #f59e0b;
+            background: rgba(245, 158, 11, 0.12);
+        }
+
+        .sev-badge.critical {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+    .risk-badge {
+        font-size: 10px;
+        font-family: 'Consolas', monospace;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid;
+        white-space: nowrap;
+    }
+
+    .risk-low {
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.5);
+    }
+
+    .risk-mid {
         color: #f59e0b;
+        border-color: rgba(245, 158, 11, 0.5);
     }
 
-    .sev-low {
-        color: #94a3b8;
-    }
-
-    .fix-method {
-        color: #06b6d4;
-        font-family: monospace;
-        font-size: 11px;
-        cursor: pointer;
-        text-decoration: underline;
+    .risk-high {
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.5);
     }
 
     .empty-state {
@@ -345,7 +517,7 @@
 
 <div class="glass-panel">
 
-    @* ── الف: جستجو با آیکون و placeholder دقیق طرح ── *@
+    @* ── الف: جستجو ── *@
     <div class="search-wrap">
         <span class="search-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round">
@@ -356,7 +528,7 @@
         <input type="text" class="search-box" placeholder="Search findings..." @bind="SearchTerm" @bind:event="oninput" />
     </div>
 
-    @* ── الف۲: تب‌های فیلتر وضعیت با شمارنده زنده + WARN ── *@
+    @* ── الف: تب‌های فیلتر وضعیت با شمارنده ── *@
     <div class="filter-tabs">
         <button class="filter-tab @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All <span class="ft-count">@CountAll</span></button>
         <button class="filter-tab @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail <span class="ft-count">@CountFail</span></button>
@@ -364,7 +536,7 @@
         <button class="filter-tab @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass <span class="ft-count">@CountPass</span></button>
     </div>
 
-    @* ── الف: ردیف دسته‌بندی + Back در سمت راست ── *@
+    @* ── الف: ردیف دسته‌بندی + Back ── *@
     <div class="category-row">
         <div class="cat-links">
             <button class="cat-link @(string.IsNullOrEmpty(SelectedCategory) ? "active" : "")" @onclick="() => SetCategory(null)">All Categories</button>
@@ -386,30 +558,49 @@
     }
     else
     {
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Severity</th>
-                        <th>Fix Method</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var finding in FilteredFindings)
-                    {
-                        <tr @onclick="() => OpenDrawer(finding)">
-                            <td style="color: #64748b; font-family: monospace;">@finding.CheckId</td>
-                            <td>@finding.Name</td>
-                            <td><span class="sev-@finding.Severity.ToString().ToLower()">@finding.Severity</span></td>
-                            <td><span class="fix-method">@GetFixMethod(finding.CheckId)</span></td>
-                            <td><span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span></td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        @* ── ب: لیست کارت‌های یافته‌ها (جایگزین جدول) ── *@
+        <div class="findings-list">
+            @foreach (var finding in FilteredFindings)
+            {
+                <div class="finding-card border-@finding.Status.ToString().ToLower()" @onclick="() => OpenDrawer(finding)">
+
+                    <div class="finding-main">
+                        <div class="finding-title-row">
+                            <span class="finding-name">@finding.Name</span>
+                            <span class="finding-id">@finding.CheckId</span>
+                            @if (!string.IsNullOrEmpty(finding.CisReference))
+                            {
+                                <span class="cis-badge">@finding.CisReference</span>
+                            }
+                        </div>
+                        <div class="finding-source">Source: @finding.SourceType · @finding.Category</div>
+                    </div>
+
+                    <div class="finding-values">
+                        <span class="fv-label">Current</span>
+                        <span class="fv-current fv-@finding.Status.ToString().ToLower()">@finding.CurrentValue</span>
+                        <span class="fv-label">Expected</span>
+                        <span class="fv-expected">@finding.ExpectedValue</span>
+                    </div>
+
+                    @* EDIT: stopPropagation تا کلیک روی دکمه‌ها Drawer را باز نکند *@
+                    <div class="finding-actions" @onclick:stopPropagation="true">
+                        @foreach (var tool in GetTools(finding))
+                        {
+                            <button class="action-btn" @onclick="() => LaunchTool(tool)">@tool</button>
+                        }
+                        <button class="action-btn" disabled="@(finding.Status != CheckStatus.Ignored)" @onclick="() => UndoFinding(finding)">Undo</button>
+                        <button class="action-btn" @onclick="() => RescanFinding(finding)">Rescan</button>
+                        <button class="action-btn" disabled="@(finding.Status == CheckStatus.Ignored)" @onclick="() => IgnoreFindingRow(finding)">Ignore</button>
+                    </div>
+
+                    <div class="finding-badges">
+                        <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
+                        <span class="sev-badge @finding.Severity.ToString().ToLower()">@finding.Severity</span>
+                        <span class="risk-badge @GetRiskClass(finding.RiskScore)">Risk @finding.RiskScore</span>
+                    </div>
+                </div>
+            }
         </div>
     }
 </div>
@@ -440,7 +631,6 @@
 }
 
 @code {
-    // مقادیر داخلی فیلتر وضعیت: All / Fail / Warning / Pass
     private string SelectedFilter = "All";
     private string SearchTerm = "";
     private Finding? SelectedFinding;
@@ -448,12 +638,9 @@
     [SupplyParameterFromQuery(Name = "category")]
     public string? SelectedCategory { get; set; }
 
-    // EDIT: لیست دسته‌بندی‌ها برای ردیف فیلتر
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
 
-    // EDIT: فیلتر پایه (دسته‌بندی + جستجو) بدون فیلتر وضعیت —
-    // مبنای محاسبه شمارنده‌ها و لیست نهایی
     private IEnumerable<Finding> BaseFilteredFindings
     {
         get
@@ -469,7 +656,6 @@
         }
     }
 
-    // EDIT: شمارنده‌های زنده تب‌ها (روی فیلتر پایه، قبل از فیلتر وضعیت)
     private int CountAll => BaseFilteredFindings.Count();
     private int CountFail => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail);
     private int CountWarn => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Warning);
@@ -486,7 +672,7 @@
         }
     }
 
-    // استخراج ابزار رفع مشکل از روی آیدی چک
+    // استخراج ابزار رفع مشکل از روی آیدی چک (Fallback تا مرحله «د»)
     private string GetFixMethod(string checkId)
     {
         if (checkId.StartsWith("FW") || checkId.StartsWith("SMB")) return "powershell.exe";
@@ -495,22 +681,52 @@
         return "regedit.exe";
     }
 
+    // EDIT: ابزارهای هر ردیف — اگر چک هنوز FixTools واقعی نداشته باشد، از Fallback استفاده می‌شود
+    private IEnumerable<string> GetTools(Finding finding)
+        => finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
+
+    // EDIT: رنگ بج Risk بر اساس امتیاز واقعی
+    private static string GetRiskClass(int score)
+        => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
+
     private void SetFilterAll() => SelectedFilter = "All";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
     private void SetFilterWarn() => SelectedFilter = "Warning";
 
-    // EDIT: انتخاب دسته‌بندی از ردیف جدید (null یعنی All Categories)
     private void SetCategory(string? category) => SelectedCategory = category;
 
     private void OpenDrawer(Finding finding) => SelectedFinding = finding;
     private void CloseDrawer() => SelectedFinding = null;
 
+    // ── ب: اکشن‌های هر ردیف، متصل به منطق واقعی ──
+    private void LaunchTool(string tool) => StateService.LaunchFixTool(tool);
+
+    private void UndoFinding(Finding finding)
+    {
+        finding.Undo();
+        StateService.LogAction($"User undid ignore: {finding.CheckId}");
+        StateHasChanged();
+    }
+
+    // EDIT: lambdaasync — چون EventCallback دکمه‌ها Task را پشتیبانی می‌کند
+    private async Task RescanFinding(Finding finding)
+    {
+        await StateService.RescanSingleCheckAsync(finding.CheckId);
+    }
+
+    private void IgnoreFindingRow(Finding finding)
+    {
+        finding.Ignore();
+        StateService.LogAction($"User ignored finding: {finding.CheckId}");
+        StateHasChanged();
+    }
+
     private void IgnoreFinding()
     {
         if (SelectedFinding != null)
         {
-            SelectedFinding.Ignore(); // فراخوانی متد از لایه Domain
+            SelectedFinding.Ignore();
             StateService.LogAction($"User ignored finding: {SelectedFinding.CheckId}");
             StateHasChanged();
         }
