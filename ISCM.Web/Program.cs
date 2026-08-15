@@ -23,8 +23,6 @@ builder.Services.AddTransient<IHardeningCheck, UsbStorageCheck>();
 builder.Services.AddTransient<IHardeningCheck, WindowsUpdateCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoLogonCheck>();
 builder.Services.AddTransient<IHardeningCheck, RdpNlaCheck>();
-
-// این ۳ خط مربوط به گام ۱۶ است که الان ساختیم:
 builder.Services.AddTransient<IHardeningCheck, AdminAccountCountCheck>();
 builder.Services.AddTransient<IHardeningCheck, PasswordLengthCheck>();
 builder.Services.AddTransient<IHardeningCheck, LmCompatibilityCheck>();
@@ -33,6 +31,8 @@ builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 builder.Services.AddScoped<ScanStateService>();
 builder.Services.AddScoped<ScanHistoryService>();
+// EDIT: ثبت سرویس تم در DI Container (اسکوپ شده تا هر کاربر نشست خودش را داشته باشد)
+builder.Services.AddScoped<ThemeService>();
 
 var app = builder.Build();
 
