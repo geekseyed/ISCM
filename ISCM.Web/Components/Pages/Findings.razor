@@ -3,7 +3,12 @@
 @using ISCM.Domain.Entities
 @using ISCM.Domain.Enums
 @using ISCM.Web.Services
+@using Microsoft.JSInterop
+@using System.Text
+@using System.Text.Json
 @inject ScanStateService StateService
+@inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>DefenDoor - Findings</PageTitle>
 
@@ -15,18 +20,189 @@
         border-radius: 16px;
         padding: 20px;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        height: 100%;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         box-sizing: border-box;
     }
 
-    /* ── نوار بالا (مرحله الف) ──────────────────────────────────── */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .kpi-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: 0.2s;
+        border-left: 3px solid #334155;
+    }
+
+        .kpi-card:hover {
+            border-color: #06b6d4;
+            transform: translateY(-1px);
+        }
+
+        .kpi-card.active {
+            border-color: #06b6d4 !important;
+            background: rgba(6, 182, 212, 0.08);
+        }
+
+    .kpi-value {
+        font-size: 22px;
+        font-weight: 800;
+        font-family: 'Consolas', monospace;
+        color: #e2e8f0;
+        line-height: 1;
+    }
+
+    .kpi-label {
+        font-size: 10px;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
+
+    .kpi-sub {
+        font-size: 9px;
+        color: #475569;
+        margin-top: 2px;
+    }
+
+    .kpi-total {
+        border-left-color: #06b6d4 !important;
+    }
+
+    .kpi-open {
+        border-left-color: #f59e0b !important;
+    }
+
+    .kpi-critical {
+        border-left-color: #ef4444 !important;
+    }
+
+    .kpi-warning {
+        border-left-color: #f59e0b !important;
+    }
+
+    .kpi-suppressed {
+        border-left-color: #94a3b8 !important;
+    }
+
+    .kpi-compliance {
+        border-left-color: #10b981 !important;
+    }
+
+    .sev-dist-row {
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+    }
+
+    .sev-chips {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+    }
+
+    .sev-chip {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 12px;
+        color: #94a3b8;
+    }
+
+    .sev-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+        .sev-dot.critical {
+            background: #ef4444;
+            box-shadow: 0 0 6px #ef4444;
+        }
+
+        .sev-dot.high {
+            background: #f59e0b;
+            box-shadow: 0 0 6px #f59e0b;
+        }
+
+        .sev-dot.medium {
+            background: #eab308;
+        }
+
+        .sev-dot.low {
+            background: #64748b;
+        }
+
+    .sev-count {
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        color: #e2e8f0;
+    }
+
+    .sev-filter-btns {
+        display: flex;
+        gap: 4px;
+        margin-left: auto;
+    }
+
+    .sev-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .sev-btn:hover {
+            border-color: #06b6d4;
+            color: #e2e8f0;
+        }
+
+        .sev-btn.active {
+            background: #06b6d4;
+            color: white;
+            border-color: #06b6d4;
+        }
+
+    .control-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .dropdown {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .ctrl-label {
+        color: #64748b;
+        font-size: 11px;
+        text-transform: uppercase;
+    }
+
     .search-wrap {
         position: relative;
-        margin-bottom: 15px;
-        flex-shrink: 0;
+        margin-bottom: 14px;
     }
 
     .search-icon {
@@ -34,8 +210,6 @@
         left: 12px;
         top: 50%;
         transform: translateY(-50%);
-        display: flex;
-        align-items: center;
         pointer-events: none;
     }
 
@@ -59,7 +233,6 @@
         gap: 20px;
         border-bottom: 1px solid #1e293b;
         margin-bottom: 12px;
-        flex-shrink: 0;
     }
 
     .filter-tab {
@@ -95,12 +268,113 @@
         color: #06b6d4;
     }
 
+    .toolbar-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    }
+
+    .preset-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 11px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .preset-btn:hover {
+            border-color: #06b6d4;
+            color: #e2e8f0;
+        }
+
+        .preset-btn.active {
+            background: rgba(6, 182, 212, 0.15);
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+
+    .export-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 11px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Consolas', monospace;
+        transition: 0.2s;
+    }
+
+        .export-btn:hover {
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+    .toolbar-spacer {
+        margin-left: auto;
+    }
+
+    .bulk-bar {
+        display: none;
+        gap: 10px;
+        align-items: center;
+        background: rgba(6, 182, 212, 0.08);
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        border-radius: 8px;
+        padding: 8px 14px;
+        margin-bottom: 12px;
+    }
+
+        .bulk-bar.visible {
+            display: flex;
+        }
+
+    .bulk-count {
+        color: #06b6d4;
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        font-size: 13px;
+    }
+
+    .bulk-btn {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        font-size: 11px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .bulk-btn:hover {
+            border-color: #06b6d4;
+        }
+
+        .bulk-btn.danger {
+            color: #ef4444;
+        }
+
+            .bulk-btn.danger:hover {
+                border-color: #ef4444;
+            }
+
+        .bulk-btn.clear {
+            margin-left: auto;
+            background: transparent;
+            color: #94a3b8;
+        }
+
     .category-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 15px;
-        flex-shrink: 0;
     }
 
     .cat-links {
@@ -139,7 +413,6 @@
         font-size: 12px;
     }
 
-    /* ── ب: لیست کارت‌های یافته‌ها ───────────────────────────────── */
     .findings-list {
         flex-grow: 1;
         overflow-y: auto;
@@ -148,6 +421,28 @@
         gap: 10px;
         scrollbar-width: thin;
         scrollbar-color: #164e63 #0f172a;
+    }
+
+    .group-header {
+        color: #64748b;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        padding: 8px 0 4px 0;
+        margin-top: 6px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .group-count {
+        background: rgba(100, 116, 139, 0.2);
+        color: #94a3b8;
+        font-family: 'Consolas', monospace;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 10px;
     }
 
     .finding-card {
@@ -161,11 +456,15 @@
         padding: 12px 14px;
         cursor: pointer;
         transition: 0.2s;
-        flex-shrink: 0;
     }
 
         .finding-card:hover {
             background: rgba(6, 182, 212, 0.05);
+            border-color: #06b6d4;
+        }
+
+        .finding-card.selected {
+            background: rgba(6, 182, 212, 0.08);
             border-color: #06b6d4;
         }
 
@@ -188,6 +487,35 @@
     .border-error {
         border-left-color: #dc2626 !important;
     }
+
+    .border-falsepositive {
+        border-left-color: #a78bfa !important;
+    }
+
+    .finding-checkbox {
+        width: 14px;
+        height: 14px;
+        border: 2px solid #475569;
+        border-radius: 3px;
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+    }
+
+        .finding-checkbox.checked {
+            background: #06b6d4;
+            border-color: #06b6d4;
+        }
+
+            .finding-checkbox.checked::after {
+                content: "✓";
+                color: white;
+                font-weight: bold;
+            }
 
     .finding-main {
         flex: 1 1 260px;
@@ -221,6 +549,28 @@
         font-size: 10px;
         padding: 2px 8px;
         border-radius: 4px;
+    }
+
+    .fp-tag {
+        color: #a78bfa;
+        border: 1px solid rgba(167, 139, 250, 0.4);
+        background: rgba(167, 139, 250, 0.1);
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+
+    .ignored-badge {
+        color: #94a3b8;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: rgba(148, 163, 184, 0.1);
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
     }
 
     .finding-source {
@@ -269,6 +619,10 @@
         color: #dc2626;
     }
 
+    .fv-falsepositive {
+        color: #a78bfa;
+    }
+
     .fv-expected {
         color: #e2e8f0;
         font-family: 'Consolas', monospace;
@@ -312,7 +666,7 @@
     .status-pass {
         color: #10b981;
         font-weight: bold;
-        background: rgba(16, 185, 129, 0.1);
+        background: rgba(16,185,129,0.1);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 10px;
@@ -321,7 +675,7 @@
     .status-fail {
         color: #ef4444;
         font-weight: bold;
-        background: rgba(239, 68, 68, 0.1);
+        background: rgba(239,68,68,0.1);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 10px;
@@ -330,7 +684,7 @@
     .status-warning {
         color: #f59e0b;
         font-weight: bold;
-        background: rgba(245, 158, 11, 0.1);
+        background: rgba(245,158,11,0.1);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 10px;
@@ -339,7 +693,7 @@
     .status-ignored {
         color: #94a3b8;
         font-weight: bold;
-        background: rgba(148, 163, 184, 0.1);
+        background: rgba(148,163,184,0.1);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 10px;
@@ -348,7 +702,16 @@
     .status-error {
         color: #dc2626;
         font-weight: bold;
-        background: rgba(220, 38, 38, 0.1);
+        background: rgba(220,38,38,0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+    }
+
+    .status-falsepositive {
+        color: #a78bfa;
+        font-weight: bold;
+        background: rgba(167,139,250,0.1);
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 10px;
@@ -364,22 +727,22 @@
 
         .sev-badge.low {
             color: #94a3b8;
-            background: rgba(148, 163, 184, 0.12);
+            background: rgba(148,163,184,0.12);
         }
 
         .sev-badge.medium {
             color: #e2e8f0;
-            background: rgba(226, 232, 240, 0.12);
+            background: rgba(226,232,240,0.12);
         }
 
         .sev-badge.high {
             color: #f59e0b;
-            background: rgba(245, 158, 11, 0.12);
+            background: rgba(245,158,11,0.12);
         }
 
         .sev-badge.critical {
             color: #ef4444;
-            background: rgba(239, 68, 68, 0.15);
+            background: rgba(239,68,68,0.15);
         }
 
     .risk-badge {
@@ -393,17 +756,17 @@
 
     .risk-low {
         color: #10b981;
-        border-color: rgba(16, 185, 129, 0.5);
+        border-color: rgba(16,185,129,0.5);
     }
 
     .risk-mid {
         color: #f59e0b;
-        border-color: rgba(245, 158, 11, 0.5);
+        border-color: rgba(245,158,11,0.5);
     }
 
     .risk-high {
         color: #ef4444;
-        border-color: rgba(239, 68, 68, 0.5);
+        border-color: rgba(239,68,68,0.5);
     }
 
     .empty-state {
@@ -413,7 +776,6 @@
         font-size: 13px;
     }
 
-    /* ── ج: Drawer نسخه ۲ ───────────────────────────────────────── */
     .drawer-overlay {
         position: fixed;
         top: 0;
@@ -433,7 +795,7 @@
         position: fixed;
         top: 0;
         right: 0;
-        width: 450px;
+        width: 520px;
         height: 100%;
         background: #1e293b;
         box-shadow: -5px 0 15px rgba(0,0,0,0.5);
@@ -497,7 +859,6 @@
         line-height: 1.5;
     }
 
-    /* EDIT: نمایش دوتایی CURRENT / EXPECTED */
     .drawer-values {
         display: flex;
         gap: 30px;
@@ -520,9 +881,9 @@
     .drawer-badges-row {
         display: flex;
         gap: 30px;
+        flex-wrap: wrap;
     }
 
-    /* EDIT: بلوک کد SOURCE COMMAND */
     .code-block {
         background: #0a0e1a;
         border: 1px solid #334155;
@@ -532,9 +893,60 @@
         font-size: 12px;
         color: #7dd3fc;
         word-break: break-all;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
     }
 
-    /* EDIT: نوار اکشن چسبان پایین Drawer */
+    .code-copy-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #06b6d4;
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .tool-panel {
+        background: rgba(6, 182, 212, 0.05);
+        border: 1px solid rgba(6, 182, 212, 0.3);
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 15px;
+    }
+
+    .tool-panel-header {
+        color: #06b6d4;
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tool-row {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 8px;
+    }
+
+    .tool-row-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        margin-bottom: 3px;
+    }
+
+    .tool-row-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+    }
+
     .drawer-actions {
         position: sticky;
         bottom: 0;
@@ -551,7 +963,82 @@
 
 <div class="glass-panel">
 
-    @* ── الف: جستجو ── *@
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-total @(ActivePreset == "all" && SelectedFilter == "All" ? "active" : "")" @onclick="ApplyPresetAll">
+            <div class="kpi-value">@KpiTotal</div>
+            <div class="kpi-label">Total Findings</div>
+            <div class="kpi-sub">across all checks</div>
+        </div>
+        <div class="kpi-card kpi-open @(ActivePreset == "needs-remediation" ? "active" : "")" @onclick="ApplyPresetNeedsRemediation">
+            <div class="kpi-value">@KpiOpenRisk</div>
+            <div class="kpi-label">Open Risk</div>
+            <div class="kpi-sub">fail + warn</div>
+        </div>
+        <div class="kpi-card kpi-critical @(ActivePreset == "critical-open" ? "active" : "")" @onclick="ApplyPresetCriticalOpen">
+            <div class="kpi-value">@KpiCritical</div>
+            <div class="kpi-label">Critical</div>
+            <div class="kpi-sub">immediate action</div>
+        </div>
+        <div class="kpi-card kpi-warning @(SelectedFilter == "Warning" ? "active" : "")" @onclick="ApplyPresetWarnings">
+            <div class="kpi-value">@KpiWarnings</div>
+            <div class="kpi-label">Warnings</div>
+            <div class="kpi-sub">needs review</div>
+        </div>
+        <div class="kpi-card kpi-suppressed @(ActivePreset == "ignored" ? "active" : "")" @onclick="ApplyPresetIgnored">
+            <div class="kpi-value">@KpiSuppressed</div>
+            <div class="kpi-label">Ignored / FP</div>
+            <div class="kpi-sub">suppressed</div>
+        </div>
+        <div class="kpi-card kpi-compliance" @onclick="ApplyPresetAll">
+            <div class="kpi-value">@KpiCompliance%</div>
+            <div class="kpi-label">Compliance</div>
+            <div class="kpi-sub">pass rate</div>
+        </div>
+    </div>
+
+    <div class="sev-dist-row">
+        <div class="sev-chips">
+            <span style="color:#94a3b8; font-size: 12px; font-weight: bold;">Severity Distribution</span>
+            <span style="color:#e2e8f0; font-size: 13px; font-family: Consolas;">@BaseFilteredFindings.Count() total</span>
+            <div class="sev-chip"><span class="sev-dot critical"></span>Critical <span class="sev-count">@SevCriticalCount</span></div>
+            <div class="sev-chip"><span class="sev-dot high"></span>High <span class="sev-count">@SevHighCount</span></div>
+            <div class="sev-chip"><span class="sev-dot medium"></span>Medium <span class="sev-count">@SevMediumCount</span></div>
+            <div class="sev-chip"><span class="sev-dot low"></span>Low <span class="sev-count">@SevLowCount</span></div>
+        </div>
+        <div class="sev-filter-btns">
+            <button class="sev-btn @(SelectedSeverity == "All" ? "active" : "")" @onclick="SetSeverityAll">All</button>
+            <button class="sev-btn @(SelectedSeverity == "Critical" ? "active" : "")" @onclick="SetSeverityCritical">Critical</button>
+            <button class="sev-btn @(SelectedSeverity == "High" ? "active" : "")" @onclick="SetSeverityHigh">High</button>
+            <button class="sev-btn @(SelectedSeverity == "Medium" ? "active" : "")" @onclick="SetSeverityMedium">Medium</button>
+            <button class="sev-btn @(SelectedSeverity == "Low" ? "active" : "")" @onclick="SetSeverityLow">Low</button>
+        </div>
+    </div>
+
+    <div class="sev-dist-row">
+        <div class="control-group">
+            <span class="ctrl-label">Sort:</span>
+            <select class="dropdown" @bind="SortBy">
+                <option value="Status">Status</option>
+                <option value="RiskHigh">Risk (High to Low)</option>
+                <option value="RiskLow">Risk (Low to High)</option>
+                <option value="Name">Name (A-Z)</option>
+                <option value="Category">Category</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <span class="ctrl-label">Group:</span>
+            <select class="dropdown" @bind="GroupBy">
+                <option value="None">None</option>
+                <option value="Category">Category</option>
+                <option value="Severity">Severity</option>
+                <option value="Status">Status</option>
+            </select>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button class="export-btn" @onclick="ExportFilteredCsv">📄 CSV</button>
+        <button class="export-btn" @onclick="ExportFilteredJson">📋 JSON</button>
+    </div>
+
     <div class="search-wrap">
         <span class="search-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round">
@@ -562,7 +1049,6 @@
         <input type="text" class="search-box" placeholder="Search findings..." @bind="SearchTerm" @bind:event="oninput" />
     </div>
 
-    @* ── الف: تب‌های فیلتر وضعیت با شمارنده ── *@
     <div class="filter-tabs">
         <button class="filter-tab @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All <span class="ft-count">@CountAll</span></button>
         <button class="filter-tab @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail <span class="ft-count">@CountFail</span></button>
@@ -570,13 +1056,30 @@
         <button class="filter-tab @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass <span class="ft-count">@CountPass</span></button>
     </div>
 
-    @* ── الف: ردیف دسته‌بندی + Back ── *@
+    <div class="toolbar-row">
+        <button class="preset-btn @(ActivePreset == "all" ? "active" : "")" @onclick="ApplyPresetAll">All</button>
+        <button class="preset-btn @(ActivePreset == "critical-open" ? "active" : "")" @onclick="ApplyPresetCriticalOpen">Critical Open</button>
+        <button class="preset-btn @(ActivePreset == "needs-remediation" ? "active" : "")" @onclick="ApplyPresetNeedsRemediation">Needs Remediation</button>
+        <button class="preset-btn @(ActivePreset == "quick-wins" ? "active" : "")" @onclick="ApplyPresetQuickWins">Quick Wins (Low Risk)</button>
+        <button class="preset-btn @(ActivePreset == "ignored" ? "active" : "")" @onclick="ApplyPresetIgnored">Ignored / FP</button>
+    </div>
+
+    <div class="bulk-bar @(SelectedFindingIds.Count > 0 ? "visible" : "")">
+        <span class="bulk-count">@SelectedFindingIds.Count selected</span>
+        <button class="bulk-btn" @onclick="BulkRescan">🔄 Rescan</button>
+        <button class="bulk-btn" @onclick="BulkIgnore">🚫 Ignore</button>
+        <button class="bulk-btn" @onclick="BulkMarkFp">🏳️ Mark FP</button>
+        <button class="bulk-btn" @onclick="BulkExport">📤 Export Selected</button>
+        <button class="bulk-btn clear" @onclick="ClearSelection">Clear All</button>
+    </div>
+
     <div class="category-row">
         <div class="cat-links">
-            <button class="cat-link @(string.IsNullOrEmpty(SelectedCategory) ? "active" : "")" @onclick="() => SetCategory(null)">All Categories</button>
+            <button class="cat-link @(string.IsNullOrEmpty(SelectedCategory) ? "active" : "")" @onclick="ClearCategory">All Categories</button>
             @foreach (var cat in AllCategories)
             {
-                <button class="cat-link @(SelectedCategory == cat ? "active" : "")" @onclick="() => SetCategory(cat)">@cat</button>
+                var capturedCat = cat;
+                <button class="cat-link @(SelectedCategory == capturedCat ? "active" : "")" @onclick="() => SetCategory(capturedCat)">@capturedCat</button>
             }
         </div>
         <a href="/" class="btn-back">← Back to Dashboard</a>
@@ -586,59 +1089,78 @@
     {
         <p class="empty-state">Run a scan from the Dashboard to see findings.</p>
     }
-    else if (!FilteredFindings.Any())
+    else if (!FinalFindings.Any())
     {
         <p class="empty-state">No findings match the current filters.</p>
     }
     else
     {
-        @* ── ب: لیست کارت‌های یافته‌ها ── *@
         <div class="findings-list">
-            @foreach (var finding in FilteredFindings)
+            @foreach (var group in GroupedFindings)
             {
-                <div class="finding-card border-@finding.Status.ToString().ToLower()" @onclick="() => OpenDrawer(finding)">
+                @if (GroupBy != "None")
+                {
+                    <div class="group-header">@group.Key <span class="group-count">@group.Count</span></div>
+                }
+                @foreach (var finding in group.Items)
+                {
+                    if (finding is null) continue;
+                    var f = finding;
+                    <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
+                        <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
+                             @onclick="() => ToggleSelect(f)"
+                             @onclick:stopPropagation="true"></div>
 
-                    <div class="finding-main">
-                        <div class="finding-title-row">
-                            <span class="finding-name">@finding.Name</span>
-                            <span class="finding-id">@finding.CheckId</span>
-                            @if (!string.IsNullOrEmpty(finding.CisReference))
-                            {
-                                <span class="cis-badge">@finding.CisReference</span>
-                            }
+                        <div class="finding-main">
+                            <div class="finding-title-row">
+                                <span class="finding-name">@f.Name</span>
+                                <span class="finding-id">@f.CheckId</span>
+                                @if (!string.IsNullOrEmpty(f.CisReference))
+                                {
+                                    <span class="cis-badge">@f.CisReference</span>
+                                }
+                                @if (f.Status == CheckStatus.FalsePositive)
+                                {
+                                    <span class="fp-tag">FP</span>
+                                }
+                                else if (f.Status == CheckStatus.Ignored)
+                                {
+                                    <span class="ignored-badge">IGNORED</span>
+                                }
+                            </div>
+                            <div class="finding-source">Source: @GetSourceType(f) · @f.Category</div>
                         </div>
-                        <div class="finding-source">Source: @GetSourceType(finding) · @finding.Category</div>
-                    </div>
 
-                    <div class="finding-values">
-                        <span class="fv-label">Current</span>
-                        <span class="fv-current fv-@finding.Status.ToString().ToLower()">@finding.CurrentValue</span>
-                        <span class="fv-label">Expected</span>
-                        <span class="fv-expected">@finding.ExpectedValue</span>
-                    </div>
+                        <div class="finding-values">
+                            <span class="fv-label">Current</span>
+                            <span class="fv-current fv-@f.Status.ToString().ToLower()">@f.CurrentValue</span>
+                            <span class="fv-label">Expected</span>
+                            <span class="fv-expected">@f.ExpectedValue</span>
+                        </div>
 
-                    <div class="finding-actions" @onclick:stopPropagation="true">
-                        @foreach (var tool in GetTools(finding))
-                        {
-                            <button class="action-btn" @onclick="() => LaunchTool(tool)">@tool</button>
-                        }
-                        <button class="action-btn" disabled="@(finding.Status != CheckStatus.Ignored)" @onclick="() => UndoFinding(finding)">Undo</button>
-                        <button class="action-btn" @onclick="() => RescanFinding(finding)">Rescan</button>
-                        <button class="action-btn" disabled="@(finding.Status == CheckStatus.Ignored)" @onclick="() => IgnoreFindingRow(finding)">Ignore</button>
-                    </div>
+                        <div class="finding-actions" @onclick:stopPropagation="true">
+                            @foreach (var tool in GetTools(f))
+                            {
+                                var capturedTool = tool;
+                                <button class="action-btn" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
+                            }
+                            <button class="action-btn" @onclick="() => ShowUndoGuidance(f)">↶ Undo</button>
+                            <button class="action-btn" @onclick="() => RescanFinding(f)">🔄 Rescan</button>
+                            <button class="action-btn" disabled="@f.IsSuppressed" @onclick="() => IgnoreFindingRow(f)">Ignore</button>
+                        </div>
 
-                    <div class="finding-badges">
-                        <span class="status-@finding.Status.ToString().ToLower()">@finding.Status</span>
-                        <span class="sev-badge @finding.Severity.ToString().ToLower()">@finding.Severity</span>
-                        <span class="risk-badge @GetRiskClass(finding.RiskScore)">Risk @finding.RiskScore</span>
+                        <div class="finding-badges">
+                            <span class="status-@f.Status.ToString().ToLower()">@f.Status</span>
+                            <span class="sev-badge @f.Severity.ToString().ToLower()">@f.Severity</span>
+                            <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk @f.RiskScore</span>
+                        </div>
                     </div>
-                </div>
+                }
             }
         </div>
     }
 </div>
 
-@* ── ج: Drawer نسخه ۲ ── *@
 @if (SelectedFinding != null)
 {
     <div class="drawer-overlay active" @onclick="CloseDrawer"></div>
@@ -682,6 +1204,17 @@
             </div>
         </div>
 
+        @if (!string.IsNullOrEmpty(SelectedFinding.RegistryPath))
+        {
+            <div class="detail-section">
+                <div class="detail-label">Registry Path</div>
+                <div class="code-block">
+                    <span>@SelectedFinding.RegistryPath</span>
+                    <button class="code-copy-btn" @onclick="() => CopyToClipboard(SelectedFinding.RegistryPath!)">Copy</button>
+                </div>
+            </div>
+        }
+
         <div class="detail-section">
             <div class="detail-label">Source Type</div>
             <div class="detail-value">@GetSourceType(SelectedFinding) · Category @SelectedFinding.Category</div>
@@ -689,7 +1222,10 @@
 
         <div class="detail-section">
             <div class="detail-label">Source Command</div>
-            <div class="code-block">@GetSourceCommand(SelectedFinding)</div>
+            <div class="code-block">
+                <span>@GetSourceCommand(SelectedFinding)</span>
+                <button class="code-copy-btn" @onclick="() => CopySourceCommand()">Copy</button>
+            </div>
         </div>
 
         <div class="detail-section">
@@ -697,29 +1233,93 @@
             <div class="detail-value">@SelectedFinding.Recommendation</div>
         </div>
 
-        @* ── ج: نوار اکشن چسبان پایین ── *@
+        @if (ActiveToolPanel != null)
+        {
+            <div class="tool-panel">
+                <div class="tool-panel-header">🔧 Policy Tool Path — @ActiveToolPanel.Tool</div>
+                <div class="tool-row">
+                    <div class="tool-row-label">Tool</div>
+                    <div class="tool-row-value">@ActiveToolPanel.Tool</div>
+                </div>
+                <div class="tool-row">
+                    <div class="tool-row-label">Registry Location</div>
+                    <div class="tool-row-value">@(ActiveToolPanel.RegistryLocation ?? "N/A")</div>
+                </div>
+                <div class="tool-row">
+                    <div class="tool-row-label">Navigation Path</div>
+                    <div class="tool-row-value" style="line-height: 1.6;">@ActiveToolPanel.NavigationPath</div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button class="action-btn" @onclick="LaunchActiveTool">▶ Launch @ActiveToolPanel.Tool</button>
+                </div>
+            </div>
+        }
+
+        @if (ShowUndoPanel && SelectedFinding != null)
+        {
+            var sf = SelectedFinding;
+            <div class="tool-panel">
+                <div class="tool-panel-header">↶ Undo Guidance — @sf.Name</div>
+                <div class="tool-row">
+                    <div class="tool-row-label">CLI Command (PowerShell)</div>
+                    <div class="code-block" style="margin: 0;">
+                        <span>@GetUndoCliCommand(sf)</span>
+                        <button class="code-copy-btn" @onclick="() => CopyUndoCommand(sf)">Copy</button>
+                    </div>
+                </div>
+                <div class="tool-row" style="margin-top: 10px;">
+                    <div class="tool-row-label">Graphical Path</div>
+                    <div class="tool-row-value" style="line-height: 1.6;">@GetGraphicalPath(sf)</div>
+                </div>
+            </div>
+        }
+
         <div class="drawer-actions">
             @foreach (var tool in GetTools(SelectedFinding))
             {
-                <button class="action-btn" @onclick="() => LaunchTool(tool)">@tool</button>
+                var capturedTool = tool;
+                <button class="action-btn" @onclick="() => ShowPolicyToolPath(SelectedFinding, capturedTool)">🔧 @capturedTool</button>
             }
-            <button class="action-btn" disabled="@(SelectedFinding.Status != CheckStatus.Ignored)" @onclick="() => UndoFinding(SelectedFinding)">Undo</button>
-            <button class="action-btn" @onclick="() => RescanFinding(SelectedFinding)">Rescan</button>
-            <button class="action-btn" disabled="@(SelectedFinding.Status == CheckStatus.Ignored)" @onclick="() => IgnoreFindingRow(SelectedFinding)">Ignore</button>
+            <button class="action-btn" @onclick="ShowUndoGuidanceForSelected">↶ Undo</button>
+            <button class="action-btn" @onclick="RescanSelected">🔄 Rescan</button>
+            <button class="action-btn" disabled="@SelectedFinding.IsSuppressed" @onclick="IgnoreSelected">Ignore</button>
+            <button class="action-btn" @onclick="MarkFpSelected">🏳️ Mark FP</button>
         </div>
     </div>
 }
 
 @code {
+    // ── State fields ──
     private string SelectedFilter = "All";
     private string SearchTerm = "";
+    private string SelectedSeverity = "All";
+    private string SortBy = "Status";
+    private string GroupBy = "None";
+    private string ActivePreset = "all";
+    private HashSet<string> SelectedFindingIds = new();
     private Finding? SelectedFinding;
+    private ToolPathInfo? ActiveToolPanel;
+    private bool ShowUndoPanel;
 
     [SupplyParameterFromQuery(Name = "category")]
     public string? SelectedCategory { get; set; }
 
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
+
+    private class FindingGroup
+    {
+        public string Key { get; set; } = "";
+        public List<Finding> Items { get; set; } = new();
+        public int Count => Items.Count;
+    }
+
+    private class ToolPathInfo
+    {
+        public string Tool { get; set; } = "";
+        public string? RegistryLocation { get; set; }
+        public string NavigationPath { get; set; } = "";
+    }
 
     private IEnumerable<Finding> BaseFilteredFindings
     {
@@ -736,20 +1336,113 @@
         }
     }
 
-    private int CountAll => BaseFilteredFindings.Count();
-    private int CountFail => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail);
-    private int CountWarn => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Warning);
-    private int CountPass => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Pass);
+    private int KpiTotal => BaseFilteredFindings.Count();
+    private int KpiOpenRisk => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+    private int KpiCritical => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
+    private int KpiWarnings => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Warning);
+    private int KpiSuppressed => BaseFilteredFindings.Count(f => f.IsSuppressed);
+    private int KpiCompliance => StateService.CurrentScanResult?.ComplianceScore ?? 0;
 
-    private IEnumerable<Finding> FilteredFindings
+    private int SevCriticalCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Critical);
+    private int SevHighCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.High);
+    private int SevMediumCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Medium);
+    private int SevLowCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Low);
+
+    private IEnumerable<Finding> PreStatusFindings
     {
         get
         {
             var findings = BaseFilteredFindings;
-            if (SelectedFilter != "All")
-                findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
+            if (SelectedSeverity != "All")
+                findings = findings.Where(f => f.Severity.ToString() == SelectedSeverity);
+            findings = ApplyPreset(findings, ActivePreset);
             return findings;
         }
+    }
+
+    private int CountAll => PreStatusFindings.Count();
+    private int CountFail => PreStatusFindings.Count(f => f.Status == CheckStatus.Fail);
+    private int CountWarn => PreStatusFindings.Count(f => f.Status == CheckStatus.Warning);
+    private int CountPass => PreStatusFindings.Count(f => f.Status == CheckStatus.Pass);
+
+    private IEnumerable<Finding> FinalFindings
+    {
+        get
+        {
+            var findings = PreStatusFindings;
+            if (SelectedFilter != "All")
+                findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
+            return ApplySort(findings);
+        }
+    }
+
+    private List<FindingGroup> GroupedFindings
+    {
+        get
+        {
+            var final = FinalFindings.ToList();
+            if (GroupBy == "None")
+                return new List<FindingGroup> { new FindingGroup { Key = "All", Items = final } };
+
+            var groups = final.GroupBy(f => GetGroupKey(f))
+                              .OrderBy(g => g.Key)
+                              .Select(g => new FindingGroup { Key = g.Key, Items = g.ToList() })
+                              .ToList();
+            return groups;
+        }
+    }
+
+    private string GetGroupKey(Finding f) => GroupBy switch
+    {
+        "Category" => f.Category.ToString(),
+        "Severity" => f.Severity.ToString(),
+        "Status" => f.Status.ToString(),
+        _ => "All"
+    };
+
+    private IEnumerable<Finding> ApplySort(IEnumerable<Finding> findings) => SortBy switch
+    {
+        "Status" => findings.OrderBy(f => (int)f.Status),
+        "RiskHigh" => findings.OrderByDescending(f => f.RiskScore),
+        "RiskLow" => findings.OrderBy(f => f.RiskScore),
+        "Name" => findings.OrderBy(f => f.Name),
+        "Category" => findings.OrderBy(f => f.Category.ToString()).ThenBy(f => f.Name),
+        _ => findings
+    };
+
+    private static IEnumerable<Finding> ApplyPreset(IEnumerable<Finding> findings, string preset) => preset switch
+    {
+        "critical-open" => findings.Where(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical),
+        "needs-remediation" => findings.Where(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning),
+        "quick-wins" => findings.Where(f => f.Status != CheckStatus.Pass && f.RiskScore < 40),
+        "ignored" => findings.Where(f => f.IsSuppressed),
+        _ => findings
+    };
+
+    private static string GetSourceType(Finding f)
+    {
+        if (!string.IsNullOrEmpty(f.SourceType)) return f.SourceType;
+        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit";
+        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net.exe";
+        return "RegistryReader";
+    }
+
+    private static string GetSourceCommand(Finding f)
+    {
+        if (!string.IsNullOrEmpty(f.SourceCommand)) return f.SourceCommand;
+        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit /export /cfg output.txt";
+        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net user";
+        return string.IsNullOrEmpty(f.RegistryPath) ? "reg query HKLM" : $"reg query {f.RegistryPath}";
+    }
+
+    private static string GetRiskClass(int score)
+        => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
+
+    // FIX: چک null برای رفع ارور Possible null reference argument
+    private IEnumerable<string> GetTools(Finding? finding)
+    {
+        if (finding is null) return Array.Empty<string>();
+        return finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
     }
 
     private string GetFixMethod(string checkId)
@@ -760,58 +1453,304 @@
         return "regedit.exe";
     }
 
-    private IEnumerable<string> GetTools(Finding finding)
-        => finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
-
-    private static string GetRiskClass(int score)
-        => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
-
-    // EDIT (ج): Fallback منطقی برای SourceType تا مرحله «د» که مقادیر واقعی بیایند
-    private static string GetSourceType(Finding f)
+    private void ShowPolicyToolPath(Finding finding, string tool)
     {
-        if (!string.IsNullOrEmpty(f.SourceType)) return f.SourceType;
-        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit";
-        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net.exe";
-        return "RegistryReader";
+        SelectedFinding = finding;
+        ShowUndoPanel = false;
+        ActiveToolPanel = new ToolPathInfo
+            {
+                Tool = tool,
+                RegistryLocation = finding.RegistryPath,
+                NavigationPath = BuildNavigationPath(finding, tool)
+            };
     }
 
-    // EDIT (ج): Fallback برای SourceCommand — اگر چک RegistryPath واقعی داشته باشد، از همان استفاده می‌شود
-    private static string GetSourceCommand(Finding f)
+    private string BuildNavigationPath(Finding finding, string tool)
     {
-        if (!string.IsNullOrEmpty(f.SourceCommand)) return f.SourceCommand;
-        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit /export /cfg output.txt";
-        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net user";
-        return string.IsNullOrEmpty(f.RegistryPath) ? "reg query HKLM" : $"reg query {f.RegistryPath}";
+        if (tool == "secpol.msc")
+            return "Open secpol.msc → Account Policies → Password Policy / Account Lockout Policy → Locate policy → Modify";
+        if (tool == "gpedit.msc")
+            return "Open gpedit.msc → Computer Configuration → Administrative Templates → System / Windows Components → Locate policy";
+        if (tool == "wf.msc")
+            return "Open wf.msc → Inbound Rules / Outbound Rules → New Rule → Configure";
+        if (tool == "powershell.exe")
+            return "Open PowerShell as Administrator → Execute CLI command from Undo Guidance panel";
+        if (tool == "regedit.exe")
+            return "Open regedit.exe → Navigate to: " + (finding.RegistryPath ?? "HKLM");
+        if (tool == "net.exe")
+            return "Open CMD/PowerShell as Administrator → Run net user / net localgroup commands";
+        if (tool == "lusrmgr.msc")
+            return "Open lusrmgr.msc → Users → Double-click user → Modify settings";
+        if (tool == "compmgmt.msc")
+            return "Open compmgmt.msc → System Tools → Local Users and Groups → Groups → Administrators";
+        if (tool == "UserAccountControlSettings.exe")
+            return "Open UserAccountControlSettings.exe → Move slider to desired level → OK";
+        if (tool == "SystemPropertiesRemote.exe")
+            return "Open SystemPropertiesRemote.exe → Remote tab → Enable/Disable NLA";
+        if (tool == "OptionalFeatures.exe")
+            return "Open OptionalFeatures.exe → Locate feature → Uncheck → OK → Restart";
+        return "Open " + tool + " → Navigate to relevant policy section";
     }
+
+    private void ShowUndoGuidance(Finding finding)
+    {
+        SelectedFinding = finding;
+        ActiveToolPanel = null;
+        ShowUndoPanel = true;
+
+        if (finding.IsSuppressed)
+        {
+            finding.Undo();
+            StateService.LogAction($"User undid suppression: {finding.CheckId}");
+        }
+    }
+
+    // FIX: متدهای مجزا برای Drawer actions تا از lambda با null reference اجتناب شود
+    private void ShowUndoGuidanceForSelected()
+    {
+        if (SelectedFinding != null) ShowUndoGuidance(SelectedFinding);
+    }
+
+    private async Task RescanSelected()
+    {
+        if (SelectedFinding != null) await RescanFinding(SelectedFinding);
+    }
+
+    private void IgnoreSelected()
+    {
+        if (SelectedFinding != null) IgnoreFindingRow(SelectedFinding);
+    }
+
+    private void MarkFpSelected()
+    {
+        if (SelectedFinding != null) MarkFpFinding(SelectedFinding);
+    }
+
+    private void LaunchActiveTool()
+    {
+        if (ActiveToolPanel != null) StateService.LaunchFixTool(ActiveToolPanel.Tool);
+    }
+
+    private async Task CopySourceCommand()
+    {
+        if (SelectedFinding != null)
+            await CopyToClipboard(GetSourceCommand(SelectedFinding));
+    }
+
+    private async Task CopyUndoCommand(Finding f)
+    {
+        await CopyToClipboard(GetUndoCliCommand(f));
+    }
+
+    private static string GetUndoCliCommand(Finding finding)
+    {
+        if (finding.CheckId.StartsWith("FW")) return "Set-NetFirewallProfile -Profile Domain -Enabled True";
+        if (finding.CheckId.StartsWith("SMB")) return "Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force";
+        if (finding.CheckId.StartsWith("RDP")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 1";
+        if (finding.CheckId.StartsWith("USB")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Services\\USBSTOR' -Name Start -Value 4";
+        if (finding.CheckId.StartsWith("DEF")) return "Set-MpPreference -DisableRealtimeMonitoring $false";
+        if (finding.CheckId.StartsWith("UAC")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA -Value 1";
+        if (finding.CheckId.StartsWith("ARD")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255";
+        if (finding.CheckId.StartsWith("GUEST")) return "net user Guest /active:no";
+        if (finding.CheckId.StartsWith("ADM")) return "# Review and remove unnecessary admin accounts via lusrmgr.msc";
+        if (finding.CheckId.StartsWith("ALG")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 0";
+        if (finding.CheckId.StartsWith("PWD")) return "net accounts /minpwlen:14";
+        if (finding.CheckId.StartsWith("WUP")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name NoAutoUpdate -Value 1";
+        if (finding.CheckId.StartsWith("LM")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 5";
+        return "# Use " + (finding.FixTools.FirstOrDefault() ?? "relevant tool") + " to set to " + finding.ExpectedValue;
+    }
+
+    private static string GetGraphicalPath(Finding finding)
+    {
+        if (finding.CheckId.StartsWith("FW")) return "Control Panel → Windows Defender Firewall → Turn on for Domain";
+        if (finding.CheckId.StartsWith("SMB")) return "Control Panel → Programs → Turn Windows features on or off → Uncheck SMB 1.0/CIFS";
+        if (finding.CheckId.StartsWith("RDP")) return "System Properties → Remote → Allow remote connections → Check NLA";
+        if (finding.CheckId.StartsWith("USB")) return "Group Policy Editor → Computer Configuration → Administrative Templates → System → Removable Storage Access";
+        if (finding.CheckId.StartsWith("DEF")) return "Windows Security → Virus & threat protection → Manage settings → Turn on Real-time";
+        if (finding.CheckId.StartsWith("UAC")) return "Control Panel → User Accounts → Change User Account Control settings → Raise slider";
+        if (finding.CheckId.StartsWith("ARD")) return "Group Policy Editor → Administrative Templates → Windows Components → AutoPlay Policies";
+        if (finding.CheckId.StartsWith("GUEST")) return "Computer Management → Local Users and Groups → Users → Guest → Disable";
+        if (finding.CheckId.StartsWith("ADM")) return "Computer Management → Local Users and Groups → Groups → Administrators → Review members";
+        if (finding.CheckId.StartsWith("ALG")) return "netplwiz → Uncheck 'Users must enter a user name and password'";
+        if (finding.CheckId.StartsWith("PWD")) return "Local Security Policy → Account Policies → Password Policy → Minimum password length = 14";
+        if (finding.CheckId.StartsWith("WUP")) return "Group Policy Editor → Windows Update → Configure Automatic Updates → Disabled";
+        if (finding.CheckId.StartsWith("LM")) return "Local Security Policy → Local Policies → Security Options → LAN Manager authentication level = NTLMv2 only";
+        return finding.Recommendation;
+    }
+
+    private bool IsSelected(Finding finding) => SelectedFindingIds.Contains(finding.CheckId);
+
+    private void ToggleSelect(Finding finding)
+    {
+        if (!SelectedFindingIds.Add(finding.CheckId))
+            SelectedFindingIds.Remove(finding.CheckId);
+    }
+
+    private void ClearSelection() => SelectedFindingIds.Clear();
+
+    private IEnumerable<Finding> GetSelectedFindings()
+    {
+        if (StateService.CurrentScanResult == null) return Enumerable.Empty<Finding>();
+        return StateService.CurrentScanResult.Findings.Where(f => SelectedFindingIds.Contains(f.CheckId));
+    }
+
+    private async Task BulkRescan()
+    {
+        foreach (var f in GetSelectedFindings().ToList())
+            await StateService.RescanSingleCheckAsync(f.CheckId);
+        ClearSelection();
+    }
+
+    private void BulkIgnore()
+    {
+        foreach (var f in GetSelectedFindings())
+        {
+            f.Ignore();
+            StateService.LogAction($"User ignored: {f.CheckId}");
+        }
+        ClearSelection();
+    }
+
+    private void BulkMarkFp()
+    {
+        foreach (var f in GetSelectedFindings())
+        {
+            f.MarkFalsePositive();
+            StateService.LogAction($"User marked FP: {f.CheckId}");
+        }
+        ClearSelection();
+    }
+
+    private async Task BulkExport()
+    {
+        var items = GetSelectedFindings().ToList();
+        if (!items.Any()) return;
+        await DownloadFindingsAsCsv(items, $"DefenDoor_Selected_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+    }
+
+    // FIX: متدهای Severity به صورت مجزا برای رفع ارور Razor quotation conflict
+    private void SetSeverityAll() => SelectedSeverity = "All";
+    private void SetSeverityCritical() => SelectedSeverity = "Critical";
+    private void SetSeverityHigh() => SelectedSeverity = "High";
+    private void SetSeverityMedium() => SelectedSeverity = "Medium";
+    private void SetSeverityLow() => SelectedSeverity = "Low";
+
+    private void ApplyPresetAll() { ActivePreset = "all"; SelectedFilter = "All"; }
+    private void ApplyPresetCriticalOpen() { ActivePreset = "critical-open"; SelectedFilter = "All"; }
+    private void ApplyPresetNeedsRemediation() { ActivePreset = "needs-remediation"; SelectedFilter = "All"; }
+    private void ApplyPresetQuickWins() { ActivePreset = "quick-wins"; SelectedFilter = "All"; }
+    private void ApplyPresetIgnored() { ActivePreset = "ignored"; SelectedFilter = "All"; }
+    private void ApplyPresetWarnings() { ActivePreset = "all"; SelectedFilter = "Warning"; }
 
     private void SetFilterAll() => SelectedFilter = "All";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
     private void SetFilterWarn() => SelectedFilter = "Warning";
+    private void SetCategory(string? c) => SelectedCategory = c;
+    private void ClearCategory() => SelectedCategory = null;
 
-    private void SetCategory(string? category) => SelectedCategory = category;
+    private void OpenDrawer(Finding f) { SelectedFinding = f; ActiveToolPanel = null; ShowUndoPanel = false; }
+    private void CloseDrawer() { SelectedFinding = null; ActiveToolPanel = null; ShowUndoPanel = false; }
 
-    private void OpenDrawer(Finding finding) => SelectedFinding = finding;
-    private void CloseDrawer() => SelectedFinding = null;
-
-    private void LaunchTool(string tool) => StateService.LaunchFixTool(tool);
-
-    private void UndoFinding(Finding finding)
+    private void IgnoreFindingRow(Finding f)
     {
-        finding.Undo();
-        StateService.LogAction($"User undid ignore: {finding.CheckId}");
-        StateHasChanged();
+        f.Ignore();
+        StateService.LogAction($"User ignored: {f.CheckId}");
     }
 
-    private async Task RescanFinding(Finding finding)
+    private void MarkFpFinding(Finding f)
     {
-        await StateService.RescanSingleCheckAsync(finding.CheckId);
+        f.MarkFalsePositive();
+        StateService.LogAction($"User marked FP: {f.CheckId}");
     }
 
-    private void IgnoreFindingRow(Finding finding)
+    private async Task RescanFinding(Finding f)
     {
-        finding.Ignore();
-        StateService.LogAction($"User ignored finding: {finding.CheckId}");
-        StateHasChanged();
+        await StateService.RescanSingleCheckAsync(f.CheckId);
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch { }
+    }
+
+    private async Task ExportFilteredCsv()
+    {
+        var items = FinalFindings.ToList();
+        await DownloadFindingsAsCsv(items, $"DefenDoor_Findings_Filtered_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+    }
+
+    private async Task DownloadFindingsAsCsv(List<Finding> items, string filename)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("CheckId,Name,Category,Severity,Status,Current,Expected,CIS,Risk,Source");
+        foreach (var f in items)
+        {
+            sb.AppendLine($"\"{f.CheckId}\",\"{f.Name}\",\"{f.Category}\",\"{f.Severity}\",\"{f.Status}\",\"{f.CurrentValue}\",\"{f.ExpectedValue}\",\"{f.CisReference}\",{f.RiskScore},\"{f.SourceType}\"");
+        }
+        await DownloadFile(filename, sb.ToString(), "text/csv");
+    }
+
+    private async Task ExportFilteredJson()
+    {
+        var items = FinalFindings.Select(f => new
+        {
+            f.CheckId,
+            f.Name,
+            Category = f.Category.ToString(),
+            Severity = f.Severity.ToString(),
+            Status = f.Status.ToString(),
+            f.CurrentValue,
+            f.ExpectedValue,
+            f.CisReference,
+            f.RiskScore,
+            f.SourceType,
+            f.SourceCommand,
+            f.RegistryPath,
+            f.Recommendation
+        }).ToList();
+        var json = JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true });
+        await DownloadFile($"DefenDoor_Findings_Filtered_{DateTime.Now:yyyyMMdd_HHmmss}.json", json, "application/json");
+    }
+
+    private async Task DownloadFile(string filename, string content, string mime)
+    {
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(content);
+            var b64 = Convert.ToBase64String(bytes);
+            var script = $@"(function() {{
+                const a = document.createElement('a');
+                a.href = 'data:{mime};base64,{b64}';
+                a.download = '{filename}';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }})();";
+            await JS.InvokeVoidAsync("eval", script);
+        }
+        catch (Exception ex)
+        {
+            StateService.LogAction($"Export failed: {ex.Message}");
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        StateService.OnChange += HandleStateChanged;
+    }
+
+    private void HandleStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        StateService.OnChange -= HandleStateChanged;
     }
 }
