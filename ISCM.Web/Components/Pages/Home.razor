@@ -21,7 +21,6 @@
         box-sizing: border-box;
     }
 
-    /* ── دکمه اسکن + انیمیشن Dot Wave ─────────────────────────── */
     .btn-scan {
         background: linear-gradient(45deg, #06b6d4, #3b82f6);
         border: none;
@@ -50,7 +49,6 @@
             transform: none;
         }
 
-    /* EDIT: انیمیشن موج نقطه‌ها — فقط برای حالت Scanning (مطابق دمو 16-dots-wave) */
     .dots-wave {
         display: inline-flex;
         gap: 5px;
@@ -97,7 +95,6 @@
         }
     }
 
-    /* ── کنسول اسکن ────────────────────────────────────────────── */
     .console-header {
         display: flex;
         align-items: center;
@@ -156,13 +153,29 @@
         font-family: 'Consolas', monospace;
         font-size: 12px;
         line-height: 1.5;
-        color: #10b981;
         background: #0a0e1a;
         border: 1px solid rgba(255,255,255,0.1);
     }
 
     .log-placeholder {
         color: #64748b;
+    }
+
+    /* EDIT: کلاس‌های رنگی لاگ‌ها مطابق ویدیوی طرح */
+    .log-info {
+        color: #94a3b8;
+    }
+
+    .log-pass {
+        color: #10b981;
+    }
+
+    .log-fail {
+        color: #ef4444;
+    }
+
+    .log-warn {
+        color: #f59e0b;
     }
 
     .console-summary {
@@ -213,7 +226,6 @@
         text-transform: uppercase;
     }
 
-    /* ── چیدمان دو ستونه (Score + System Info) ─────────────────── */
     .two-col {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -250,7 +262,6 @@
             background: #475569;
         }
 
-    /* ── حلقه امتیاز ───────────────────────────────────────────── */
     .score-layout {
         display: flex;
         align-items: center;
@@ -360,7 +371,6 @@
             color: #f59e0b;
         }
 
-    /* ── دونات ─────────────────────────────────────────────────── */
     .donut-section {
         display: flex;
         align-items: center;
@@ -443,7 +453,6 @@
         color: #e2e8f0;
     }
 
-    /* ── جدول اطلاعات سیستم ────────────────────────────────────── */
     .sys-row {
         display: flex;
         justify-content: space-between;
@@ -504,7 +513,6 @@
         cursor: pointer;
     }
 
-    /* ── کارت‌های دسته‌بندی با Progress Bar ────────────────────── */
     .category-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -566,7 +574,6 @@
     }
 </style>
 
-@* ── کنسول اسکن + دکمه با انیمیشن Dot Wave ─────────────────────── *@
 <div class="console-header">
     <div class="console-status @StateService.ConsoleStatusClass">
         <div class="dot"></div>
@@ -593,7 +600,8 @@
     {
         @foreach (var log in StateService.ConsoleLogs)
         {
-            <div>@log</div>
+            @* EDIT: هر لاگ با کلاس رنگی خودش رندر می‌شود *@
+            <div class="@GetLogClass(log)">@log</div>
         }
     }
 </div>
@@ -605,7 +613,6 @@
     <div class="summary-item"><div class="summary-num">@ChecksDisplay</div><div class="summary-label">Checks</div></div>
 </div>
 
-@* ── دو پنل همیشه‌نمایان: امتیاز + اطلاعات سیستم ───────────────── *@
 <div class="two-col">
     <div class="glass-panel" style="margin-bottom: 0;">
         <div class="panel-title" style="margin-bottom: 12px;">Compliance Score</div>
@@ -690,7 +697,6 @@
     </div>
 </div>
 
-@* ── کارت‌های دسته‌بندی با درصد و Progress Bar ─────────────────── *@
 <div class="category-grid" style="margin-top: 10px;">
     @foreach (var group in CategoryBreakdown)
     {
@@ -712,7 +718,6 @@
 </div>
 
 @code {
-    // EDIT: مدل سبک برای آمار هر دسته‌بندی (فقط برای نمایش در UI)
     public class CategoryStat
     {
         public string Category { get; set; } = "";
@@ -753,19 +758,35 @@
         }).ToList();
     }
 
-    // EDIT: درصد = Pass تقسیم بر (Pass + Fail) — دقیقاً مطابق منطق طرح (3 pass 2 fail = 60%)
     private static int GetCategoryPercent(CategoryStat s)
         => (s.PassCount + s.FailCount) == 0 ? 0 : (int)Math.Round((double)s.PassCount / (s.PassCount + s.FailCount) * 100);
 
-    // EDIT: رنگ نوار پیشرفت — سبز برای ۱۰۰٪، نارنجی برای ۵۰٪ به بالا، قرمز برای کمتر
     private static string GetBarColor(int pct)
         => pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
 
-    // ── مقادیر نمایشی نوار خلاصه (Placeholder قبل از اسکن) ──
+    // ── مقادیر نمایشی نوار خلاصه ──
     private string PassedDisplay => StateService.CurrentScanResult?.PassCount.ToString() ?? "—";
     private string FailedDisplay => StateService.CurrentScanResult?.FailCount.ToString() ?? "—";
     private string WarningDisplay => StateService.CurrentScanResult?.WarningCount.ToString() ?? "—";
-    private string ChecksDisplay => StateService.CurrentScanResult != null ? $"{StateService.TotalChecks}/{StateService.TotalChecks}" : "—";
+
+    // EDIT: ستون CHECKS — حین اسکن شمارنده زنده x/15 و بعد از اسکن n/n
+    private string ChecksDisplay
+    {
+        get
+        {
+            if (StateService.IsScanning) return $"{StateService.CompletedChecks}/{StateService.ExpectedChecks}";
+            return StateService.CurrentScanResult != null ? $"{StateService.TotalChecks}/{StateService.TotalChecks}" : "—";
+        }
+    }
+
+    // EDIT: انتخاب کلاس رنگی هر خط لاگ بر اساس تگ آن
+    private static string GetLogClass(string log)
+    {
+        if (log.Contains("[PASS]")) return "log-pass";
+        if (log.Contains("[FAIL]")) return "log-fail";
+        if (log.Contains("[WARN]")) return "log-warn";
+        return "log-info";
+    }
 
     // ── محاسبات حلقه امتیاز و دونات ──
     private const double RingCircumference = 326.7;
