@@ -7,6 +7,9 @@ namespace ISCM.Infrastructure.Scanning.Checks;
 
 public class PasswordLengthCheck : IHardeningCheck
 {
+    private const string RegistryPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+    private const string ValueName = "MinimumPasswordLength";
+
     public string CheckId => "PWD-001";
     public string Name => "Min Password Length";
     public CheckCategory Category => CheckCategory.Account;
@@ -20,11 +23,10 @@ public class PasswordLengthCheck : IHardeningCheck
 
         try
         {
-            // مسیر رجیستری برای سیاست‌های رمز عبور (اگر با GPO تنظیم شده باشد)
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System");
+            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
             if (key != null)
             {
-                var val = key.GetValue("MinimumPasswordLength");
+                var val = key.GetValue(ValueName);
                 if (val != null && int.TryParse(val.ToString(), out int length))
                 {
                     currentValue = $"{length} chars";
@@ -33,7 +35,7 @@ public class PasswordLengthCheck : IHardeningCheck
                 else
                 {
                     currentValue = "Not Configured (0)";
-                    status = CheckStatus.Fail; // اگر تنظیم نشده باشد، یعنی امن نیست
+                    status = CheckStatus.Fail;
                 }
             }
             else
@@ -48,16 +50,19 @@ public class PasswordLengthCheck : IHardeningCheck
             status = CheckStatus.Error;
         }
 
+        // EDIT (مرحله د): تغذیه متادیتای واقعی مطابق طرح
         return Task.FromResult(new Finding(
-            CheckId,
-            Name,
-            Category,
-            Severity,
-            status,
-            currentValue,
-            "14 chars",
-            "Set minimum password length to 14 characters via Local Security Policy.",
-            errorMessage
+            CheckId, Name, Category, Severity, status, currentValue,
+            expectedValue: "14 chars",
+            recommendation: "Set minimum password length to 14 characters via Local Security Policy.",
+            errorMessage: errorMessage,
+            description: "Minimum password length policy defines the minimum number of characters required for user passwords. Short passwords are vulnerable to brute-force and dictionary attacks.",
+            registryPath: $@"HKLM\{RegistryPath}\{ValueName}",
+            cisReference: "CIS 5.2.3",
+            riskScore: 60,
+            sourceType: "secedit",
+            sourceCommand: "secedit /export /cfg output.txt /areas SECURITYPOLICY",
+            fixTools: new List<string> { "secpol.msc" }
         ));
     }
 }

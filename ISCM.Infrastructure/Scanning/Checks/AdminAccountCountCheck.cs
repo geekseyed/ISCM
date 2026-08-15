@@ -20,7 +20,6 @@ public class AdminAccountCountCheck : IHardeningCheck
 
         try
         {
-            // استفاده از WMI برای شمارش اعضای گروه Administrators
             string machineName = Environment.MachineName;
             string query = $"SELECT * FROM Win32_GroupUser WHERE GroupComponent = \"Win32_Group.Domain='{machineName}',Name='Administrators'\"";
 
@@ -28,7 +27,6 @@ public class AdminAccountCountCheck : IHardeningCheck
             int adminCount = searcher.Get().Count;
 
             currentValue = $"{adminCount} Admins";
-            // استاندارد ما: کمتر یا مساوی ۲ ادمین
             status = adminCount <= 2 ? CheckStatus.Pass : CheckStatus.Fail;
         }
         catch (Exception ex)
@@ -37,16 +35,19 @@ public class AdminAccountCountCheck : IHardeningCheck
             status = CheckStatus.Error;
         }
 
+        // EDIT (مرحله د): تغذیه متادیتای واقعی
         return Task.FromResult(new Finding(
-            CheckId,
-            Name,
-            Category,
-            Severity,
-            status,
-            currentValue,
-            "<= 2 Admins",
-            "Limit local administrator group to essential members only.",
-            errorMessage
+            CheckId, Name, Category, Severity, status, currentValue,
+            expectedValue: "<= 2 Admins",
+            recommendation: "Limit local administrator group to essential members only.",
+            errorMessage: errorMessage,
+            description: "Limiting local administrators reduces the attack surface for privilege escalation. Excessive admin accounts increase the risk of credential theft.",
+            registryPath: null,
+            cisReference: "CIS 2.3.1.5",
+            riskScore: 20,
+            sourceType: "WMI (Win32_GroupUser)",
+            sourceCommand: "net localgroup Administrators",
+            fixTools: new List<string> { "powershell.exe", "compmgmt.msc" }
         ));
     }
 }
