@@ -17,15 +17,14 @@ public class Finding : BaseEntity
     public string Recommendation { get; private set; } = string.Empty;
     public string? ErrorMessage { get; private set; }
 
-    // EDIT (پیش‌نیاز مرحله ب): متادیتای غنی مطابق UI نهایی —
-    // فعلاً مقدار پیش‌فرض خالی؛ در مرحله «د» هر چک مقدار واقعی خودش را می‌دهد.
+    // متادیتای غنی (گام ۲۳-د)
     public string CisReference { get; private set; } = "";
     public int RiskScore { get; private set; } = 0;
     public string SourceType { get; private set; } = "";
     public string SourceCommand { get; private set; } = "";
     public IReadOnlyList<string> FixTools { get; private set; } = new List<string>();
 
-    // EDIT: وضعیت قبلی برای قابلیت Undo
+    // وضعیت قبلی برای قابلیت Undo (مشترک بین Ignore و FP)
     private CheckStatus? _previousStatus;
 
     private Finding() { }
@@ -71,7 +70,6 @@ public class Finding : BaseEntity
         FixTools = fixTools ?? new List<string>();
     }
 
-    // EDIT: هنگام Ignore، وضعیت قبلی ذخیره می‌شود تا Undo ممکن باشد.
     public void Ignore()
     {
         if (Status == CheckStatus.Ignored) return;
@@ -80,14 +78,26 @@ public class Finding : BaseEntity
         MarkModified();
     }
 
-    // EDIT: Undo — بازگشت به وضعیت قبل از Ignore
+    // EDIT (گام ۲۴): علامت‌گذاری به‌عنوان مثبت کاذب — مستقل از Ignore
+    public void MarkFalsePositive()
+    {
+        if (Status == CheckStatus.FalsePositive) return;
+        _previousStatus = Status;
+        Status = CheckStatus.FalsePositive;
+        MarkModified();
+    }
+
+    // EDIT (گام ۲۴): Undo حالا هر دو حالت Ignored و FalsePositive را برمی‌گرداند
     public void Undo()
     {
-        if (Status != CheckStatus.Ignored) return;
+        if (Status != CheckStatus.Ignored && Status != CheckStatus.FalsePositive) return;
         Status = _previousStatus ?? CheckStatus.NotScanned;
         _previousStatus = null;
         MarkModified();
     }
+
+    // EDIT (گام ۲۴): سرکوب‌شده = Ignored یا FP — مبنای کارت KPI و فیلتر ترکیبی
+    public bool IsSuppressed => Status == CheckStatus.Ignored || Status == CheckStatus.FalsePositive;
 
     public void SetError(string errorMessage)
     {
@@ -96,7 +106,6 @@ public class Finding : BaseEntity
         MarkModified();
     }
 
-    // EDIT: به‌روزرسانی نتیجه پس از Rescan تکیِ یک چک
     public void UpdateResult(CheckStatus newStatus, string newValue)
     {
         Status = newStatus;

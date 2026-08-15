@@ -43,7 +43,6 @@ public class ScanResult : BaseEntity
         MarkModified();
     }
 
-    // EDIT: جایگزینی نتیجه یک چک پس از Rescan تکی (بدون خطای تکراری)
     public void ReplaceFinding(Finding finding)
     {
         ArgumentNullException.ThrowIfNull(finding);
@@ -63,12 +62,26 @@ public class ScanResult : BaseEntity
     public int FailCount => _findings.Count(f => f.Status == CheckStatus.Fail);
     public int WarningCount => _findings.Count(f => f.Status == CheckStatus.Warning);
 
+    // EDIT (گام ۲۴): یافته‌های سرکوب‌شده (Ignored + FP) برای کارت KPI
+    public int SuppressedCount => _findings.Count(f => f.IsSuppressed);
+
+    // EDIT (گام ۲۴): موارد بحرانی باز (Fail + Critical) برای کارت KPI
+    public int CriticalOpenCount => _findings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
+
+    // EDIT (گام ۲۴): ریسک باز (Fail + Warn) برای کارت KPI
+    public int OpenRiskCount => _findings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+
     public int ComplianceScore
     {
         get
         {
             if (_findings.Count == 0) return 0;
-            var eligibleChecks = _findings.Count(f => f.Status != CheckStatus.Error && f.Status != CheckStatus.NotScanned && f.Status != CheckStatus.Ignored);
+            // EDIT: FalsePositive هم مثل Ignored/Error/NotScanned از مخرج امتیاز حذف می‌شود
+            var eligibleChecks = _findings.Count(f =>
+                f.Status != CheckStatus.Error &&
+                f.Status != CheckStatus.NotScanned &&
+                f.Status != CheckStatus.Ignored &&
+                f.Status != CheckStatus.FalsePositive);
             if (eligibleChecks == 0) return 0;
             return (int)Math.Round((double)PassCount / eligibleChecks * 100);
         }

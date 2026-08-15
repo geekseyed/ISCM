@@ -13,5 +13,7 @@ public enum CheckStatus
     Fail = 2,
     Warning = 3,
     Ignored = 4,
-    Error = 5
+    Error = 5,
+    FalsePositive = 6
+
 }
