@@ -1,0 +1,570 @@
+﻿@using ISCM.Domain.Entities
+@using ISCM.Domain.Enums
+@using ISCM.Web.Services
+@using Microsoft.JSInterop
+@inject ScanStateService StateService
+@inject IJSRuntime JS
+
+@if (SelectedFinding != null)
+{
+    var f = SelectedFinding;
+    <div class="drawer-overlay active" @onclick="CloseDrawer"></div>
+    <div class="drawer open">
+        <div class="drawer-header">
+            <div class="drawer-title">@f.Name (@f.CheckId)</div>
+            <button class="btn-close" @onclick="CloseDrawer">X</button>
+        </div>
+
+        @* EDIT: نوار کلیدها به بالای Drawer منتقل شد — همیشه قابل دید *@
+        <div class="drawer-actions">
+            @foreach (var tool in GetTools(f))
+            {
+                var capturedTool = tool;
+                <button class="action-btn" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
+            }
+            <button class="action-btn" @onclick="ToggleUndoPanel">↶ Undo</button>
+            <button class="action-btn" @onclick="RescanFinding">🔄 Rescan</button>
+            <button class="action-btn" @onclick="ToggleIgnore">@(f.IsSuppressed ? "🚫 Unignore" : "🚫 Ignore")</button>
+        </div>
+
+        <div class="drawer-body">
+            <div class="detail-section">
+                <div class="detail-label">Description</div>
+                <div class="detail-value">@(string.IsNullOrEmpty(f.Description) ? "No description available." : f.Description)</div>
+            </div>
+            <div class="detail-section">
+                <div class="drawer-values">
+                    <div>
+                        <div class="dv-label">Current</div>
+                        <div class="dv-value fv-@f.Status.ToString().ToLower()">@f.CurrentValue</div>
+                    </div>
+                    <div>
+                        <div class="dv-label">Expected</div>
+                        <div class="dv-value">@f.ExpectedValue</div>
+                    </div>
+                </div>
+            </div>
+            <div class="detail-section">
+                <div class="drawer-badges-row">
+                    @if (!string.IsNullOrEmpty(f.CisReference))
+                    {
+                        <div>
+                            <div class="detail-label">CIS Reference</div>
+                            <span class="cis-badge">@f.CisReference</span>
+                        </div>
+                    }
+                    <div>
+                        <div class="detail-label">Risk Score</div>
+                        <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk: @f.RiskScore/100</span>
+                    </div>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(f.RegistryPath))
+            {
+                <div class="detail-section">
+                    <div class="detail-label">Registry Path</div>
+                    <div class="code-block">
+                        <span>@f.RegistryPath</span>
+                        <button class="code-copy-btn" @onclick="() => CopyToClipboard(f.RegistryPath!)">Copy</button>
+                    </div>
+                </div>
+            }
+            <div class="detail-section">
+                <div class="detail-label">Source Type</div>
+                <div class="detail-value">@GetSourceType(f) · Category @f.Category</div>
+            </div>
+            <div class="detail-section">
+                <div class="detail-label">Source Command</div>
+                <div class="code-block">
+                    <span>@GetSourceCommand(f)</span>
+                    <button class="code-copy-btn" @onclick="CopySourceCommand">Copy</button>
+                </div>
+            </div>
+            <div class="detail-section">
+                <div class="detail-label">Recommendation</div>
+                <div class="detail-value">@f.Recommendation</div>
+                @if (f.Status == CheckStatus.Ignored)
+                {
+                    <div class="ignored-notice">This finding has been ignored</div>
+                }
+                else if (f.Status == CheckStatus.FalsePositive)
+                {
+                    <div class="ignored-notice">This finding has been marked as false positive</div>
+                }
+            </div>
+
+            @* پنل‌های انحصاری: فقط یکی در هر لحظه *@
+            @if (ShowUndoPanel)
+            {
+                <div class="tool-panel">
+                    <div class="tool-panel-header">↶ Undo Guidance</div>
+                    <div class="tool-row">
+                        <div class="tool-row-label">CLI Command (PowerShell)</div>
+                        <div class="code-block" style="margin: 0;">
+                            <span>@GetUndoCliCommand(f)</span>
+                            <button class="code-copy-btn" @onclick="() => CopyUndoCommand(f)">Copy</button>
+                        </div>
+                    </div>
+                    <div class="tool-row" style="margin-top: 10px;">
+                        <div class="tool-row-label">Graphical Path</div>
+                        <div class="tool-row-value" style="line-height: 1.6;">@GetGraphicalPath(f)</div>
+                    </div>
+                </div>
+            }
+            else if (ActiveToolPanel != null)
+            {
+                <div class="tool-panel">
+                    <div class="tool-panel-header">🔧 Policy Tool Path</div>
+                    <div class="tool-row">
+                        <div class="tool-row-label">Tool</div>
+                        <div class="tool-row-value">@ActiveToolPanel.Tool</div>
+                    </div>
+                    <div class="tool-row">
+                        <div class="tool-row-label">Navigation Path</div>
+                        <div class="tool-row-value" style="line-height: 1.6;">@ActiveToolPanel.NavigationPath</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Finding? SelectedFinding { get; set; }
+    [Parameter] public EventCallback Close { get; set; }
+
+    private ToolPathInfo? ActiveToolPanel;
+    private bool ShowUndoPanel;
+
+    private class ToolPathInfo
+    {
+        public string Tool { get; set; } = "";
+        public string NavigationPath { get; set; } = "";
+    }
+
+    private async Task CloseDrawer()
+    {
+        ActiveToolPanel = null;
+        ShowUndoPanel = false;
+        await Close.InvokeAsync();
+    }
+
+    private void ShowPolicyToolPath(Finding finding, string tool)
+    {
+        ShowUndoPanel = false;
+        ActiveToolPanel = new ToolPathInfo { Tool = tool, NavigationPath = BuildNavigationPath(finding, tool) };
+    }
+
+    private void ToggleUndoPanel()
+    {
+        if (ShowUndoPanel) { ShowUndoPanel = false; }
+        else { ActiveToolPanel = null; ShowUndoPanel = true; }
+    }
+
+    private void ToggleIgnore()
+    {
+        if (SelectedFinding == null) return;
+        if (SelectedFinding.IsSuppressed)
+        {
+            SelectedFinding.Undo();
+            StateService.LogAction($"User undid suppression: {SelectedFinding.CheckId}");
+        }
+        else
+        {
+            SelectedFinding.Ignore();
+            StateService.LogAction($"User ignored: {SelectedFinding.CheckId}");
+        }
+    }
+
+    private async Task RescanFinding()
+    {
+        if (SelectedFinding != null)
+            await StateService.RescanSingleCheckAsync(SelectedFinding.CheckId);
+    }
+
+    private async Task CopySourceCommand()
+    {
+        if (SelectedFinding != null)
+            await CopyToClipboard(GetSourceCommand(SelectedFinding));
+    }
+
+    private async Task CopyUndoCommand(Finding f) => await CopyToClipboard(GetUndoCliCommand(f));
+
+    private async Task CopyToClipboard(string text)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); } catch { }
+    }
+
+    private IEnumerable<string> GetTools(Finding? finding)
+    {
+        if (finding is null) return Array.Empty<string>();
+        return finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
+    }
+
+    private string GetFixMethod(string checkId)
+    {
+        if (checkId.StartsWith("FW") || checkId.StartsWith("SMB")) return "powershell.exe";
+        if (checkId.StartsWith("GUEST") || checkId.StartsWith("ADM")) return "net.exe";
+        if (checkId.StartsWith("PWD") || checkId.StartsWith("AUD")) return "secpol.msc";
+        return "regedit.exe";
+    }
+
+    private static string GetRiskClass(int score)
+        => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
+
+    private static string GetSourceType(Finding f)
+    {
+        if (!string.IsNullOrEmpty(f.SourceType)) return f.SourceType;
+        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit";
+        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net.exe";
+        return "RegistryReader";
+    }
+
+    private static string GetSourceCommand(Finding f)
+    {
+        if (!string.IsNullOrEmpty(f.SourceCommand)) return f.SourceCommand;
+        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit /export /cfg output.txt";
+        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net user";
+        return string.IsNullOrEmpty(f.RegistryPath) ? "reg query HKLM" : $"reg query {f.RegistryPath}";
+    }
+
+    private string BuildNavigationPath(Finding finding, string tool)
+    {
+        if (tool == "secpol.msc") return "Open secpol.msc → Account Policies → Password Policy → Minimum password length → Set to 14.";
+        if (tool == "gpedit.msc") return "Open gpedit.msc → Computer Configuration → Administrative Templates → System / Windows Components → Locate policy";
+        if (tool == "wf.msc") return "Open wf.msc → Windows Defender Firewall → Advanced Settings → Inbound Rules → Disable SMBv1-related rules. Or: Control Panel → Programs → Turn Windows features on/off → uncheck SMB 1.0/CIFS.";
+        if (tool == "powershell.exe") return "Open PowerShell as Administrator → Execute the CLI command shown in Undo Guidance panel.";
+        if (tool == "regedit.exe") return "Open regedit.exe → Navigate to: " + (finding.RegistryPath ?? "HKLM");
+        if (tool == "net.exe") return "Open CMD/PowerShell as Administrator → Run net user / net localgroup commands";
+        if (tool == "lusrmgr.msc") return "Open lusrmgr.msc → Users → Double-click user → Modify settings";
+        if (tool == "compmgmt.msc") return "Open compmgmt.msc → System Tools → Local Users and Groups → Groups → Administrators";
+        if (tool == "UserAccountControlSettings.exe") return "Open UserAccountControlSettings.exe → Move slider to desired level → OK";
+        if (tool == "SystemPropertiesRemote.exe") return "Open SystemPropertiesRemote.exe → Remote tab → Enable/Disable NLA";
+        if (tool == "OptionalFeatures.exe") return "Open OptionalFeatures.exe → Locate feature → Uncheck → OK → Restart";
+        if (tool == "services.msc") return "Open services.msc → Locate service → Set Startup Type → Restart service";
+        if (tool == "settings") return "Open Windows Settings → Locate the relevant security section → Apply change";
+        return "Open " + tool + " → Navigate to relevant policy section";
+    }
+
+    private static string GetUndoCliCommand(Finding finding)
+    {
+        if (finding.CheckId.StartsWith("FW")) return "Set-NetFirewallProfile -Profile Domain -Enabled True";
+        if (finding.CheckId.StartsWith("SMB")) return "Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force";
+        if (finding.CheckId.StartsWith("RDP")) return "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 1";
+        if (finding.CheckId.StartsWith("USB")) return "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR' -Name Start -Value 4";
+        if (finding.CheckId.StartsWith("DEF")) return "Set-MpPreference -DisableRealtimeMonitoring $false";
+        if (finding.CheckId.StartsWith("UAC")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA -Value 1";
+        if (finding.CheckId.StartsWith("ARD")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255";
+        if (finding.CheckId.StartsWith("GUEST")) return "net user Guest /active:no";
+        if (finding.CheckId.StartsWith("ADM")) return "# Review and remove unnecessary admin accounts via lusrmgr.msc";
+        if (finding.CheckId.StartsWith("ALG")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 0";
+        if (finding.CheckId.StartsWith("PWD")) return "net accounts /minpwlen:14";
+        if (finding.CheckId.StartsWith("WUP")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name NoAutoUpdate -Value 1";
+        if (finding.CheckId.StartsWith("LM")) return "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 5";
+        return "# Use " + (finding.FixTools.FirstOrDefault() ?? "relevant tool") + " to set to " + finding.ExpectedValue;
+    }
+
+    private static string GetGraphicalPath(Finding finding)
+    {
+        if (finding.CheckId.StartsWith("FW")) return "Control Panel → Windows Defender Firewall → Turn on for Domain";
+        if (finding.CheckId.StartsWith("SMB")) return "Open wf.msc → Windows Defender Firewall → Advanced Settings → Inbound Rules → Disable SMBv1-related rules. Or: Control Panel → Programs → Turn Windows features on/off → uncheck SMB 1.0/CIFS.";
+        if (finding.CheckId.StartsWith("RDP")) return "System Properties → Remote → Allow remote connections → Check NLA";
+        if (finding.CheckId.StartsWith("USB")) return "Group Policy Editor → Computer Configuration → Administrative Templates → System → Removable Storage Access";
+        if (finding.CheckId.StartsWith("DEF")) return "Windows Security → Virus & threat protection → Manage settings → Turn on Real-time";
+        if (finding.CheckId.StartsWith("UAC")) return "Control Panel → User Accounts → Change User Account Control settings → Raise slider";
+        if (finding.CheckId.StartsWith("ARD")) return "Group Policy Editor → Administrative Templates → Windows Components → AutoPlay Policies";
+        if (finding.CheckId.StartsWith("GUEST")) return "Computer Management → Local Users and Groups → Users → Guest → Disable";
+        if (finding.CheckId.StartsWith("ADM")) return "Computer Management → Local Users and Groups → Groups → Administrators → Review members";
+        if (finding.CheckId.StartsWith("ALG")) return "netplwiz → Uncheck 'Users must enter a user name and password'";
+        if (finding.CheckId.StartsWith("PWD")) return "Open secpol.msc → Account Policies → Password Policy → Minimum password length → Set to 14.";
+        if (finding.CheckId.StartsWith("WUP")) return "Group Policy Editor → Windows Update → Configure Automatic Updates → Disabled";
+        if (finding.CheckId.StartsWith("LM")) return "Local Security Policy → Local Policies → Security Options → LAN Manager authentication level = NTLMv2 only";
+        return finding.Recommendation;
+    }
+}
+
+<style>
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        display: none;
+    }
+
+        .drawer-overlay.active {
+            display: block;
+        }
+
+    .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 520px;
+        height: 100%;
+        background: #1e293b;
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        z-index: 1001;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-in-out;
+        padding: 30px;
+        border-left: 2px solid #06b6d4;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .drawer.open {
+            transform: translateX(0);
+        }
+
+    .drawer-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #164e63 #1e293b;
+    }
+
+    .drawer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 15px;
+        margin-bottom: 12px;
+        flex-shrink: 0;
+    }
+
+    .drawer-title {
+        color: #06b6d4;
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .btn-close {
+        background: #ef4444;
+        color: white;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+    /* EDIT: نوار کلیدها حالا بالای Drawer است — همیشه قابل دید */
+    .drawer-actions {
+        flex-shrink: 0;
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 0 0 12px 0;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #334155;
+    }
+
+    .action-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Consolas', monospace;
+        transition: 0.2s;
+        white-space: nowrap;
+    }
+
+        .action-btn:hover:not(:disabled) {
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+
+        .action-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+    .detail-section {
+        margin-bottom: 16px;
+        flex-shrink: 0;
+    }
+
+    .detail-label {
+        color: #64748b;
+        font-size: 12px;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+
+    .detail-value {
+        color: #e2e8f0;
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .ignored-notice {
+        display: inline-block;
+        background: rgba(148,163,184,0.15);
+        border: 1px solid #475569;
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        margin-top: 10px;
+        text-transform: uppercase;
+    }
+
+    .drawer-values {
+        display: flex;
+        gap: 30px;
+    }
+
+    .dv-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .dv-value {
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        color: #e2e8f0;
+        font-size: 14px;
+    }
+
+    .drawer-badges-row {
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+    }
+
+    .code-block {
+        background: #0a0e1a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        color: #7dd3fc;
+        word-break: break-all;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .code-copy-btn {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #06b6d4;
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .tool-panel {
+        background: rgba(245,158,11,0.04);
+        border: 1px solid rgba(245,158,11,0.25);
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 15px;
+    }
+
+    .tool-panel-header {
+        color: #f59e0b;
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tool-row {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 8px;
+    }
+
+    .tool-row-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        margin-bottom: 3px;
+    }
+
+    .tool-row-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+    }
+
+    .cis-badge {
+        color: #06b6d4;
+        border: 1px solid rgba(6,182,212,0.4);
+        background: rgba(6,182,212,0.08);
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .risk-badge {
+        font-size: 10px;
+        font-family: 'Consolas', monospace;
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid;
+        white-space: nowrap;
+    }
+
+    .risk-low {
+        color: #10b981;
+        border-color: rgba(16,185,129,0.5);
+    }
+
+    .risk-mid {
+        color: #f59e0b;
+        border-color: rgba(245,158,11,0.5);
+    }
+
+    .risk-high {
+        color: #ef4444;
+        border-color: rgba(239,68,68,0.5);
+    }
+
+    .fv-pass {
+        color: #10b981;
+    }
+
+    .fv-fail {
+        color: #ef4444;
+    }
+
+    .fv-warning {
+        color: #f59e0b;
+    }
+
+    .fv-ignored {
+        color: #94a3b8;
+    }
+
+    .fv-error {
+        color: #dc2626;
+    }
+
+    .fv-falsepositive {
+        color: #a78bfa;
+    }
+</style>
