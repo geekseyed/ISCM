@@ -1,11 +1,10 @@
 ﻿@page "/findings"
 @rendermode InteractiveServer
+@using System.Text
+@using Microsoft.JSInterop
 @using ISCM.Domain.Entities
 @using ISCM.Domain.Enums
 @using ISCM.Web.Services
-@using Microsoft.JSInterop
-@using System.Text
-@using System.Text.Json
 @inject ScanStateService StateService
 @inject IJSRuntime JS
 @implements IDisposable
@@ -14,12 +13,12 @@
 
 <style>
     .glass-panel {
-        background: rgba(30, 41, 59, 0.7);
+        background: rgba(30,41,59,0.7);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 16px;
         padding: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -34,7 +33,7 @@
     }
 
     .kpi-card {
-        background: rgba(15, 23, 42, 0.6);
+        background: rgba(15,23,42,0.6);
         border: 1px solid #1e293b;
         border-radius: 8px;
         padding: 12px 14px;
@@ -50,7 +49,7 @@
 
         .kpi-card.active {
             border-color: #06b6d4 !important;
-            background: rgba(6, 182, 212, 0.08);
+            background: rgba(6,182,212,0.08);
         }
 
     .kpi-value {
@@ -98,7 +97,6 @@
         border-left-color: #10b981 !important;
     }
 
-    /* ── ردیف نمایشی Severity Distribution (بدون دکمه فیلتر) ───── */
     .sev-dist-row {
         display: flex;
         gap: 20px;
@@ -244,7 +242,7 @@
         }
 
         .preset-btn.active {
-            background: rgba(6, 182, 212, 0.15);
+            background: rgba(6,182,212,0.15);
             border-color: #06b6d4;
             color: #06b6d4;
         }
@@ -253,8 +251,8 @@
         display: none;
         gap: 10px;
         align-items: center;
-        background: rgba(6, 182, 212, 0.08);
-        border: 1px solid rgba(6, 182, 212, 0.3);
+        background: rgba(6,182,212,0.08);
+        border: 1px solid rgba(6,182,212,0.3);
         border-radius: 8px;
         padding: 8px 14px;
         margin-bottom: 12px;
@@ -349,7 +347,7 @@
         display: flex;
         align-items: center;
         gap: 14px;
-        background: rgba(15, 23, 42, 0.6);
+        background: rgba(15,23,42,0.6);
         border: 1px solid #1e293b;
         border-left: 3px solid #334155;
         border-radius: 8px;
@@ -359,12 +357,12 @@
     }
 
         .finding-card:hover {
-            background: rgba(6, 182, 212, 0.05);
+            background: rgba(6,182,212,0.05);
             border-color: #06b6d4;
         }
 
         .finding-card.selected {
-            background: rgba(6, 182, 212, 0.08);
+            background: rgba(6,182,212,0.08);
             border-color: #06b6d4;
         }
 
@@ -443,8 +441,8 @@
 
     .cis-badge {
         color: #06b6d4;
-        border: 1px solid rgba(6, 182, 212, 0.4);
-        background: rgba(6, 182, 212, 0.08);
+        border: 1px solid rgba(6,182,212,0.4);
+        background: rgba(6,182,212,0.08);
         font-family: 'Consolas', monospace;
         font-size: 10px;
         padding: 2px 8px;
@@ -453,8 +451,8 @@
 
     .fp-tag {
         color: #a78bfa;
-        border: 1px solid rgba(167, 139, 250, 0.4);
-        background: rgba(167, 139, 250, 0.1);
+        border: 1px solid rgba(167,139,250,0.4);
+        background: rgba(167,139,250,0.1);
         font-family: 'Consolas', monospace;
         font-size: 10px;
         padding: 2px 6px;
@@ -464,8 +462,8 @@
 
     .ignored-badge {
         color: #94a3b8;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: rgba(148, 163, 184, 0.1);
+        border: 1px solid rgba(148,163,184,0.4);
+        background: rgba(148,163,184,0.1);
         font-family: 'Consolas', monospace;
         font-size: 10px;
         padding: 2px 6px;
@@ -555,6 +553,10 @@
         .action-btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
+        }
+
+        .action-btn.preview {
+            cursor: default;
         }
 
     .finding-badges {
@@ -675,195 +677,9 @@
         padding: 40px;
         font-size: 13px;
     }
-
-    .drawer-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        z-index: 1000;
-        display: none;
-    }
-
-        .drawer-overlay.active {
-            display: block;
-        }
-
-    .drawer {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: 520px;
-        height: 100%;
-        background: #1e293b;
-        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-        z-index: 1001;
-        transform: translateX(100%);
-        transition: transform 0.3s ease-in-out;
-        padding: 30px;
-        overflow-y: auto;
-        border-left: 2px solid #06b6d4;
-        display: flex;
-        flex-direction: column;
-    }
-
-        .drawer.open {
-            transform: translateX(0);
-        }
-
-    .drawer-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #334155;
-        padding-bottom: 15px;
-        margin-bottom: 20px;
-        flex-shrink: 0;
-    }
-
-    .drawer-title {
-        color: #06b6d4;
-        font-size: 18px;
-        font-weight: bold;
-    }
-
-    .btn-close {
-        background: #ef4444;
-        color: white;
-        border: none;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-weight: bold;
-        flex-shrink: 0;
-    }
-
-    .detail-section {
-        margin-bottom: 20px;
-        flex-shrink: 0;
-    }
-
-    .detail-label {
-        color: #64748b;
-        font-size: 12px;
-        text-transform: uppercase;
-        margin-bottom: 5px;
-    }
-
-    .detail-value {
-        color: #e2e8f0;
-        font-size: 14px;
-        line-height: 1.5;
-    }
-
-    .drawer-values {
-        display: flex;
-        gap: 30px;
-    }
-
-    .dv-label {
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-
-    .dv-value {
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-        color: #e2e8f0;
-        font-size: 14px;
-    }
-
-    .drawer-badges-row {
-        display: flex;
-        gap: 30px;
-        flex-wrap: wrap;
-    }
-
-    .code-block {
-        background: #0a0e1a;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-        color: #7dd3fc;
-        word-break: break-all;
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        align-items: center;
-    }
-
-    .code-copy-btn {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #06b6d4;
-        font-size: 10px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .tool-panel {
-        background: rgba(6, 182, 212, 0.05);
-        border: 1px solid rgba(6, 182, 212, 0.3);
-        border-radius: 8px;
-        padding: 14px;
-        margin-bottom: 15px;
-    }
-
-    .tool-panel-header {
-        color: #06b6d4;
-        font-weight: bold;
-        font-size: 13px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-
-    .tool-row {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 8px;
-    }
-
-    .tool-row-label {
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-        margin-bottom: 3px;
-    }
-
-    .tool-row-value {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-    }
-
-    .drawer-actions {
-        position: sticky;
-        bottom: 0;
-        margin-top: auto;
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        padding: 15px 0 0 0;
-        background: #1e293b;
-        border-top: 1px solid #334155;
-        flex-shrink: 0;
-    }
 </style>
 
 <div class="glass-panel">
-
-    @* ── ۶ کارت KPI ── *@
     <div class="kpi-grid">
         <div class="kpi-card kpi-total @(ActivePreset == "all" && SelectedFilter == "All" ? "active" : "")" @onclick="ApplyPresetAll">
             <div class="kpi-value">@KpiTotal</div>
@@ -897,7 +713,6 @@
         </div>
     </div>
 
-    @* ── ردیف نمایشی Severity Distribution (فقط نمایش، بدون فیلتر) ── *@
     <div class="sev-dist-row">
         <div class="sev-chips">
             <span style="color:#94a3b8; font-size: 12px; font-weight: bold;">Severity Distribution</span>
@@ -909,7 +724,6 @@
         </div>
     </div>
 
-    @* ── Search ─ *@
     <div class="search-wrap">
         <span class="search-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round">
@@ -920,7 +734,6 @@
         <input type="text" class="search-box" placeholder="Search findings..." @bind="SearchTerm" @bind:event="oninput" />
     </div>
 
-    @* ── Status Tabs ── *@
     <div class="filter-tabs">
         <button class="filter-tab @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All <span class="ft-count">@CountAll</span></button>
         <button class="filter-tab @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail <span class="ft-count">@CountFail</span></button>
@@ -928,7 +741,6 @@
         <button class="filter-tab @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass <span class="ft-count">@CountPass</span></button>
     </div>
 
-    @* ── Quick Presets ── *@
     <div class="toolbar-row">
         <button class="preset-btn @(ActivePreset == "all" ? "active" : "")" @onclick="ApplyPresetAll">All</button>
         <button class="preset-btn @(ActivePreset == "critical-open" ? "active" : "")" @onclick="ApplyPresetCriticalOpen">Critical Open</button>
@@ -937,7 +749,6 @@
         <button class="preset-btn @(ActivePreset == "ignored" ? "active" : "")" @onclick="ApplyPresetIgnored">Ignored / FP</button>
     </div>
 
-    @* ── Bulk Action Bar ── *@
     <div class="bulk-bar @(SelectedFindingIds.Count > 0 ? "visible" : "")">
         <span class="bulk-count">@SelectedFindingIds.Count selected</span>
         <button class="bulk-btn" @onclick="BulkRescan">🔄 Rescan</button>
@@ -947,7 +758,6 @@
         <button class="bulk-btn clear" @onclick="ClearSelection">Clear All</button>
     </div>
 
-    @* ── Category Row + Back ── *@
     <div class="category-row">
         <div class="cat-links">
             <button class="cat-link @(string.IsNullOrEmpty(SelectedCategory) ? "active" : "")" @onclick="ClearCategory">All Categories</button>
@@ -960,7 +770,6 @@
         <a href="/" class="btn-back">← Back to Dashboard</a>
     </div>
 
-    @* ── List ── *@
     @if (StateService.CurrentScanResult == null)
     {
         <p class="empty-state">Run a scan from the Dashboard to see findings.</p>
@@ -980,7 +789,6 @@
                     <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
                          @onclick="() => ToggleSelect(f)"
                          @onclick:stopPropagation="true"></div>
-
                     <div class="finding-main">
                         <div class="finding-title-row">
                             <span class="finding-name">@f.Name</span>
@@ -1000,25 +808,21 @@
                         </div>
                         <div class="finding-source">Source: @GetSourceType(f) · @f.Category</div>
                     </div>
-
                     <div class="finding-values">
                         <span class="fv-label">Current</span>
                         <span class="fv-current fv-@f.Status.ToString().ToLower()">@f.CurrentValue</span>
                         <span class="fv-label">Expected</span>
                         <span class="fv-expected">@f.ExpectedValue</span>
                     </div>
-
-                    <div class="finding-actions" @onclick:stopPropagation="true">
+                    <div class="finding-actions">
                         @foreach (var tool in GetTools(f))
                         {
-                            var capturedTool = tool;
-                            <button class="action-btn" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
+                            <button class="action-btn preview" disabled>🔧 @tool</button>
                         }
-                        <button class="action-btn" @onclick="() => ShowUndoGuidance(f)">↶ Undo</button>
-                        <button class="action-btn" @onclick="() => RescanFinding(f)">🔄 Rescan</button>
-                        <button class="action-btn" disabled="@f.IsSuppressed" @onclick="() => IgnoreFindingRow(f)">Ignore</button>
+                        <button class="action-btn preview" disabled>↶ Undo</button>
+                        <button class="action-btn preview" disabled>🔄 Rescan</button>
+                        <button class="action-btn preview" disabled>@(f.IsSuppressed ? "Unignore" : "Ignore")</button>
                     </div>
-
                     <div class="finding-badges">
                         <span class="status-@f.Status.ToString().ToLower()">@f.Status</span>
                         <span class="sev-badge @f.Severity.ToString().ToLower()">@f.Severity</span>
@@ -1030,144 +834,15 @@
     }
 </div>
 
-@* ── Drawer v3 ── *@
-@if (SelectedFinding != null)
-{
-    <div class="drawer-overlay active" @onclick="CloseDrawer"></div>
-    <div class="drawer open">
-        <div class="drawer-header">
-            <div class="drawer-title">@SelectedFinding.Name (@SelectedFinding.CheckId)</div>
-            <button class="btn-close" @onclick="CloseDrawer">X</button>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Description</div>
-            <div class="detail-value">@(string.IsNullOrEmpty(SelectedFinding.Description) ? "No description available." : SelectedFinding.Description)</div>
-        </div>
-
-        <div class="detail-section">
-            <div class="drawer-values">
-                <div>
-                    <div class="dv-label">Current</div>
-                    <div class="dv-value fv-@SelectedFinding.Status.ToString().ToLower()">@SelectedFinding.CurrentValue</div>
-                </div>
-                <div>
-                    <div class="dv-label">Expected</div>
-                    <div class="dv-value">@SelectedFinding.ExpectedValue</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="detail-section">
-            <div class="drawer-badges-row">
-                @if (!string.IsNullOrEmpty(SelectedFinding.CisReference))
-                {
-                    <div>
-                        <div class="detail-label">CIS Reference</div>
-                        <span class="cis-badge">@SelectedFinding.CisReference</span>
-                    </div>
-                }
-                <div>
-                    <div class="detail-label">Risk Score</div>
-                    <span class="risk-badge @GetRiskClass(SelectedFinding.RiskScore)">Risk: @SelectedFinding.RiskScore/100</span>
-                </div>
-            </div>
-        </div>
-
-        @if (!string.IsNullOrEmpty(SelectedFinding.RegistryPath))
-        {
-            <div class="detail-section">
-                <div class="detail-label">Registry Path</div>
-                <div class="code-block">
-                    <span>@SelectedFinding.RegistryPath</span>
-                    <button class="code-copy-btn" @onclick="() => CopyToClipboard(SelectedFinding.RegistryPath!)">Copy</button>
-                </div>
-            </div>
-        }
-
-        <div class="detail-section">
-            <div class="detail-label">Source Type</div>
-            <div class="detail-value">@GetSourceType(SelectedFinding) · Category @SelectedFinding.Category</div>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Source Command</div>
-            <div class="code-block">
-                <span>@GetSourceCommand(SelectedFinding)</span>
-                <button class="code-copy-btn" @onclick="CopySourceCommand">Copy</button>
-            </div>
-        </div>
-
-        <div class="detail-section">
-            <div class="detail-label">Recommendation</div>
-            <div class="detail-value">@SelectedFinding.Recommendation</div>
-        </div>
-
-        @if (ActiveToolPanel != null)
-        {
-            <div class="tool-panel">
-                <div class="tool-panel-header">🔧 Policy Tool Path — @ActiveToolPanel.Tool</div>
-                <div class="tool-row">
-                    <div class="tool-row-label">Tool</div>
-                    <div class="tool-row-value">@ActiveToolPanel.Tool</div>
-                </div>
-                <div class="tool-row">
-                    <div class="tool-row-label">Registry Location</div>
-                    <div class="tool-row-value">@(ActiveToolPanel.RegistryLocation ?? "N/A")</div>
-                </div>
-                <div class="tool-row">
-                    <div class="tool-row-label">Navigation Path</div>
-                    <div class="tool-row-value" style="line-height: 1.6;">@ActiveToolPanel.NavigationPath</div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <button class="action-btn" @onclick="LaunchActiveTool">▶ Launch @ActiveToolPanel.Tool</button>
-                </div>
-            </div>
-        }
-
-        @if (ShowUndoPanel && SelectedFinding != null)
-        {
-            var sf = SelectedFinding;
-            <div class="tool-panel">
-                <div class="tool-panel-header">↶ Undo Guidance — @sf.Name</div>
-                <div class="tool-row">
-                    <div class="tool-row-label">CLI Command (PowerShell)</div>
-                    <div class="code-block" style="margin: 0;">
-                        <span>@GetUndoCliCommand(sf)</span>
-                        <button class="code-copy-btn" @onclick="() => CopyUndoCommand(sf)">Copy</button>
-                    </div>
-                </div>
-                <div class="tool-row" style="margin-top: 10px;">
-                    <div class="tool-row-label">Graphical Path</div>
-                    <div class="tool-row-value" style="line-height: 1.6;">@GetGraphicalPath(sf)</div>
-                </div>
-            </div>
-        }
-
-        <div class="drawer-actions">
-            @foreach (var tool in GetTools(SelectedFinding))
-            {
-                var capturedTool = tool;
-                <button class="action-btn" @onclick="() => ShowPolicyToolPath(SelectedFinding, capturedTool)">🔧 @capturedTool</button>
-            }
-            <button class="action-btn" @onclick="ShowUndoGuidanceForSelected">↶ Undo</button>
-            <button class="action-btn" @onclick="RescanSelected">🔄 Rescan</button>
-            <button class="action-btn" disabled="@SelectedFinding.IsSuppressed" @onclick="IgnoreSelected">Ignore</button>
-            <button class="action-btn" @onclick="MarkFpSelected">🏳️ Mark FP</button>
-        </div>
-    </div>
-}
+@* EDIT: Drawer حالا یک کامپوننت مستقل است — همیشه رندر می‌شود تا استایل‌هایش فعال بمانند *@
+<FindingDrawer SelectedFinding="SelectedFinding" Close="OnDrawerClose" />
 
 @code {
-    // ── State fields ──
-    // EDIT: فیلدهای SortBy / GroupBy / SelectedSeverity طبق درخواست حذف شدند.
     private string SelectedFilter = "All";
     private string SearchTerm = "";
     private string ActivePreset = "all";
     private HashSet<string> SelectedFindingIds = new();
     private Finding? SelectedFinding;
-    private ToolPathInfo? ActiveToolPanel;
-    private bool ShowUndoPanel;
 
     [SupplyParameterFromQuery(Name = "category")]
     public string? SelectedCategory { get; set; }
@@ -1175,14 +850,6 @@
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
 
-    private class ToolPathInfo
-    {
-        public string Tool { get; set; } = "";
-        public string? RegistryLocation { get; set; }
-        public string NavigationPath { get; set; } = "";
-    }
-
-    // ── BaseFilter (Category + Search) ──
     private IEnumerable<Finding> BaseFilteredFindings
     {
         get
@@ -1198,7 +865,6 @@
         }
     }
 
-    // ── KPI Counts ──
     private int KpiTotal => BaseFilteredFindings.Count();
     private int KpiOpenRisk => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
     private int KpiCritical => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
@@ -1206,13 +872,11 @@
     private int KpiSuppressed => BaseFilteredFindings.Count(f => f.IsSuppressed);
     private int KpiCompliance => StateService.CurrentScanResult?.ComplianceScore ?? 0;
 
-    // ── Severity Counts (فقط نمایشی) ──
     private int SevCriticalCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Critical);
     private int SevHighCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.High);
     private int SevMediumCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Medium);
     private int SevLowCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Low);
 
-    // ── Preset لایه ──
     private IEnumerable<Finding> PreStatusFindings
     {
         get
@@ -1228,7 +892,6 @@
     private int CountWarn => PreStatusFindings.Count(f => f.Status == CheckStatus.Warning);
     private int CountPass => PreStatusFindings.Count(f => f.Status == CheckStatus.Pass);
 
-    // ── Final List (بدون Sort/Group — طبق درخواست حذف شدند) ──
     private IEnumerable<Finding> FinalFindings
     {
         get
@@ -1257,14 +920,6 @@
         return "RegistryReader";
     }
 
-    private static string GetSourceCommand(Finding f)
-    {
-        if (!string.IsNullOrEmpty(f.SourceCommand)) return f.SourceCommand;
-        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit /export /cfg output.txt";
-        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net user";
-        return string.IsNullOrEmpty(f.RegistryPath) ? "reg query HKLM" : $"reg query {f.RegistryPath}";
-    }
-
     private static string GetRiskClass(int score)
         => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
 
@@ -1280,130 +935,6 @@
         if (checkId.StartsWith("GUEST") || checkId.StartsWith("ADM")) return "net.exe";
         if (checkId.StartsWith("PWD") || checkId.StartsWith("AUD")) return "secpol.msc";
         return "regedit.exe";
-    }
-
-    private void ShowPolicyToolPath(Finding finding, string tool)
-    {
-        SelectedFinding = finding;
-        ShowUndoPanel = false;
-        ActiveToolPanel = new ToolPathInfo
-            {
-                Tool = tool,
-                RegistryLocation = finding.RegistryPath,
-                NavigationPath = BuildNavigationPath(finding, tool)
-            };
-    }
-
-    private string BuildNavigationPath(Finding finding, string tool)
-    {
-        if (tool == "secpol.msc")
-            return "Open secpol.msc → Account Policies → Password Policy / Account Lockout Policy → Locate policy → Modify";
-        if (tool == "gpedit.msc")
-            return "Open gpedit.msc → Computer Configuration → Administrative Templates → System / Windows Components → Locate policy";
-        if (tool == "wf.msc")
-            return "Open wf.msc → Inbound Rules / Outbound Rules → New Rule → Configure";
-        if (tool == "powershell.exe")
-            return "Open PowerShell as Administrator → Execute CLI command from Undo Guidance panel";
-        if (tool == "regedit.exe")
-            return "Open regedit.exe → Navigate to: " + (finding.RegistryPath ?? "HKLM");
-        if (tool == "net.exe")
-            return "Open CMD/PowerShell as Administrator → Run net user / net localgroup commands";
-        if (tool == "lusrmgr.msc")
-            return "Open lusrmgr.msc → Users → Double-click user → Modify settings";
-        if (tool == "compmgmt.msc")
-            return "Open compmgmt.msc → System Tools → Local Users and Groups → Groups → Administrators";
-        if (tool == "UserAccountControlSettings.exe")
-            return "Open UserAccountControlSettings.exe → Move slider to desired level → OK";
-        if (tool == "SystemPropertiesRemote.exe")
-            return "Open SystemPropertiesRemote.exe → Remote tab → Enable/Disable NLA";
-        if (tool == "OptionalFeatures.exe")
-            return "Open OptionalFeatures.exe → Locate feature → Uncheck → OK → Restart";
-        return "Open " + tool + " → Navigate to relevant policy section";
-    }
-
-    private void ShowUndoGuidance(Finding finding)
-    {
-        SelectedFinding = finding;
-        ActiveToolPanel = null;
-        ShowUndoPanel = true;
-
-        if (finding.IsSuppressed)
-        {
-            finding.Undo();
-            StateService.LogAction($"User undid suppression: {finding.CheckId}");
-        }
-    }
-
-    private void ShowUndoGuidanceForSelected()
-    {
-        if (SelectedFinding != null) ShowUndoGuidance(SelectedFinding);
-    }
-
-    private async Task RescanSelected()
-    {
-        if (SelectedFinding != null) await RescanFinding(SelectedFinding);
-    }
-
-    private void IgnoreSelected()
-    {
-        if (SelectedFinding != null) IgnoreFindingRow(SelectedFinding);
-    }
-
-    private void MarkFpSelected()
-    {
-        if (SelectedFinding != null) MarkFpFinding(SelectedFinding);
-    }
-
-    private void LaunchActiveTool()
-    {
-        if (ActiveToolPanel != null) StateService.LaunchFixTool(ActiveToolPanel.Tool);
-    }
-
-    private async Task CopySourceCommand()
-    {
-        if (SelectedFinding != null)
-            await CopyToClipboard(GetSourceCommand(SelectedFinding));
-    }
-
-    private async Task CopyUndoCommand(Finding f)
-    {
-        await CopyToClipboard(GetUndoCliCommand(f));
-    }
-
-    private static string GetUndoCliCommand(Finding finding)
-    {
-        if (finding.CheckId.StartsWith("FW")) return "Set-NetFirewallProfile -Profile Domain -Enabled True";
-        if (finding.CheckId.StartsWith("SMB")) return "Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force";
-        if (finding.CheckId.StartsWith("RDP")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 1";
-        if (finding.CheckId.StartsWith("USB")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Services\\USBSTOR' -Name Start -Value 4";
-        if (finding.CheckId.StartsWith("DEF")) return "Set-MpPreference -DisableRealtimeMonitoring $false";
-        if (finding.CheckId.StartsWith("UAC")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA -Value 1";
-        if (finding.CheckId.StartsWith("ARD")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 255";
-        if (finding.CheckId.StartsWith("GUEST")) return "net user Guest /active:no";
-        if (finding.CheckId.StartsWith("ADM")) return "# Review and remove unnecessary admin accounts via lusrmgr.msc";
-        if (finding.CheckId.StartsWith("ALG")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 0";
-        if (finding.CheckId.StartsWith("PWD")) return "net accounts /minpwlen:14";
-        if (finding.CheckId.StartsWith("WUP")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name NoAutoUpdate -Value 1";
-        if (finding.CheckId.StartsWith("LM")) return "Set-ItemProperty -Path 'HKLM:\\System\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 5";
-        return "# Use " + (finding.FixTools.FirstOrDefault() ?? "relevant tool") + " to set to " + finding.ExpectedValue;
-    }
-
-    private static string GetGraphicalPath(Finding finding)
-    {
-        if (finding.CheckId.StartsWith("FW")) return "Control Panel → Windows Defender Firewall → Turn on for Domain";
-        if (finding.CheckId.StartsWith("SMB")) return "Control Panel → Programs → Turn Windows features on or off → Uncheck SMB 1.0/CIFS";
-        if (finding.CheckId.StartsWith("RDP")) return "System Properties → Remote → Allow remote connections → Check NLA";
-        if (finding.CheckId.StartsWith("USB")) return "Group Policy Editor → Computer Configuration → Administrative Templates → System → Removable Storage Access";
-        if (finding.CheckId.StartsWith("DEF")) return "Windows Security → Virus & threat protection → Manage settings → Turn on Real-time";
-        if (finding.CheckId.StartsWith("UAC")) return "Control Panel → User Accounts → Change User Account Control settings → Raise slider";
-        if (finding.CheckId.StartsWith("ARD")) return "Group Policy Editor → Administrative Templates → Windows Components → AutoPlay Policies";
-        if (finding.CheckId.StartsWith("GUEST")) return "Computer Management → Local Users and Groups → Users → Guest → Disable";
-        if (finding.CheckId.StartsWith("ADM")) return "Computer Management → Local Users and Groups → Groups → Administrators → Review members";
-        if (finding.CheckId.StartsWith("ALG")) return "netplwiz → Uncheck 'Users must enter a user name and password'";
-        if (finding.CheckId.StartsWith("PWD")) return "Local Security Policy → Account Policies → Password Policy → Minimum password length = 14";
-        if (finding.CheckId.StartsWith("WUP")) return "Group Policy Editor → Windows Update → Configure Automatic Updates → Disabled";
-        if (finding.CheckId.StartsWith("LM")) return "Local Security Policy → Local Policies → Security Options → LAN Manager authentication level = NTLMv2 only";
-        return finding.Recommendation;
     }
 
     private bool IsSelected(Finding finding) => SelectedFindingIds.Contains(finding.CheckId);
@@ -1433,7 +964,7 @@
     {
         foreach (var f in GetSelectedFindings())
         {
-            f.Ignore();
+            if (!f.IsSuppressed) f.Ignore();
             StateService.LogAction($"User ignored: {f.CheckId}");
         }
         ClearSelection();
@@ -1456,7 +987,6 @@
         await DownloadFindingsAsCsv(items, $"DefenDoor_Selected_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
     }
 
-    // ── Presets ──
     private void ApplyPresetAll() { ActivePreset = "all"; SelectedFilter = "All"; }
     private void ApplyPresetCriticalOpen() { ActivePreset = "critical-open"; SelectedFilter = "All"; }
     private void ApplyPresetNeedsRemediation() { ActivePreset = "needs-remediation"; SelectedFilter = "All"; }
@@ -1464,7 +994,6 @@
     private void ApplyPresetIgnored() { ActivePreset = "ignored"; SelectedFilter = "All"; }
     private void ApplyPresetWarnings() { ActivePreset = "all"; SelectedFilter = "Warning"; }
 
-    // ── Filters ──
     private void SetFilterAll() => SelectedFilter = "All";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
@@ -1472,37 +1001,12 @@
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
 
-    // ── Drawer ──
-    private void OpenDrawer(Finding f) { SelectedFinding = f; ActiveToolPanel = null; ShowUndoPanel = false; }
-    private void CloseDrawer() { SelectedFinding = null; ActiveToolPanel = null; ShowUndoPanel = false; }
+    // کلیک روی کارت → باز شدن Drawer (کامپوننت مستقل)
+    private void OpenDrawer(Finding f) { SelectedFinding = f; }
 
-    private void IgnoreFindingRow(Finding f)
-    {
-        f.Ignore();
-        StateService.LogAction($"User ignored: {f.CheckId}");
-    }
+    // بستن Drawer از داخل کامپوننت FindingDrawer
+    private void OnDrawerClose() { SelectedFinding = null; }
 
-    private void MarkFpFinding(Finding f)
-    {
-        f.MarkFalsePositive();
-        StateService.LogAction($"User marked FP: {f.CheckId}");
-    }
-
-    private async Task RescanFinding(Finding f)
-    {
-        await StateService.RescanSingleCheckAsync(f.CheckId);
-    }
-
-    private async Task CopyToClipboard(string text)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
-        }
-        catch { }
-    }
-
-    // ── Export فقط برای انتخاب‌شده‌ها (Bulk) — دکمه‌های CSV/JSON بالای صفحه حذف شدند ──
     private async Task DownloadFindingsAsCsv(List<Finding> items, string filename)
     {
         var sb = new StringBuilder();
@@ -1511,29 +1015,17 @@
         {
             sb.AppendLine($"\"{f.CheckId}\",\"{f.Name}\",\"{f.Category}\",\"{f.Severity}\",\"{f.Status}\",\"{f.CurrentValue}\",\"{f.ExpectedValue}\",\"{f.CisReference}\",{f.RiskScore},\"{f.SourceType}\"");
         }
-        await DownloadFile(filename, sb.ToString(), "text/csv");
-    }
-
-    private async Task DownloadFile(string filename, string content, string mime)
-    {
-        try
-        {
-            var bytes = Encoding.UTF8.GetBytes(content);
-            var b64 = Convert.ToBase64String(bytes);
-            var script = $@"(function() {{
-                const a = document.createElement('a');
-                a.href = 'data:{mime};base64,{b64}';
-                a.download = '{filename}';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }})();";
-            await JS.InvokeVoidAsync("eval", script);
-        }
-        catch (Exception ex)
-        {
-            StateService.LogAction($"Export failed: {ex.Message}");
-        }
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var b64 = Convert.ToBase64String(bytes);
+        var script = $@"(function() {{
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;base64,{b64}';
+            a.download = '{filename}';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }})();";
+        await JS.InvokeVoidAsync("eval", script);
     }
 
     protected override void OnInitialized()
