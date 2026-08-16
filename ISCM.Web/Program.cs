@@ -31,7 +31,6 @@ builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 builder.Services.AddScoped<ScanStateService>();
 builder.Services.AddScoped<ScanHistoryService>();
-// EDIT: ثبت سرویس تم در DI Container (اسکوپ شده تا هر کاربر نشست خودش را داشته باشد)
 builder.Services.AddScoped<ThemeService>();
 
 var app = builder.Build();
