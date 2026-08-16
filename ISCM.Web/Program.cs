@@ -27,11 +27,13 @@ builder.Services.AddTransient<IHardeningCheck, AdminAccountCountCheck>();
 builder.Services.AddTransient<IHardeningCheck, PasswordLengthCheck>();
 builder.Services.AddTransient<IHardeningCheck, LmCompatibilityCheck>();
 
+
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 builder.Services.AddScoped<ScanStateService>();
 builder.Services.AddScoped<ScanHistoryService>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<ReportGateService>();
 
 var app = builder.Build();
 
