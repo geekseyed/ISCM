@@ -1,7 +1,9 @@
 ﻿@page "/reports"
 @rendermode InteractiveServer
 @using ISCM.Application.Interfaces
+@using ISCM.Domain.Entities
 @using ISCM.Web.Services
+@using System.Globalization
 @inject IReportService ReportService
 @inject ScanStateService StateService
 
@@ -9,16 +11,12 @@
 
 <style>
     .glass-panel {
-        background: rgba(30, 41, 59, 0.7);
+        background: rgba(30,41,59,0.7);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 16px;
-        padding: 25px;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
+        padding: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
         box-sizing: border-box;
     }
 
@@ -27,7 +25,6 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
-        flex-shrink: 0;
     }
 
     .btn-back {
@@ -39,243 +36,621 @@
         border-radius: 6px;
         cursor: pointer;
         text-decoration: none;
+        font-size: 12px;
     }
 
-    .summary-card {
-        background: #0f172a;
-        padding: 20px;
-        border-radius: 12px;
+    .section-title {
+        color: #94a3b8;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 0 0 10px 0;
+    }
+
+    .section-sub {
+        color: #64748b;
+        font-size: 11px;
+        margin: -6px 0 10px 0;
+    }
+
+    .panel {
+        background: rgba(15,23,42,0.6);
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .type-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+    }
+
+    .type-card {
+        background: rgba(15,23,42,0.8);
         border: 1px solid #334155;
-        margin-bottom: 25px;
-        flex-shrink: 0;
+        border-radius: 8px;
+        padding: 12px;
+        cursor: pointer;
+        text-align: center;
+        transition: 0.2s;
+    }
+
+        .type-card:hover {
+            border-color: #06b6d4;
+        }
+
+        .type-card.active {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.08);
+        }
+
+    .type-icon {
+        font-size: 22px;
+    }
+
+    .type-name {
+        color: #e2e8f0;
+        font-weight: bold;
+        font-size: 12px;
+        margin-top: 6px;
+    }
+
+    .type-desc {
+        color: #64748b;
+        font-size: 10px;
+        margin-top: 4px;
+    }
+
+    .ctx-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 24px;
+    }
+
+    .ctx-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        border-bottom: 1px solid rgba(51,65,85,0.5);
+        padding: 8px 0;
     }
 
-    .summary-item {
-        text-align: center;
-    }
-
-    .summary-label {
+    .ctx-label {
         color: #64748b;
         font-size: 11px;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 5px;
     }
 
-    .summary-value {
+    .ctx-value {
         color: #e2e8f0;
+        font-family: 'Consolas', monospace;
         font-weight: bold;
-        font-size: 16px;
-        font-family: monospace;
+        font-size: 12px;
     }
 
-    .export-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-        flex-shrink: 0;
+    .chip-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
     }
 
-    .export-card {
-        background: rgba(15, 23, 42, 0.6);
-        padding: 20px;
-        border-radius: 12px;
-        text-align: center;
-        border-top: 4px solid #06b6d4;
+    .chip {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
     }
 
-    .btn-export {
+        .chip.active {
+            background: #06b6d4;
+            border-color: #06b6d4;
+            color: white;
+        }
+
+    .btn-edit {
+        background: #334155;
         border: none;
-        padding: 12px 20px;
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: bold;
+        padding: 4px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .sys-input {
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        width: 60%;
+    }
+
+    .btn-save {
+        background: #10b981;
+        border: none;
         color: white;
         font-weight: bold;
-        border-radius: 8px;
+        font-size: 11px;
+        padding: 6px 16px;
+        border-radius: 6px;
         cursor: pointer;
-        transition: 0.3s;
-        font-size: 15px;
-        width: 100%;
-        margin-top: 15px;
     }
 
-        .btn-export:disabled {
+    .btn-cancel {
+        background: #475569;
+        border: none;
+        color: white;
+        font-weight: bold;
+        font-size: 11px;
+        padding: 6px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .sections-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 24px;
+    }
+
+    .section-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(51,65,85,0.4);
+    }
+
+        .section-check input {
+            accent-color: #06b6d4;
+            width: 14px;
+            height: 14px;
+        }
+
+    .sc-title {
+        color: #e2e8f0;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .sc-desc {
+        color: #64748b;
+        font-size: 10px;
+    }
+
+    .link-btn {
+        background: none;
+        border: none;
+        color: #06b6d4;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .sign-row {
+        display: flex;
+        gap: 24px;
+        margin-top: 12px;
+    }
+
+    .sign-item {
+        font-size: 11px;
+        color: #94a3b8;
+    }
+
+    .sign-ok {
+        color: #10b981;
+        font-weight: bold;
+    }
+
+    .sign-pending {
+        color: #f59e0b;
+        font-weight: bold;
+    }
+
+    .fmt-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+    }
+
+    .fmt-card {
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 10px;
+        cursor: pointer;
+        text-align: center;
+        transition: 0.2s;
+    }
+
+        .fmt-card:hover {
+            border-color: #06b6d4;
+        }
+
+        .fmt-card.active {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.08);
+        }
+
+    .fmt-name {
+        color: #e2e8f0;
+        font-weight: bold;
+        font-size: 11px;
+        margin-top: 4px;
+    }
+
+    .fmt-desc {
+        color: #64748b;
+        font-size: 9px;
+        margin-top: 2px;
+    }
+
+    .opts-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px 24px;
+    }
+
+    .outline-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 12px 0;
+    }
+
+    .outline-pages {
+        color: #94a3b8;
+        font-size: 12px;
+    }
+
+    .action-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .btn-generate {
+        background: linear-gradient(45deg, #06b6d4, #3b82f6);
+        border: none;
+        color: white;
+        font-weight: bold;
+        padding: 10px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+        .btn-generate:disabled {
             background: #475569;
             cursor: not-allowed;
         }
 
-    .loading-spinner {
-        border: 3px solid rgba(255,255,255,0.3);
-        border-top: 3px solid #fff;
-        border-radius: 50%;
-        width: 16px;
-        height: 16px;
-        animation: spin 1s linear infinite;
-        display: inline-block;
-        vertical-align: middle;
-        margin-left: 10px;
-    }
-
-    @@keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
+    .btn-secondary {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        font-size: 12px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        cursor: pointer;
     }
 
     .result-message {
-        margin-top: 20px;
-        padding: 15px;
+        margin-top: 14px;
+        padding: 12px;
         border-radius: 8px;
-        font-size: 14px;
+        font-size: 13px;
         word-break: break-all;
-        flex-shrink: 0;
+    }
+
+    .empty-state {
+        color: #64748b;
+        text-align: center;
+        padding: 40px;
+        font-size: 13px;
     }
 </style>
 
 <div class="glass-panel">
     <div class="header-row">
-        <h2 style="color:#e2e8f0;">Reports & Export Center</h2>
-        <a href="/" class="btn-back">⬅️ Back to Dashboard</a>
+        <h2 style="color:#e2e8f0; margin:0;">Reports & Export Center</h2>
+        <a href="/" class="btn-back">← Back to Dashboard</a>
     </div>
 
     @if (StateService.CurrentScanResult == null)
     {
-        <p style="color:#94a3b8; text-align:center; padding:40px;">
-            No scan data available for reporting. <br /> Please go to <a href="/" style="color:#06b6d4;">Dashboard</a> and run a scan first.
-        </p>
+        <p class="empty-state">No scan data available for reporting. Please run a scan from the Dashboard first.</p>
     }
     else
     {
-        var result = StateService.CurrentScanResult;
-
-        <div class="summary-card">
-            <div class="summary-item">
-                <div class="summary-label">Target Host</div>
-                <div class="summary-value">@result.Hostname</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-label">IP Address</div>
-                <div class="summary-value">@result.IpAddress</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-label">Scan Date</div>
-                <div class="summary-value" style="font-size: 14px;">@result.StartedAtUtc.LocalDateTime.ToString("g")</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-label">Compliance Score</div>
-                <div class="summary-value" style="color: @(result.ComplianceScore > 70 ? "#10b981" : "#ef4444");">@result.ComplianceScore% (Grade @result.Grade)</div>
+        @* ── 1) Report Type ── *@
+        <div class="panel">
+            <div class="section-title">Report Type</div>
+            <div class="section-sub">نوع گزارش را انتخاب کنید</div>
+            <div class="type-grid">
+                @foreach (var t in ReportTypes)
+                {
+                    <div class="type-card @(SelectedReportType == t.Id ? "active" : "")" @onclick="() => SelectedReportType = t.Id">
+                        <div class="type-icon">@t.Icon</div>
+                        <div class="type-name">@t.Name</div>
+                        <div class="type-desc">@t.DescFa</div>
+                    </div>
+                }
             </div>
         </div>
 
-        <p style="color:#94a3b8; margin-bottom:15px;">
-            Select an export format. Files are saved in the <strong style="color:#e2e8f0;">Reports</strong> folder next to the application executable.
-        </p>
-
-        <div class="export-grid">
-            <div class="export-card" style="border-top-color: #10b981;">
-                <div style="color: #10b981; font-size: 40px;">📄</div>
-                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">HTML Report</h3>
-                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Interactive web report for viewing in browser.</p>
-                <button class="btn-export" @onclick="ExportHtmlAsync" disabled="@_isExporting" style="background: #10b981;">
-                    @if (_isExporting && _exportType == "HTML")
-                    {
-                        <span>Generating...<div class="loading-spinner"></div></span>
-                    }
-                    else
-                    {
-                        <span>Export HTML</span>
-                    }
-                </button>
+        @* ── 2) Target System & Context ── *@
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div class="section-title" style="margin-bottom:2px;">Target System & Context</div>
+                    <div class="section-sub">System details and operational context</div>
+                </div>
+                @if (!StateService.IsEditingSystemInfo)
+                {
+                    <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo">Edit System Details</button>
+                }
             </div>
 
-            <div class="export-card" style="border-top-color: #f59e0b;">
-                <div style="color: #f59e0b; font-size: 40px;">📊</div>
-                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">JSON Report</h3>
-                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Structured data format for APIs and tools.</p>
-                <button class="btn-export" @onclick="ExportJsonAsync" disabled="@_isExporting" style="background: #f59e0b;">
-                    @if (_isExporting && _exportType == "JSON")
-                    {
-                        <span>Generating...<div class="loading-spinner"></div></span>
-                    }
-                    else
-                    {
-                        <span>Export JSON</span>
-                    }
-                </button>
-            </div>
+            <div class="ctx-grid">
+                <div class="ctx-row"><span class="ctx-label">Scan Date Gregorian</span><span class="ctx-value">@DateTime.Now.ToString("yyyy-MM-dd")</span></div>
+                <div class="ctx-row"><span class="ctx-label">Persian (شمسی)</span><span class="ctx-value">@PersianDate</span></div>
 
-            <div class="export-card" style="border-top-color: #8b5cf6;">
-                <div style="color: #8b5cf6; font-size: 40px;">📃</div>
-                <h3 style="color: #e2e8f0; font-size: 18px; margin: 10px 0;">CSV Report</h3>
-                <p style="color: #64748b; font-size: 12px; margin-bottom: 15px;">Spreadsheet format for Excel and data analysis.</p>
-                <button class="btn-export" @onclick="ExportCsvAsync" disabled="@_isExporting" style="background: #8b5cf6;">
-                    @if (_isExporting && _exportType == "CSV")
-                    {
-                        <span>Generating...<div class="loading-spinner"></div></span>
-                    }
-                    else
-                    {
-                        <span>Export CSV</span>
-                    }
-                </button>
+                @if (StateService.IsEditingSystemInfo)
+                {
+                    <div class="ctx-row"><span class="ctx-label">Hostname</span><input class="sys-input" @bind="StateService.DraftHostname" /></div>
+                    <div class="ctx-row"><span class="ctx-label">IP Address</span><input class="sys-input" @bind="StateService.DraftIpAddress" /></div>
+                    <div class="ctx-row"><span class="ctx-label">OS Build</span><input class="sys-input" @bind="StateService.DraftOsBuild" /></div>
+                    <div class="ctx-row">
+                        <span></span>
+                        <span>
+                            <button class="btn-save" @onclick="StateService.SaveSystemInfoEdits">Save</button>
+                            <button class="btn-cancel" @onclick="StateService.CancelSystemInfoEdits">Cancel</button>
+                        </span>
+                    </div>
+                }
+                else
+                {
+                    <div class="ctx-row"><span class="ctx-label">Hostname</span><span class="ctx-value">@StateService.DisplayHostname</span></div>
+                    <div class="ctx-row"><span class="ctx-label">IP Address</span><span class="ctx-value">@StateService.DisplayIpAddress</span></div>
+                    <div class="ctx-row"><span class="ctx-label">OS Build</span><span class="ctx-value">@StateService.DisplayOsBuild</span></div>
+                }
+
+                <div class="ctx-row">
+                    <span class="ctx-label">Operational Context Zone</span>
+                    <span class="chip-row">
+                        @foreach (var z in Zones)
+                        {
+                            <button class="chip @(StateService.SelectedZone == z ? "active" : "")" @onclick="() => StateService.SelectedZone = z">@z</button>
+                        }
+                    </span>
+                </div>
+                <div class="ctx-row">
+                    <span class="ctx-label">System Role</span>
+                    <span class="chip-row">
+                        @foreach (var r in Roles)
+                        {
+                            <button class="chip @(StateService.SelectedSystem == r ? "active" : "")" @onclick="() => StateService.SelectedSystem = r">@r</button>
+                        }
+                    </span>
+                </div>
+                <div class="ctx-row"><span class="ctx-label">Context Hostname</span><span class="ctx-value" style="color:#06b6d4;">@StateService.HostnameContext</span></div>
             </div>
         </div>
 
-        @if (_errorMessage != null)
-        {
-            <div class="result-message" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
-                ⚠️ @_errorMessage
+        @* ── 3) Report Sections ── *@
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div class="section-title" style="margin-bottom:2px;">Report Sections</div>
+                    <div class="section-sub">بخش‌های گزارش را انتخاب کنید</div>
+                </div>
+                <span>
+                    <button class="link-btn" @onclick="SelectAllSections">Select All</button>
+                    <button class="link-btn" @onclick="DeselectAllSections">Deselect All</button>
+                </span>
             </div>
-        }
+            <div class="sections-grid">
+                @foreach (var s in Sections)
+                {
+                    <label class="section-check">
+                        <input type="checkbox" @bind="s.Enabled" />
+                        <span>
+                            <span class="sc-title">@s.TitleEn</span>
+                            <span class="sc-desc"> — @s.DescFa</span>
+                        </span>
+                    </label>
+                }
+            </div>
+            <div class="sign-row">
+                <span class="sign-item">Prepared By <span class="sign-ok">✓ Signed</span></span>
+                <span class="sign-item">Reviewed By <span class="sign-ok">✓ Signed</span></span>
+                <span class="sign-item">Approved By <span class="sign-pending">⏳ Pending</span></span>
+            </div>
+        </div>
 
-        @if (_savedFilePath != null)
-        {
-            <div class="result-message" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-                ✅ <strong>Success!</strong> Report saved at:<br />
-                <code style="color: #06b6d4;">@_savedFilePath</code>
+        @* ── 4) Export Format & Path ── *@
+        <div class="panel">
+            <div class="section-title">Export Format & Path</div>
+            <div class="fmt-grid">
+                @foreach (var f in ExportFormats)
+                {
+                    <div class="fmt-card @(SelectedFormat == f.Id ? "active" : "")" @onclick="() => SelectedFormat = f.Id">
+                        <div class="type-icon">@f.Icon</div>
+                        <div class="fmt-name">@f.Name</div>
+                        <div class="fmt-desc">@f.Desc</div>
+                    </div>
+                }
             </div>
-        }
+        </div>
+
+        @* ── 5) Export Options ── *@
+        <div class="panel">
+            <div class="section-title">Export Options</div>
+            <div class="opts-grid">
+                <label class="section-check"><input type="checkbox" @bind="OptBeforeAfter" /><span><span class="sc-title">Include Before/After Comparison</span> <span class="sc-desc">— شامل مقایسه قبل و بعد</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptRawEvidence" /><span><span class="sc-title">Include Raw Evidence Files</span> <span class="sc-desc">— شامل فایل‌های خام شواهد</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptHashes" /><span><span class="sc-title">Include File Hashes (SHA-256)</span> <span class="sc-desc">— هش فایل‌ها برای یکپارچگی</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptBilingual" /><span><span class="sc-title">Bilingual (EN + FA)</span> <span class="sc-desc">— گزارش دو زبانه انگلیسی و فارسی</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptScreenshots" /><span><span class="sc-title">Include Screenshots</span> <span class="sc-desc">— اسکرین‌شات از سیستم اسکن شده</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptEncrypt" /><span><span class="sc-title">Encrypt Report (Password)</span> <span class="sc-desc">— رمزنگاری فایل خروجی</span></span></label>
+            </div>
+        </div>
+
+        @* ── 6) Outline + Actions ── *@
+        <div class="panel">
+            <div class="outline-row">
+                <span class="outline-pages">Report Outline ~@(EstimatedPages) pages</span>
+            </div>
+            <div class="action-row">
+                <button class="btn-generate" @onclick="GenerateReportAsync" disabled="@_isExporting">@(_isExporting ? "Generating..." : "Generate Report")</button>
+                <button class="btn-secondary" @onclick="PreviewReport">Preview</button>
+                <button class="btn-secondary" @onclick="EmailReport">Email Report</button>
+                <button class="btn-secondary" @onclick="ScheduleReport">Schedule Recurring</button>
+            </div>
+
+            @if (_errorMessage != null)
+            {
+                <div class="result-message" style="background: rgba(239,68,68,0.1); color: #ef4444;">⚠️ @_errorMessage</div>
+            }
+            @if (_savedFilePath != null)
+            {
+                <div class="result-message" style="background: rgba(16,185,129,0.1); color: #10b981;">✅ Report saved at: <code style="color:#06b6d4;">@_savedFilePath</code></div>
+            }
+        </div>
     }
 </div>
 
 @code {
+    private string SelectedReportType = "beforeafter";
+    private string SelectedFormat = "html";
     private bool _isExporting;
-    private string? _exportType;
     private string? _savedFilePath;
     private string? _errorMessage;
 
-    private async Task ExportHtmlAsync() => await ExecuteExportAsync("HTML", ReportService.GenerateAndSaveReportAsync);
-    private async Task ExportJsonAsync() => await ExecuteExportAsync("JSON", ReportService.GenerateAndSaveJsonReportAsync);
-    private async Task ExportCsvAsync() => await ExecuteExportAsync("CSV", ReportService.GenerateAndSaveCsvReportAsync);
+    // Export Options
+    private bool OptBeforeAfter = true;
+    private bool OptRawEvidence = true;
+    private bool OptHashes = false;
+    private bool OptBilingual = true;
+    private bool OptScreenshots = false;
+    private bool OptEncrypt = false;
 
-    private async Task ExecuteExportAsync(string type, Func<ISCM.Domain.Entities.ScanResult, string, Task<string>> exportMethod)
+    private static readonly string[] Zones = { "MRDC", "AOC", "ERDC", "SRDC", "NRDC" };
+    private static readonly string[] Roles = { "Shift Supervisor", "Shift Expert" };
+
+    private static readonly List<(string Id, string Icon, string Name, string DescFa)> ReportTypes = new()
+    {
+        ("beforeafter", "📋", "Before/After", "مقایسه قبل و بعد هاردنینگ"),
+        ("executive", "📊", "Executive", "خلاصه اجرایی برای مدیریت"),
+        ("technical", "🔧", "Technical", "گزارش فنی کامل با شواهد"),
+        ("audit", "🔍", "Audit", "گزارش حسابرسی و انطباق"),
+        ("remediation", "✅", "Remediation", "گزارش اصلاح و بسترسازی")
+    };
+
+    private static readonly List<(string Id, string Icon, string Name, string Desc)> ExportFormats = new()
+    {
+        ("html", "📄", "HTML", "Interactive"),
+        ("pdf", "📕", "PDF", "Printable"),
+        ("excel", "📊", "Excel", "Spreadsheet"),
+        ("json", "🧩", "JSON", "Machine-readable"),
+        ("zip", "📦", "ZIP", "Bundle All + evidence"),
+        ("csv", "✍", "CSV", "Findings only")
+    };
+
+    private class ReportSection
+    {
+        public string TitleEn { get; set; } = "";
+        public string DescFa { get; set; } = "";
+        public bool Enabled { get; set; } = true;
+    }
+
+    private List<ReportSection> Sections { get; set; } = new()
+    {
+        new() { TitleEn = "Executive", DescFa = "خلاصه مدیریتی و امتیاز کلی" },
+        new() { TitleEn = "Score & Grade", DescFa = "امتیاز، گرید و نمودار" },
+        new() { TitleEn = "Risk Assessment", DescFa = "ارزیابی ریسک و سطح بحرانی" },
+        new() { TitleEn = "Technical Findings Table", DescFa = "جدول کامل یافته‌ها" },
+        new() { TitleEn = "Current vs Expected", DescFa = "مقایسه مقدار فعلی و مورد انتظار" },
+        new() { TitleEn = "Registry Snapshots", DescFa = "Snapshot کلیدهای رجیستری" },
+        new() { TitleEn = "Evidence Before/After Diff", DescFa = "تفاوت خروجی قبل و بعد" },
+        new() { TitleEn = "Command Outputs", DescFa = "خروجی دستورات جمع‌آوری" },
+        new() { TitleEn = "Raw Scan Logs", DescFa = "لاگ خام اسکن" },
+        new() { TitleEn = "File Hashes (SHA-256)", DescFa = "هش فایل‌های خروجی" },
+        new() { TitleEn = "Compliance CIS Mapping", DescFa = "انطباق با CIS Benchmark" },
+        new() { TitleEn = "SLA Status", DescFa = "وضعیت SLA و مهلت اصلاح" },
+        new() { TitleEn = "Exception/Waiver Record", DescFa = "استثنائات و معافیت‌ها" },
+        new() { TitleEn = "Remediation Actions Applied", DescFa = "اقدامات اصلاحی انجام شده" },
+        new() { TitleEn = "Remaining Risks", DescFa = "ریسک‌های باقی‌مانده" },
+        new() { TitleEn = "Recommendations", DescFa = "پیشنهادات و راهکارها" },
+        new() { TitleEn = "Attachments Screenshots", DescFa = "اسکرین‌شات از سیستم" },
+        new() { TitleEn = "Baseline Config", DescFa = "فایل پیکربندی بیس‌لاین" },
+        new() { TitleEn = "Activity Log", DescFa = "لاگ فعالیت‌های انجام شده" },
+        new() { TitleEn = "Approval & Sign-off", DescFa = "تأیید و امضای گزارش" }
+    };
+
+    private void SelectAllSections() => Sections.ForEach(s => s.Enabled = true);
+    private void DeselectAllSections() => Sections.ForEach(s => s.Enabled = false);
+
+    // تاریخ شمسی با PersianCalendar
+    private string PersianDate
+    {
+        get
+        {
+            var pc = new PersianCalendar();
+            var now = DateTime.Now;
+            return $"{pc.GetYear(now)}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
+        }
+    }
+
+    private int EstimatedPages => 4 + Sections.Count(s => s.Enabled) / 2;
+
+    private async Task GenerateReportAsync()
     {
         if (StateService.CurrentScanResult == null) return;
+        _isExporting = true;
+        _errorMessage = null;
+        _savedFilePath = null;
 
         try
         {
-            _isExporting = true;
-            _exportType = type;
-            _errorMessage = null;
-            _savedFilePath = null;
-            StateHasChanged();
+            string outputDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Reports");
 
-            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
-            _savedFilePath = await exportMethod(StateService.CurrentScanResult, outputDir);
+            _savedFilePath = SelectedFormat switch
+            {
+                "html" => await ReportService.GenerateAndSaveReportAsync(StateService.CurrentScanResult, outputDir),
+                "json" => await ReportService.GenerateAndSaveJsonReportAsync(StateService.CurrentScanResult, outputDir),
+                "csv" => await ReportService.GenerateAndSaveCsvReportAsync(StateService.CurrentScanResult, outputDir),
+                _ => null
+            };
+
+            if (_savedFilePath == null)
+            {
+                _errorMessage = $"{SelectedFormat.ToUpper()} export (PDF/Excel/ZIP) will be implemented in the next stage.";
+            }
+
+            StateService.LogAction($"Report generated: type={SelectedReportType}, format={SelectedFormat}, sections={Sections.Count(s => s.Enabled)}");
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Failed to save {type} report: {ex.Message}";
+            _errorMessage = $"Failed to generate report: {ex.Message}";
         }
         finally
         {
             _isExporting = false;
-            _exportType = null;
         }
     }
+
+    private void PreviewReport() => StateService.LogAction($"Report preview requested: type={SelectedReportType}");
+    private void EmailReport() => StateService.LogAction("Email report: planned for a future step.");
+    private void ScheduleReport() => StateService.LogAction("Schedule recurring report: planned for a future step.");
 }
