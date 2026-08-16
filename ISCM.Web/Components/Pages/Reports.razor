@@ -7,6 +7,8 @@
 @using System.Globalization
 @inject IReportService ReportService
 @inject ScanStateService StateService
+@inject ScanHistoryService HistoryService
+@inject ReportGateService GateService
 
 <PageTitle>DefenDoor - Reports</PageTitle>
 
@@ -25,7 +27,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
     }
 
     .btn-back {
@@ -38,6 +40,47 @@
         cursor: pointer;
         text-decoration: none;
         font-size: 12px;
+    }
+    /* ── زیرتب‌ها ── */
+    .subtab-bar {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid #1e293b;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+
+    .subtab {
+        background: transparent;
+        border: 1px solid transparent;
+        border-bottom: 2px solid transparent;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 8px 16px;
+        border-radius: 8px 8px 0 0;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+        .subtab:hover {
+            color: #e2e8f0;
+            background: rgba(6,182,212,0.05);
+        }
+
+        .subtab.active {
+            color: #06b6d4;
+            border-color: rgba(6,182,212,0.4);
+            border-bottom-color: #06b6d4;
+            background: rgba(6,182,212,0.08);
+            box-shadow: 0 0 12px rgba(6,182,212,0.15);
+        }
+
+    .subtab-icon {
+        font-size: 14px;
     }
 
     .section-title {
@@ -61,10 +104,10 @@
         padding: 16px;
         margin-bottom: 16px;
     }
-
+    /* ── Report Types (3) ── */
     .type-grid {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 10px;
     }
 
@@ -76,6 +119,7 @@
         cursor: pointer;
         text-align: center;
         transition: 0.2s;
+        position: relative;
     }
 
         .type-card:hover {
@@ -85,6 +129,11 @@
         .type-card.active {
             border-color: #06b6d4;
             background: rgba(6,182,212,0.08);
+        }
+
+        .type-card.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
         }
 
     .type-icon {
@@ -104,6 +153,38 @@
         margin-top: 4px;
     }
 
+    .gate-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        font-size: 8px;
+        font-weight: bold;
+        font-family: 'Consolas', monospace;
+        padding: 2px 6px;
+        border-radius: 3px;
+        letter-spacing: 1px;
+    }
+
+        .gate-badge.locked {
+            background: rgba(148,163,184,0.15);
+            color: #94a3b8;
+        }
+
+        .gate-badge.firstallowed {
+            background: rgba(16,185,129,0.15);
+            color: #10b981;
+        }
+
+        .gate-badge.blocked {
+            background: rgba(245,158,11,0.15);
+            color: #f59e0b;
+        }
+
+        .gate-badge.changeallowed {
+            background: rgba(6,182,212,0.15);
+            color: #06b6d4;
+        }
+    /* ── Context ── */
     .ctx-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -196,7 +277,7 @@
         border-radius: 6px;
         cursor: pointer;
     }
-
+    /* ── Sections / Options ── */
     .sections-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -359,8 +440,7 @@
         padding: 40px;
         font-size: 13px;
     }
-
-    /* ── Snapshots (مرحله 2) ── */
+    /* ── Snapshots / Evidence / Compliance (تب Before/After) ── */
     .snapshots-row {
         display: grid;
         grid-template-columns: 1fr auto 1fr;
@@ -506,19 +586,12 @@
             color: #10b981;
         }
 
-        .delta-pill.down {
-            background: rgba(239,68,68,0.15);
-            border-color: rgba(239,68,68,0.4);
-            color: #ef4444;
-        }
-
         .delta-pill.warn {
             background: rgba(245,158,11,0.15);
             border-color: rgba(245,158,11,0.4);
             color: #f59e0b;
         }
 
-    /* ── Evidence (مرحله 2) ── */
     .evidence-chips {
         display: flex;
         gap: 8px;
@@ -579,7 +652,6 @@
         font-size: 11px;
     }
 
-    /* ── Compliance Table (مرحله 2) ── */
     .compliance-table-wrap {
         margin-top: 12px;
         overflow-x: auto;
@@ -693,29 +765,123 @@
         <a href="/" class="btn-back">← Back to Dashboard</a>
     </div>
 
-    @if (StateService.CurrentScanResult == null)
+    @* ── نوار زیرتب‌ها ── *@
+    <div class="subtab-bar">
+        @foreach (var t in SubTabs)
+        {
+            <button class="subtab @(ActiveSubTab == t.Id ? "active" : "")" @onclick="() => ActiveSubTab = t.Id">
+                <span class="subtab-icon">@t.Icon</span> @t.Name
+            </button>
+        }
+    </div>
+
+    @if (StateService.CurrentScanResult == null && ActiveSubTab != "baseline")
     {
         <p class="empty-state">No scan data available for reporting. Please run a scan from the Dashboard first.</p>
     }
-    else
+    else if (ActiveSubTab == "generator")
     {
-        @* ── 1) Report Type ── *@
+        @* ── تب Generator ── *@
         <div class="panel">
             <div class="section-title">Report Type</div>
             <div class="section-sub">نوع گزارش را انتخاب کنید</div>
             <div class="type-grid">
-                @foreach (var t in ReportTypes)
+                <div class="type-card @(SelectedReportType == "current" ? "active" : "") @(CurrentGate.Kind == GateKind.Locked ? "disabled" : "")"
+                     @onclick="SelectCurrentType">
+                    <span class="gate-badge @CurrentGate.Kind.ToString().ToLower()">
+                        @(CurrentGate.Kind switch { GateKind.Locked => "LOCKED", GateKind.FirstAllowed => "READY", GateKind.Blocked => "NO CHANGE", _ => "CHANGED" })
+                    </span>
+                    <div class="type-icon">📸</div>
+                    <div class="type-name">Current State</div>
+                    <div class="type-desc">وضعیت فعلی سیستم (Baseline)</div>
+                </div>
+                <div class="type-card @(SelectedReportType == "beforeafter" ? "active" : "")" @onclick="SelectBeforeAfterType">
+                    <div class="type-icon">📋</div>
+                    <div class="type-name">Before/After</div>
+                    <div class="type-desc">مقایسه قبل و بعد هاردنینگ</div>
+                </div>
+                <div class="type-card @(SelectedReportType == "remediation" ? "active" : "")" @onclick="SelectRemediationType">
+                    <div class="type-icon">✅</div>
+                    <div class="type-name">Remediation</div>
+                    <div class="type-desc">گزارش اصلاح و بسترسازی</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div class="section-title" style="margin-bottom:2px;">Report Sections</div>
+                    <div class="section-sub">بخش‌های گزارش را انتخاب کنید</div>
+                </div>
+                <span>
+                    <button class="link-btn" @onclick="SelectAllSections">Select All</button>
+                    <button class="link-btn" @onclick="DeselectAllSections">Deselect All</button>
+                </span>
+            </div>
+            <div class="sections-grid">
+                @foreach (var s in Sections)
                 {
-                    <div class="type-card @(SelectedReportType == t.Id ? "active" : "")" @onclick="() => SelectedReportType = t.Id">
-                        <div class="type-icon">@t.Icon</div>
-                        <div class="type-name">@t.Name</div>
-                        <div class="type-desc">@t.DescFa</div>
+                    <label class="section-check">
+                        <input type="checkbox" @bind="s.Enabled" />
+                        <span><span class="sc-title">@s.TitleEn</span> <span class="sc-desc">— @s.DescFa</span></span>
+                    </label>
+                }
+            </div>
+            <div class="sign-row">
+                <span class="sign-item">Prepared By <span class="sign-ok">✓ Signed</span></span>
+                <span class="sign-item">Reviewed By <span class="sign-ok">✓ Signed</span></span>
+                <span class="sign-item">Approved By <span class="sign-pending">⏳ Pending</span></span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="section-title">Export Format & Path</div>
+            <div class="fmt-grid">
+                @foreach (var f in ExportFormats)
+                {
+                    <div class="fmt-card @(SelectedFormat == f.Id ? "active" : "")" @onclick="() => SelectedFormat = f.Id">
+                        <div class="type-icon">@f.Icon</div>
+                        <div class="fmt-name">@f.Name</div>
+                        <div class="fmt-desc">@f.Desc</div>
                     </div>
                 }
             </div>
         </div>
 
-        @* ── 1.5) Before / After Hardening Snapshots + Evidence + Compliance Mapping ── *@
+        <div class="panel">
+            <div class="section-title">Export Options</div>
+            <div class="opts-grid">
+                <label class="section-check"><input type="checkbox" @bind="OptBeforeAfter" /><span><span class="sc-title">Include Before/After Comparison</span> <span class="sc-desc">— شامل مقایسه قبل و بعد</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptRawEvidence" /><span><span class="sc-title">Include Raw Evidence Files</span> <span class="sc-desc">— شامل فایل‌های خام شواهد</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptHashes" /><span><span class="sc-title">Include File Hashes (SHA-256)</span> <span class="sc-desc">— هش فایل‌ها برای یکپارچگی</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptBilingual" /><span><span class="sc-title">Bilingual (EN + FA)</span> <span class="sc-desc">— گزارش دو زبانه</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptScreenshots" /><span><span class="sc-title">Include Screenshots</span> <span class="sc-desc">— اسکرین‌شات از سیستم</span></span></label>
+                <label class="section-check"><input type="checkbox" @bind="OptEncrypt" /><span><span class="sc-title">Encrypt Report (Password)</span> <span class="sc-desc">— رمزنگاری خروجی</span></span></label>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="outline-row"><span class="outline-pages">Report Outline ~@(EstimatedPages) pages</span></div>
+            <div class="action-row">
+                <button class="btn-generate" @onclick="GenerateReportAsync" disabled="@_isExporting">@(_isExporting ? "Generating..." : "Generate Report")</button>
+                <button class="btn-secondary" @onclick="PreviewReport">Preview</button>
+                <button class="btn-secondary" @onclick="EmailReport">Email Report</button>
+                <button class="btn-secondary" @onclick="ScheduleReport">Schedule Recurring</button>
+            </div>
+            @if (_errorMessage != null)
+            {
+                <div class="result-message" style="background: rgba(239,68,68,0.1); color: #ef4444;">⚠️ @_errorMessage</div>
+            }
+            @if (_savedFilePath != null)
+            {
+                <div class="result-message" style="background: rgba(16,185,129,0.1); color: #10b981;">✅ Report saved at: <code style="color:#06b6d4;">@_savedFilePath</code></div>
+            }
+        </div>
+    }
+    else if (ActiveSubTab == "beforeafter")
+    {
+        @* ── تب Before/After ── *@
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
@@ -724,7 +890,6 @@
                 </div>
                 <button class="btn-edit" @onclick="RefreshSnapshots">Refresh Snapshots</button>
             </div>
-
             <div class="snapshots-row">
                 <div class="snapshot-card before">
                     <div class="snap-dot before-dot"></div>
@@ -732,24 +897,17 @@
                     <div class="snap-date">@BeforeScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
                     <div class="snap-score">@BeforeScan.ComplianceScore%</div>
                     <div class="snap-grade">Grade @BeforeScan.Grade</div>
-                    <div class="snap-counts">
-                        <span class="snap-pass">@BeforeScan.PassCount Pass</span>
-                        <span class="snap-fail">@BeforeScan.FailCount Fail</span>
-                        <span class="snap-warn">@BeforeScan.WarningCount Warn</span>
-                    </div>
+                    <div class="snap-counts"><span class="snap-pass">@BeforeScan.PassCount Pass</span><span class="snap-fail">@BeforeScan.FailCount Fail</span><span class="snap-warn">@BeforeScan.WarningCount Warn</span></div>
                     <div class="snap-meta">
                         <div><span class="meta-label">Baseline</span> <span class="meta-value">@BeforeBaselineName</span></div>
                         <div><span class="meta-label">Output File</span> <span class="meta-value">@BeforeFileName</span></div>
                     </div>
                 </div>
-
                 <div class="snap-arrow">
                     <div class="arrow-icon">→</div>
                     @if (ScoreDelta != 0)
                     {
-                        <div class="delta-pill @(ScoreDelta > 0 ? "up" : "down")">
-                            @(ScoreDelta > 0 ? "↑" : "↓") Score @Math.Abs(ScoreDelta)%
-                        </div>
+                        <div class="delta-pill @(ScoreDelta > 0 ? "up" : "")">@(ScoreDelta > 0 ? "↑" : "↓") Score @Math.Abs(ScoreDelta)%</div>
                     }
                     @if (IssuesFixed > 0)
                     {
@@ -764,18 +922,13 @@
                         <div class="delta-pill warn">@AfterScan.WarningCount Warnings Remaining</div>
                     }
                 </div>
-
                 <div class="snapshot-card after">
                     <div class="snap-dot after-dot"></div>
                     <div class="snap-header">After Hardening</div>
                     <div class="snap-date">@AfterScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
                     <div class="snap-score">@AfterScan.ComplianceScore%</div>
                     <div class="snap-grade">Grade @AfterScan.Grade</div>
-                    <div class="snap-counts">
-                        <span class="snap-pass">@AfterScan.PassCount Pass</span>
-                        <span class="snap-fail">@AfterScan.FailCount Fail</span>
-                        <span class="snap-warn">@AfterScan.WarningCount Warn</span>
-                    </div>
+                    <div class="snap-counts"><span class="snap-pass">@AfterScan.PassCount Pass</span><span class="snap-fail">@AfterScan.FailCount Fail</span><span class="snap-warn">@AfterScan.WarningCount Warn</span></div>
                     <div class="snap-meta">
                         <div><span class="meta-label">Baseline</span> <span class="meta-value">@AfterBaselineName</span></div>
                         <div><span class="meta-label">Output File</span> <span class="meta-value">@AfterFileName</span></div>
@@ -784,52 +937,27 @@
             </div>
         </div>
 
-        @* ── Output File Evidence ── *@
         <div class="panel">
             <div class="section-title">Output File Evidence</div>
             <div class="section-sub">محتوای فایل‌های خروجی قبل و بعد — شواهد جمع‌آوری شده</div>
-
             <div class="evidence-chips">
                 @foreach (var ev in EvidenceCounts)
                 {
-                    <div class="ev-chip">
-                        <span class="ev-name">@ev.Name</span>
-                        <span class="ev-count">@ev.Count</span>
-                    </div>
+                    <div class="ev-chip"><span class="ev-name">@ev.Name</span><span class="ev-count">@ev.Count</span></div>
                 }
             </div>
-
             <div class="evidence-files">
-                <div class="ev-file">
-                    <span class="ev-file-label">Before</span>
-                    <span class="ev-file-name">@BeforeFileName</span>
-                </div>
-                <div class="ev-file">
-                    <span class="ev-file-label">After</span>
-                    <span class="ev-file-name">@AfterFileName</span>
-                </div>
+                <div class="ev-file"><span class="ev-file-label">Before</span><span class="ev-file-name">@BeforeFileName</span></div>
+                <div class="ev-file"><span class="ev-file-label">After</span><span class="ev-file-name">@AfterFileName</span></div>
             </div>
         </div>
 
-        @* ── Compliance Mapping (Before → After) ── *@
         <div class="panel">
             <div class="section-title">Compliance Mapping (Before → After)</div>
             <div class="section-sub">انطباق کنترل‌های CIS — وضعیت قبل و بعد</div>
-
             <div class="compliance-table-wrap">
                 <table class="compliance-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Check</th>
-                            <th>CIS Ref</th>
-                            <th>Severity</th>
-                            <th>Before</th>
-                            <th>After</th>
-                            <th>Delta</th>
-                            <th>Source</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>ID</th><th>Check</th><th>CIS Ref</th><th>Severity</th><th>Before</th><th>After</th><th>Delta</th><th>Source</th></tr></thead>
                     <tbody>
                         @foreach (var row in ComplianceRows)
                         {
@@ -861,8 +989,10 @@
                 </table>
             </div>
         </div>
-
-        @* ── 2) Target System & Context ── *@
+    }
+    else if (ActiveSubTab == "system")
+    {
+        @* ── تب System & Context ── *@
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div>
@@ -874,23 +1004,15 @@
                     <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo">Edit System Details</button>
                 }
             </div>
-
             <div class="ctx-grid">
                 <div class="ctx-row"><span class="ctx-label">Scan Date Gregorian</span><span class="ctx-value">@DateTime.Now.ToString("yyyy-MM-dd")</span></div>
                 <div class="ctx-row"><span class="ctx-label">Persian (شمسی)</span><span class="ctx-value">@PersianDate</span></div>
-
                 @if (StateService.IsEditingSystemInfo)
                 {
                     <div class="ctx-row"><span class="ctx-label">Hostname</span><input class="sys-input" @bind="StateService.DraftHostname" /></div>
                     <div class="ctx-row"><span class="ctx-label">IP Address</span><input class="sys-input" @bind="StateService.DraftIpAddress" /></div>
                     <div class="ctx-row"><span class="ctx-label">OS Build</span><input class="sys-input" @bind="StateService.DraftOsBuild" /></div>
-                    <div class="ctx-row">
-                        <span></span>
-                        <span>
-                            <button class="btn-save" @onclick="StateService.SaveSystemInfoEdits">Save</button>
-                            <button class="btn-cancel" @onclick="StateService.CancelSystemInfoEdits">Cancel</button>
-                        </span>
-                    </div>
+                    <div class="ctx-row"><span></span><span><button class="btn-save" @onclick="StateService.SaveSystemInfoEdits">Save</button> <button class="btn-cancel" @onclick="StateService.CancelSystemInfoEdits">Cancel</button></span></div>
                 }
                 else
                 {
@@ -898,114 +1020,71 @@
                     <div class="ctx-row"><span class="ctx-label">IP Address</span><span class="ctx-value">@StateService.DisplayIpAddress</span></div>
                     <div class="ctx-row"><span class="ctx-label">OS Build</span><span class="ctx-value">@StateService.DisplayOsBuild</span></div>
                 }
-
                 <div class="ctx-row">
                     <span class="ctx-label">Operational Context Zone</span>
-                    <span class="chip-row">
-                        @foreach (var z in Zones)
+                    <span class="chip-row">@foreach (var z in Zones)
                         {
                             <button class="chip @(StateService.SelectedZone == z ? "active" : "")" @onclick="() => StateService.SelectedZone = z">@z</button>
-                        }
-                    </span>
+                        }</span>
                 </div>
                 <div class="ctx-row">
                     <span class="ctx-label">System Role</span>
-                    <span class="chip-row">
-                        @foreach (var r in Roles)
+                    <span class="chip-row">@foreach (var r in Roles)
                         {
                             <button class="chip @(StateService.SelectedSystem == r ? "active" : "")" @onclick="() => StateService.SelectedSystem = r">@r</button>
-                        }
-                    </span>
+                        }</span>
                 </div>
                 <div class="ctx-row"><span class="ctx-label">Context Hostname</span><span class="ctx-value" style="color:#06b6d4;">@StateService.HostnameContext</span></div>
             </div>
         </div>
-
-        @* ── 3) Report Sections ── *@
+    }
+    else if (ActiveSubTab == "baseline")
+    {
+        @* ── تب Baseline (مرحله ۳) ── *@
         <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div class="section-title" style="margin-bottom:2px;">Report Sections</div>
-                    <div class="section-sub">بخش‌های گزارش را انتخاب کنید</div>
-                </div>
-                <span>
-                    <button class="link-btn" @onclick="SelectAllSections">Select All</button>
-                    <button class="link-btn" @onclick="DeselectAllSections">Deselect All</button>
-                </span>
-            </div>
-            <div class="sections-grid">
-                @foreach (var s in Sections)
-                {
-                    <label class="section-check">
-                        <input type="checkbox" @bind="s.Enabled" />
-                        <span>
-                            <span class="sc-title">@s.TitleEn</span>
-                            <span class="sc-desc"> — @s.DescFa</span>
-                        </span>
-                    </label>
-                }
-            </div>
-            <div class="sign-row">
-                <span class="sign-item">Prepared By <span class="sign-ok">✓ Signed</span></span>
-                <span class="sign-item">Reviewed By <span class="sign-ok">✓ Signed</span></span>
-                <span class="sign-item">Approved By <span class="sign-pending">⏳ Pending</span></span>
-            </div>
+            <div class="section-title">Baseline Configuration</div>
+            <div class="section-sub">ویرایش مقادیر Expected و فعال/غیرفعال کردن چک‌ها — به نام Madanchi</div>
+            <p class="empty-state">🚧 This tab will be implemented in Stage 3 (Madanchi baseline: ASR / AppLocker / Windows Security / Audit Logs).</p>
         </div>
-
-        @* ── 4) Export Format & Path ── *@
+    }
+    else if (ActiveSubTab == "ledger")
+    {
+        @* ── تب Report Ledger ── *@
         <div class="panel">
-            <div class="section-title">Export Format & Path</div>
-            <div class="fmt-grid">
-                @foreach (var f in ExportFormats)
-                {
-                    <div class="fmt-card @(SelectedFormat == f.Id ? "active" : "")" @onclick="() => SelectedFormat = f.Id">
-                        <div class="type-icon">@f.Icon</div>
-                        <div class="fmt-name">@f.Name</div>
-                        <div class="fmt-desc">@f.Desc</div>
-                    </div>
-                }
-            </div>
-        </div>
-
-        @* ── 5) Export Options ── *@
-        <div class="panel">
-            <div class="section-title">Export Options</div>
-            <div class="opts-grid">
-                <label class="section-check"><input type="checkbox" @bind="OptBeforeAfter" /><span><span class="sc-title">Include Before/After Comparison</span> <span class="sc-desc">— شامل مقایسه قبل و بعد</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptRawEvidence" /><span><span class="sc-title">Include Raw Evidence Files</span> <span class="sc-desc">— شامل فایل‌های خام شواهد</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptHashes" /><span><span class="sc-title">Include File Hashes (SHA-256)</span> <span class="sc-desc">— هش فایل‌ها برای یکپارچگی</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptBilingual" /><span><span class="sc-title">Bilingual (EN + FA)</span> <span class="sc-desc">— گزارش دو زبانه انگلیسی و فارسی</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptScreenshots" /><span><span class="sc-title">Include Screenshots</span> <span class="sc-desc">— اسکرین‌شات از سیستم اسکن شده</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptEncrypt" /><span><span class="sc-title">Encrypt Report (Password)</span> <span class="sc-desc">— رمزنگاری فایل خروجی</span></span></label>
-            </div>
-        </div>
-
-        @* ── 6) Outline + Actions ── *@
-        <div class="panel">
-            <div class="outline-row">
-                <span class="outline-pages">Report Outline ~@(EstimatedPages) pages</span>
-            </div>
-            <div class="action-row">
-                <button class="btn-generate" @onclick="GenerateReportAsync" disabled="@_isExporting">@(_isExporting ? "Generating..." : "Generate Report")</button>
-                <button class="btn-secondary" @onclick="PreviewReport">Preview</button>
-                <button class="btn-secondary" @onclick="EmailReport">Email Report</button>
-                <button class="btn-secondary" @onclick="ScheduleReport">Schedule Recurring</button>
-            </div>
-
-            @if (_errorMessage != null)
+            <div class="section-title">Report Ledger</div>
+            <div class="section-sub">بایگانی گزارش‌های تولیدشده توسط کنترلر Gate</div>
+            @if (GateService.Ledger.Count == 0)
             {
-                <div class="result-message" style="background: rgba(239,68,68,0.1); color: #ef4444;">⚠️ @_errorMessage</div>
+                <p class="empty-state">No reports generated yet.</p>
             }
-            @if (_savedFilePath != null)
+            else
             {
-                <div class="result-message" style="background: rgba(16,185,129,0.1); color: #10b981;">✅ Report saved at: <code style="color:#06b6d4;">@_savedFilePath</code></div>
+                <div class="compliance-table-wrap">
+                    <table class="compliance-table">
+                        <thead><tr><th>#</th><th>Type</th><th>Format</th><th>File Name</th><th>Generated At</th><th>State Signature</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in GateService.Ledger)
+                            {
+                                <tr>
+                                    <td><code>R-@e.Seq.ToString("D3")</code></td>
+                                    <td>@e.ReportType</td>
+                                    <td>@e.Format.ToUpper()</td>
+                                    <td class="src-cell">@e.FileName</td>
+                                    <td class="src-cell">@e.GeneratedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td class="src-cell">@e.StateSignature.Substring(0, 8)…</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
     }
 </div>
 
 @code {
-    private string SelectedReportType = "beforeafter";
+    private string ActiveSubTab = "generator";
+    private string SelectedReportType = "current";
     private string SelectedFormat = "html";
     private bool _isExporting;
     private string? _savedFilePath;
@@ -1021,13 +1100,13 @@
     private static readonly string[] Zones = { "MRDC", "AOC", "ERDC", "SRDC", "NRDC" };
     private static readonly string[] Roles = { "Shift Supervisor", "Shift Expert" };
 
-    private static readonly List<(string Id, string Icon, string Name, string DescFa)> ReportTypes = new()
+    private static readonly List<(string Id, string Icon, string Name)> SubTabs = new()
     {
-        ("beforeafter", "📋", "Before/After", "مقایسه قبل و بعد هاردنینگ"),
-        ("executive", "📊", "Executive", "خلاصه اجرایی برای مدیریت"),
-        ("technical", "🔧", "Technical", "گزارش فنی کامل با شواهد"),
-        ("audit", "🔍", "Audit", "گزارش حسابرسی و انطباق"),
-        ("remediation", "✅", "Remediation", "گزارش اصلاح و بسترسازی")
+        ("generator", "⚙", "Generator"),
+        ("beforeafter", "📈", "Before/After"),
+        ("system", "🖥", "System & Context"),
+        ("baseline", "📚", "Baseline"),
+        ("ledger", "🗂", "Report Ledger")
     };
 
     private static readonly List<(string Id, string Icon, string Name, string Desc)> ExportFormats = new()
@@ -1040,12 +1119,7 @@
         ("csv", "✍", "CSV", "Findings only")
     };
 
-    private class ReportSection
-    {
-        public string TitleEn { get; set; } = "";
-        public string DescFa { get; set; } = "";
-        public bool Enabled { get; set; } = true;
-    }
+    private class ReportSection { public string TitleEn { get; set; } = ""; public string DescFa { get; set; } = ""; public bool Enabled { get; set; } = true; }
 
     private List<ReportSection> Sections { get; set; } = new()
     {
@@ -1086,8 +1160,17 @@
 
     private int EstimatedPages => 4 + Sections.Count(s => s.Enabled) / 2;
 
-    
-    // ── Before / After Snapshots ──
+    // ── Gate: وضعیت فعلی کنترلر برای کارت Current State ──
+    private GateDecision CurrentGate => GateService.EvaluateCurrentState(StateService.CurrentScanResult);
+
+    private void SelectCurrentType()
+    {
+        if (CurrentGate.Kind != GateKind.Locked)
+            SelectedReportType = "current";
+    }
+    private void SelectBeforeAfterType() => SelectedReportType = "beforeafter";
+    private void SelectRemediationType() => SelectedReportType = "remediation";
+    // ── Snapshots ──
     private ScanResult BeforeScan { get; set; } = EmptyScan();
     private ScanResult AfterScan { get; set; } = EmptyScan();
     private string BeforeBaselineName = "win11-pro-hardening.json";
@@ -1095,35 +1178,26 @@
     private string BeforeFileName = "scan_before_001.json";
     private string AfterFileName = "scan_after_002.json";
 
-    // EDIT: ScanResult سازندهٔ بدون پارامتر ندارد؛ از سازندهٔ عمومی استفاده می‌کنیم.
-    // ComplianceScore و Grade پراپرتی‌های محاسباتی read-only هستند و اینجا ست نمی‌شوند.
-    private static ScanResult EmptyScan() =>
-        new ScanResult("N/A", "N/A", "N/A", "N/A", "N/A", ScanMode.Full);
+    private static ScanResult EmptyScan() => new ScanResult("N/A", "N/A", "N/A", "N/A", "N/A", ScanMode.Full);
 
     private void RefreshSnapshots()
     {
         var current = StateService.CurrentScanResult;
+        var history = HistoryService?.History.ToList() ?? new List<ScanHistoryEntry>();
 
-        // TODO: به محض اینکه API واقعی ScanHistoryService مشخص شد،
-        //       Before = اولین اسکن تاریخچه و After = آخرین اسکن قرار می‌گیرد.
+        if (history.Count >= 2)
+        {
+            BeforeFileName = $"scan_before_{history.Count:D3}.json";
+            AfterFileName = $"scan_after_{history.Count + 1:D3}.json";
+        }
+
         BeforeScan = current ?? EmptyScan();
         AfterScan = current ?? EmptyScan();
-        BeforeFileName = "scan_before_001.json";
-        AfterFileName = "scan_after_002.json";
     }
 
     private int ScoreDelta => (AfterScan?.ComplianceScore ?? 0) - (BeforeScan?.ComplianceScore ?? 0);
+    private int IssuesFixed => (BeforeScan == null || AfterScan == null) ? 0 : Math.Max(0, BeforeScan.FailCount - AfterScan.FailCount);
 
-    private int IssuesFixed
-    {
-        get
-        {
-            if (BeforeScan == null || AfterScan == null) return 0;
-            return Math.Max(0, BeforeScan.FailCount - AfterScan.FailCount);
-        }
-    }
-
-    // ── Output File Evidence ──
     private class EvidenceCount { public string Name { get; set; } = ""; public int Count { get; set; } }
 
     private List<EvidenceCount> EvidenceCounts
@@ -1132,7 +1206,6 @@
         {
             var scan = AfterScan ?? StateService.CurrentScanResult;
             if (scan?.Findings == null) return new List<EvidenceCount>();
-
             var findings = scan.Findings;
             return new List<EvidenceCount>
             {
@@ -1146,7 +1219,6 @@
         }
     }
 
-    // ── Compliance Mapping ──
     private class ComplianceRow
     {
         public string Id { get; set; } = "";
@@ -1164,7 +1236,6 @@
         {
             if (AfterScan?.Findings == null) return new List<ComplianceRow>();
             var before = BeforeScan?.Findings ?? new List<Finding>();
-
             return AfterScan.Findings.Select(f =>
             {
                 var bf = before.FirstOrDefault(x => x.CheckId == f.CheckId);
@@ -1185,9 +1256,36 @@
         }
     }
 
+    // ── تولید گزارش با کنترلر Gate ──
     private async Task GenerateReportAsync()
     {
-        if (StateService.CurrentScanResult == null) return;
+        var scan = StateService.CurrentScanResult;
+        if (scan == null) { _errorMessage = "No scan data available."; return; }
+
+        // Gate برای Current State
+        if (SelectedReportType == "current")
+        {
+            var decision = GateService.EvaluateCurrentState(scan);
+            if (decision.Kind == GateKind.Locked || decision.Kind == GateKind.Blocked)
+            {
+                _errorMessage = decision.Message;
+                _savedFilePath = null;
+                return;
+            }
+        }
+
+        // Before/After نیاز به ≥۲ اسکن
+        if (SelectedReportType == "beforeafter")
+        {
+            var history = HistoryService?.History.ToList() ?? new List<ScanHistoryEntry>();
+            if (history.Count < 2)
+            {
+                _errorMessage = "Before/After report requires at least 2 scans in history. Run another scan after making changes.";
+                _savedFilePath = null;
+                return;
+            }
+        }
+
         _isExporting = true;
         _errorMessage = null;
         _savedFilePath = null;
@@ -1195,21 +1293,27 @@
         try
         {
             string outputDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Reports");
+            var fullName = GateService.BuildFileName(scan, SelectedReportType, SelectedFormat);
+            var baseNoExt = System.IO.Path.GetFileNameWithoutExtension(fullName);
 
             _savedFilePath = SelectedFormat switch
             {
-                "html" => await ReportService.GenerateAndSaveReportAsync(StateService.CurrentScanResult, outputDir),
-                "json" => await ReportService.GenerateAndSaveJsonReportAsync(StateService.CurrentScanResult, outputDir),
-                "csv" => await ReportService.GenerateAndSaveCsvReportAsync(StateService.CurrentScanResult, outputDir),
+                "html" => await ReportService.GenerateAndSaveReportAsync(scan, outputDir, baseNoExt),
+                "json" => await ReportService.GenerateAndSaveJsonReportAsync(scan, outputDir, baseNoExt),
+                "csv" => await ReportService.GenerateAndSaveCsvReportAsync(scan, outputDir, baseNoExt),
                 _ => null
             };
 
             if (_savedFilePath == null)
             {
-                _errorMessage = $"{SelectedFormat.ToUpper()} export (PDF/Excel/ZIP) will be implemented in the next stage.";
+                _errorMessage = $"{SelectedFormat.ToUpper()} export (PDF/Excel/ZIP) will be implemented in a future stage.";
             }
-
-            StateService.LogAction($"Report generated: type={SelectedReportType}, format={SelectedFormat}, sections={Sections.Count(s => s.Enabled)}");
+            else
+            {
+                // ثبت در Ledger + فعال‌سازی چک تغییر پس از اولین گزارش (هر فرمتی)
+                GateService.RecordReport(scan, SelectedReportType, SelectedFormat, _savedFilePath);
+                StateService.LogAction($"Report generated: type={SelectedReportType}, format={SelectedFormat}, file={System.IO.Path.GetFileName(_savedFilePath)}");
+            }
         }
         catch (Exception ex)
         {
