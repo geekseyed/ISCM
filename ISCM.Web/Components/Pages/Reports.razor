@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using ISCM.Application.Interfaces
 @using ISCM.Domain.Entities
+@using ISCM.Domain.Enums
 @using ISCM.Web.Services
 @using System.Globalization
 @inject IReportService ReportService
@@ -358,6 +359,332 @@
         padding: 40px;
         font-size: 13px;
     }
+
+    /* ── Snapshots (مرحله 2) ── */
+    .snapshots-row {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 16px;
+        align-items: center;
+        margin-top: 14px;
+    }
+
+    .snapshot-card {
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 16px;
+        position: relative;
+    }
+
+        .snapshot-card.before {
+            border-left: 3px solid #f59e0b;
+        }
+
+        .snapshot-card.after {
+            border-left: 3px solid #10b981;
+        }
+
+    .snap-dot {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .before-dot {
+        background: #f59e0b;
+        box-shadow: 0 0 6px #f59e0b;
+    }
+
+    .after-dot {
+        background: #10b981;
+        box-shadow: 0 0 6px #10b981;
+    }
+
+    .snap-header {
+        color: #94a3b8;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .snap-date {
+        color: #64748b;
+        font-size: 10px;
+        font-family: 'Consolas', monospace;
+        margin-top: 4px;
+    }
+
+    .snap-score {
+        color: #e2e8f0;
+        font-size: 32px;
+        font-weight: 800;
+        font-family: 'Consolas', monospace;
+        margin-top: 10px;
+        line-height: 1;
+    }
+
+    .snap-grade {
+        color: #94a3b8;
+        font-size: 11px;
+        margin-top: 4px;
+    }
+
+    .snap-counts {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+        font-size: 11px;
+        font-family: 'Consolas', monospace;
+    }
+
+    .snap-pass {
+        color: #10b981;
+    }
+
+    .snap-fail {
+        color: #ef4444;
+    }
+
+    .snap-warn {
+        color: #f59e0b;
+    }
+
+    .snap-meta {
+        margin-top: 12px;
+        border-top: 1px solid rgba(51,65,85,0.5);
+        padding-top: 10px;
+        font-size: 10px;
+    }
+
+        .snap-meta > div {
+            display: flex;
+            justify-content: space-between;
+            padding: 2px 0;
+        }
+
+    .meta-label {
+        color: #64748b;
+        text-transform: uppercase;
+    }
+
+    .meta-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+    }
+
+    .snap-arrow {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .arrow-icon {
+        color: #06b6d4;
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    .delta-pill {
+        background: rgba(15,23,42,0.9);
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        font-family: 'Consolas', monospace;
+        padding: 4px 10px;
+        border-radius: 12px;
+        white-space: nowrap;
+    }
+
+        .delta-pill.up {
+            background: rgba(16,185,129,0.15);
+            border-color: rgba(16,185,129,0.4);
+            color: #10b981;
+        }
+
+        .delta-pill.down {
+            background: rgba(239,68,68,0.15);
+            border-color: rgba(239,68,68,0.4);
+            color: #ef4444;
+        }
+
+        .delta-pill.warn {
+            background: rgba(245,158,11,0.15);
+            border-color: rgba(245,158,11,0.4);
+            color: #f59e0b;
+        }
+
+    /* ── Evidence (مرحله 2) ── */
+    .evidence-chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .ev-chip {
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 6px 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .ev-name {
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .ev-count {
+        color: #06b6d4;
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        font-size: 12px;
+    }
+
+    .evidence-files {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .ev-file {
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 10px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ev-file-label {
+        color: #94a3b8;
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: bold;
+    }
+
+    .ev-file-name {
+        color: #06b6d4;
+        font-family: 'Consolas', monospace;
+        font-size: 11px;
+    }
+
+    /* ── Compliance Table (مرحله 2) ── */
+    .compliance-table-wrap {
+        margin-top: 12px;
+        overflow-x: auto;
+    }
+
+    .compliance-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+
+        .compliance-table th {
+            background: #0f172a;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 1px;
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+        }
+
+        .compliance-table td {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(51,65,85,0.4);
+            color: #e2e8f0;
+        }
+
+        .compliance-table code {
+            color: #06b6d4;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+        }
+
+    .cis-inline {
+        color: #06b6d4;
+        border: 1px solid rgba(6,182,212,0.4);
+        background: rgba(6,182,212,0.08);
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-family: 'Consolas', monospace;
+        font-size: 9px;
+    }
+
+    .sev-inline {
+        font-size: 9px;
+        font-weight: bold;
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+    }
+
+    .sev-critical {
+        color: #ef4444;
+        background: rgba(239,68,68,0.15);
+    }
+
+    .sev-high {
+        color: #f59e0b;
+        background: rgba(245,158,11,0.15);
+    }
+
+    .sev-medium {
+        color: #e2e8f0;
+        background: rgba(226,232,240,0.1);
+    }
+
+    .sev-low {
+        color: #94a3b8;
+        background: rgba(148,163,184,0.15);
+    }
+
+    .st-p {
+        color: #10b981;
+        font-weight: bold;
+    }
+
+    .st-f {
+        color: #ef4444;
+        font-weight: bold;
+    }
+
+    .st-w {
+        color: #f59e0b;
+        font-weight: bold;
+    }
+
+    .delta-ok {
+        color: #10b981;
+        font-weight: bold;
+    }
+
+    .delta-same {
+        color: #475569;
+    }
+
+    .delta-partial {
+        color: #f59e0b;
+    }
+
+    .src-cell {
+        color: #64748b;
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+    }
 </style>
 
 <div class="glass-panel">
@@ -385,6 +712,153 @@
                         <div class="type-desc">@t.DescFa</div>
                     </div>
                 }
+            </div>
+        </div>
+
+        @* ── 1.5) Before / After Hardening Snapshots + Evidence + Compliance Mapping ── *@
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div class="section-title" style="margin-bottom:2px;">Before / After Hardening Snapshots</div>
+                    <div class="section-sub">مقایسه وضعیت سیستم قبل و بعد از هاردنینگ</div>
+                </div>
+                <button class="btn-edit" @onclick="RefreshSnapshots">Refresh Snapshots</button>
+            </div>
+
+            <div class="snapshots-row">
+                <div class="snapshot-card before">
+                    <div class="snap-dot before-dot"></div>
+                    <div class="snap-header">Before Hardening</div>
+                    <div class="snap-date">@BeforeScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    <div class="snap-score">@BeforeScan.ComplianceScore%</div>
+                    <div class="snap-grade">Grade @BeforeScan.Grade</div>
+                    <div class="snap-counts">
+                        <span class="snap-pass">@BeforeScan.PassCount Pass</span>
+                        <span class="snap-fail">@BeforeScan.FailCount Fail</span>
+                        <span class="snap-warn">@BeforeScan.WarningCount Warn</span>
+                    </div>
+                    <div class="snap-meta">
+                        <div><span class="meta-label">Baseline</span> <span class="meta-value">@BeforeBaselineName</span></div>
+                        <div><span class="meta-label">Output File</span> <span class="meta-value">@BeforeFileName</span></div>
+                    </div>
+                </div>
+
+                <div class="snap-arrow">
+                    <div class="arrow-icon">→</div>
+                    @if (ScoreDelta != 0)
+                    {
+                        <div class="delta-pill @(ScoreDelta > 0 ? "up" : "down")">
+                            @(ScoreDelta > 0 ? "↑" : "↓") Score @Math.Abs(ScoreDelta)%
+                        </div>
+                    }
+                    @if (IssuesFixed > 0)
+                    {
+                        <div class="delta-pill up">↑ @IssuesFixed Issues Fixed</div>
+                    }
+                    @if (BeforeScan.Grade != AfterScan.Grade)
+                    {
+                        <div class="delta-pill">Grade @BeforeScan.Grade → @AfterScan.Grade</div>
+                    }
+                    @if (AfterScan.WarningCount > 0)
+                    {
+                        <div class="delta-pill warn">@AfterScan.WarningCount Warnings Remaining</div>
+                    }
+                </div>
+
+                <div class="snapshot-card after">
+                    <div class="snap-dot after-dot"></div>
+                    <div class="snap-header">After Hardening</div>
+                    <div class="snap-date">@AfterScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    <div class="snap-score">@AfterScan.ComplianceScore%</div>
+                    <div class="snap-grade">Grade @AfterScan.Grade</div>
+                    <div class="snap-counts">
+                        <span class="snap-pass">@AfterScan.PassCount Pass</span>
+                        <span class="snap-fail">@AfterScan.FailCount Fail</span>
+                        <span class="snap-warn">@AfterScan.WarningCount Warn</span>
+                    </div>
+                    <div class="snap-meta">
+                        <div><span class="meta-label">Baseline</span> <span class="meta-value">@AfterBaselineName</span></div>
+                        <div><span class="meta-label">Output File</span> <span class="meta-value">@AfterFileName</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── Output File Evidence ── *@
+        <div class="panel">
+            <div class="section-title">Output File Evidence</div>
+            <div class="section-sub">محتوای فایل‌های خروجی قبل و بعد — شواهد جمع‌آوری شده</div>
+
+            <div class="evidence-chips">
+                @foreach (var ev in EvidenceCounts)
+                {
+                    <div class="ev-chip">
+                        <span class="ev-name">@ev.Name</span>
+                        <span class="ev-count">@ev.Count</span>
+                    </div>
+                }
+            </div>
+
+            <div class="evidence-files">
+                <div class="ev-file">
+                    <span class="ev-file-label">Before</span>
+                    <span class="ev-file-name">@BeforeFileName</span>
+                </div>
+                <div class="ev-file">
+                    <span class="ev-file-label">After</span>
+                    <span class="ev-file-name">@AfterFileName</span>
+                </div>
+            </div>
+        </div>
+
+        @* ── Compliance Mapping (Before → After) ── *@
+        <div class="panel">
+            <div class="section-title">Compliance Mapping (Before → After)</div>
+            <div class="section-sub">انطباق کنترل‌های CIS — وضعیت قبل و بعد</div>
+
+            <div class="compliance-table-wrap">
+                <table class="compliance-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Check</th>
+                            <th>CIS Ref</th>
+                            <th>Severity</th>
+                            <th>Before</th>
+                            <th>After</th>
+                            <th>Delta</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in ComplianceRows)
+                        {
+                            <tr>
+                                <td><code>@row.Id</code></td>
+                                <td>@row.Name</td>
+                                <td><span class="cis-inline">@row.CisRef</span></td>
+                                <td><span class="sev-inline sev-@row.Severity.ToString().ToLower()">@row.Severity</span></td>
+                                <td class="st-@row.BeforeStatus.ToString().ToLower().Substring(0,1)">@row.BeforeStatus.ToString().Substring(0, 1)</td>
+                                <td class="st-@row.AfterStatus.ToString().ToLower().Substring(0,1)">@row.AfterStatus.ToString().Substring(0, 1)</td>
+                                <td>
+                                    @if (row.BeforeStatus == CheckStatus.Fail && row.AfterStatus == CheckStatus.Pass)
+                                    {
+                                        <span class="delta-ok">✓ Fixed</span>
+                                    }
+                                    else if (row.BeforeStatus == row.AfterStatus)
+                                    {
+                                        <span class="delta-same">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="delta-@(row.AfterStatus == CheckStatus.Pass ? "ok" : "partial")">@row.AfterStatus.ToString().Substring(0, 1)</span>
+                                    }
+                                </td>
+                                <td class="src-cell">@row.Source</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -537,7 +1011,6 @@
     private string? _savedFilePath;
     private string? _errorMessage;
 
-    // Export Options
     private bool OptBeforeAfter = true;
     private bool OptRawEvidence = true;
     private bool OptHashes = false;
@@ -601,7 +1074,6 @@
     private void SelectAllSections() => Sections.ForEach(s => s.Enabled = true);
     private void DeselectAllSections() => Sections.ForEach(s => s.Enabled = false);
 
-    // تاریخ شمسی با PersianCalendar
     private string PersianDate
     {
         get
@@ -613,6 +1085,105 @@
     }
 
     private int EstimatedPages => 4 + Sections.Count(s => s.Enabled) / 2;
+
+    
+    // ── Before / After Snapshots ──
+    private ScanResult BeforeScan { get; set; } = EmptyScan();
+    private ScanResult AfterScan { get; set; } = EmptyScan();
+    private string BeforeBaselineName = "win11-pro-hardening.json";
+    private string AfterBaselineName = "win11-pro-hardening.json";
+    private string BeforeFileName = "scan_before_001.json";
+    private string AfterFileName = "scan_after_002.json";
+
+    // EDIT: ScanResult سازندهٔ بدون پارامتر ندارد؛ از سازندهٔ عمومی استفاده می‌کنیم.
+    // ComplianceScore و Grade پراپرتی‌های محاسباتی read-only هستند و اینجا ست نمی‌شوند.
+    private static ScanResult EmptyScan() =>
+        new ScanResult("N/A", "N/A", "N/A", "N/A", "N/A", ScanMode.Full);
+
+    private void RefreshSnapshots()
+    {
+        var current = StateService.CurrentScanResult;
+
+        // TODO: به محض اینکه API واقعی ScanHistoryService مشخص شد،
+        //       Before = اولین اسکن تاریخچه و After = آخرین اسکن قرار می‌گیرد.
+        BeforeScan = current ?? EmptyScan();
+        AfterScan = current ?? EmptyScan();
+        BeforeFileName = "scan_before_001.json";
+        AfterFileName = "scan_after_002.json";
+    }
+
+    private int ScoreDelta => (AfterScan?.ComplianceScore ?? 0) - (BeforeScan?.ComplianceScore ?? 0);
+
+    private int IssuesFixed
+    {
+        get
+        {
+            if (BeforeScan == null || AfterScan == null) return 0;
+            return Math.Max(0, BeforeScan.FailCount - AfterScan.FailCount);
+        }
+    }
+
+    // ── Output File Evidence ──
+    private class EvidenceCount { public string Name { get; set; } = ""; public int Count { get; set; } }
+
+    private List<EvidenceCount> EvidenceCounts
+    {
+        get
+        {
+            var scan = AfterScan ?? StateService.CurrentScanResult;
+            if (scan?.Findings == null) return new List<EvidenceCount>();
+
+            var findings = scan.Findings;
+            return new List<EvidenceCount>
+            {
+                new() { Name = "Registry", Count = findings.Count(f => !string.IsNullOrEmpty(f.RegistryPath)) },
+                new() { Name = "PowerShell", Count = findings.Count(f => f.FixTools.Any(t => t.Contains("powershell", StringComparison.OrdinalIgnoreCase)) || f.CheckId.StartsWith("FW")) },
+                new() { Name = "Local Policy", Count = findings.Count(f => f.FixTools.Any(t => t.Contains("secpol", StringComparison.OrdinalIgnoreCase)) || f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) },
+                new() { Name = "Services", Count = findings.Count(f => f.CheckId.StartsWith("USB") || f.CheckId.StartsWith("WUP")) },
+                new() { Name = "Firewall", Count = findings.Count(f => f.CheckId.StartsWith("FW")) },
+                new() { Name = "Audit Policy", Count = findings.Count(f => f.CheckId.StartsWith("AUD")) }
+            };
+        }
+    }
+
+    // ── Compliance Mapping ──
+    private class ComplianceRow
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string CisRef { get; set; } = "";
+        public CheckSeverity Severity { get; set; }
+        public CheckStatus BeforeStatus { get; set; }
+        public CheckStatus AfterStatus { get; set; }
+        public string Source { get; set; } = "";
+    }
+
+    private List<ComplianceRow> ComplianceRows
+    {
+        get
+        {
+            if (AfterScan?.Findings == null) return new List<ComplianceRow>();
+            var before = BeforeScan?.Findings ?? new List<Finding>();
+
+            return AfterScan.Findings.Select(f =>
+            {
+                var bf = before.FirstOrDefault(x => x.CheckId == f.CheckId);
+                var source = !string.IsNullOrEmpty(f.SourceType) ? f.SourceType :
+                             f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD") ? "secedit" :
+                             f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM") ? "net.exe" : "RegistryReader";
+                return new ComplianceRow
+                    {
+                        Id = f.CheckId,
+                        Name = f.Name,
+                        CisRef = f.CisReference ?? "—",
+                        Severity = f.Severity,
+                        BeforeStatus = bf?.Status ?? CheckStatus.Pass,
+                        AfterStatus = f.Status,
+                        Source = source
+                    };
+            }).ToList();
+        }
+    }
 
     private async Task GenerateReportAsync()
     {
@@ -653,4 +1224,21 @@
     private void PreviewReport() => StateService.LogAction($"Report preview requested: type={SelectedReportType}");
     private void EmailReport() => StateService.LogAction("Email report: planned for a future step.");
     private void ScheduleReport() => StateService.LogAction("Schedule recurring report: planned for a future step.");
+
+    protected override void OnInitialized()
+    {
+        StateService.OnChange += HandleStateChanged;
+        RefreshSnapshots();
+    }
+
+    private void HandleStateChanged()
+    {
+        RefreshSnapshots();
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        StateService.OnChange -= HandleStateChanged;
+    }
 }
