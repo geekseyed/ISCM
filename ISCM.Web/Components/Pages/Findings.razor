@@ -677,6 +677,80 @@
         padding: 40px;
         font-size: 13px;
     }
+    /* ── EDIT (گام ۲۶-ادامه): آکاردئون زیرمجموعه‌ها ── */
+    .finding-wrap {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .sub-toggle {
+        background: rgba(6,182,212,0.1);
+        border: 1px solid rgba(6,182,212,0.4);
+        color: #06b6d4;
+        font-size: 9px;
+        font-weight: bold;
+        font-family: 'Consolas', monospace;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .sub-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin: 6px 0 10px 24px;
+    }
+
+    .sub-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 8px 10px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .sub-row:hover {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.06);
+        }
+
+    .subcheck-id {
+        color: #06b6d4;
+        font-family: 'Consolas', monospace;
+        font-size: 9px;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .subcheck-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .subcheck-title {
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .subcheck-dest {
+        color: #64748b;
+        font-size: 9px;
+        margin-top: 2px;
+    }
+
+    .subcheck-expected {
+        color: #94a3b8;
+        font-size: 9px;
+        font-family: 'Consolas', monospace;
+        flex-shrink: 0;
+    }
 </style>
 
 <div class="glass-panel">
@@ -785,49 +859,78 @@
             {
                 if (finding is null) continue;
                 var f = finding;
-                <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
-                    <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
-                         @onclick="() => ToggleSelect(f)"
-                         @onclick:stopPropagation="true"></div>
-                    <div class="finding-main">
-                        <div class="finding-title-row">
-                            <span class="finding-name">@f.Name</span>
-                            <span class="finding-id">@f.CheckId</span>
-                            @if (!string.IsNullOrEmpty(f.CisReference))
+                var hasSubs = f.SubChecks.Count > 0;
+                var isExpanded = ExpandedIds.Contains(f.CheckId);
+                <div class="finding-wrap">
+                    <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
+                        <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
+                             @onclick="() => ToggleSelect(f)"
+                             @onclick:stopPropagation="true"></div>
+                        <div class="finding-main">
+                            <div class="finding-title-row">
+                                <span class="finding-name">@f.Name</span>
+                                <span class="finding-id">@f.CheckId</span>
+                                @if (!string.IsNullOrEmpty(f.CisReference))
+                                {
+                                    <span class="cis-badge">@f.CisReference</span>
+                                }
+                                @if (f.Status == CheckStatus.FalsePositive)
+                                {
+                                    <span class="fp-tag">FP</span>
+                                }
+                                else if (f.Status == CheckStatus.Ignored)
+                                {
+                                    <span class="ignored-badge">IGNORED</span>
+                                }
+                            </div>
+                            <div class="finding-source">Source: @GetSourceType(f) · @f.Category</div>
+                        </div>
+                        <div class="finding-values">
+                            <span class="fv-label">Current</span>
+                            <span class="fv-current fv-@f.Status.ToString().ToLower()">@f.CurrentValue</span>
+                            <span class="fv-label">Expected</span>
+                            <span class="fv-expected">@f.ExpectedValue</span>
+                        </div>
+                        <div class="finding-actions">
+                            @foreach (var tool in GetTools(f))
                             {
-                                <span class="cis-badge">@f.CisReference</span>
+                                <button class="action-btn preview" disabled>🔧 @tool</button>
                             }
-                            @if (f.Status == CheckStatus.FalsePositive)
+                            <button class="action-btn preview" disabled>↶ Undo</button>
+                            <button class="action-btn preview" disabled>🔄 Rescan</button>
+                            <button class="action-btn preview" disabled>@(f.IsSuppressed ? "Unignore" : "Ignore")</button>
+                        </div>
+                        <div class="finding-badges">
+                            <span class="status-@f.Status.ToString().ToLower()">@f.Status</span>
+                            <span class="sev-badge @f.Severity.ToString().ToLower()">@f.Severity</span>
+                            <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk @f.RiskScore</span>
+                        </div>
+                        @if (hasSubs)
+                        {
+                            <button class="sub-toggle" @onclick="() => ToggleExpanded(f.CheckId)" @onclick:stopPropagation="true">
+                                @(isExpanded ? "▾" : "▸") @f.SubChecks.Count sub
+                            </button>
+                        }
+                    </div>
+
+                    @* EDIT: زیرمجموعه‌ها زیر همان کارت — گرید دوستونه *@
+                    @if (hasSubs && isExpanded)
+                    {
+                        <div class="sub-grid">
+                            @foreach (var sc in f.SubChecks)
                             {
-                                <span class="fp-tag">FP</span>
-                            }
-                            else if (f.Status == CheckStatus.Ignored)
-                            {
-                                <span class="ignored-badge">IGNORED</span>
+                                var capturedSc = sc;
+                                <div class="sub-row" @onclick="() => OpenSubDrawer(f, capturedSc)">
+                                    <div class="subcheck-id">@sc.Id</div>
+                                    <div class="subcheck-main">
+                                        <div class="subcheck-title">@sc.Title</div>
+                                        <div class="subcheck-dest">🧭 @sc.DestinationLabel</div>
+                                    </div>
+                                    <div class="subcheck-expected">Expected: @sc.Expected</div>
+                                </div>
                             }
                         </div>
-                        <div class="finding-source">Source: @GetSourceType(f) · @f.Category</div>
-                    </div>
-                    <div class="finding-values">
-                        <span class="fv-label">Current</span>
-                        <span class="fv-current fv-@f.Status.ToString().ToLower()">@f.CurrentValue</span>
-                        <span class="fv-label">Expected</span>
-                        <span class="fv-expected">@f.ExpectedValue</span>
-                    </div>
-                    <div class="finding-actions">
-                        @foreach (var tool in GetTools(f))
-                        {
-                            <button class="action-btn preview" disabled>🔧 @tool</button>
-                        }
-                        <button class="action-btn preview" disabled>↶ Undo</button>
-                        <button class="action-btn preview" disabled>🔄 Rescan</button>
-                        <button class="action-btn preview" disabled>@(f.IsSuppressed ? "Unignore" : "Ignore")</button>
-                    </div>
-                    <div class="finding-badges">
-                        <span class="status-@f.Status.ToString().ToLower()">@f.Status</span>
-                        <span class="sev-badge @f.Severity.ToString().ToLower()">@f.Severity</span>
-                        <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk @f.RiskScore</span>
-                    </div>
+                    }
                 </div>
             }
         </div>
@@ -835,7 +938,7 @@
 </div>
 
 @* EDIT: Drawer حالا یک کامپوننت مستقل است — همیشه رندر می‌شود تا استایل‌هایش فعال بمانند *@
-<FindingDrawer SelectedFinding="SelectedFinding" Close="OnDrawerClose" />
+<FindingDrawer SelectedFinding="SelectedFinding" InitialSubCheck="SelectedSub" Close="OnDrawerClose" />
 
 @code {
     private string SelectedFilter = "All";
@@ -1005,8 +1108,17 @@
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
 
-    private void OpenDrawer(Finding f) { SelectedFinding = f; }
-    private void OnDrawerClose() { SelectedFinding = null; }
+    // EDIT (گام ۲۶-ادامه): آکاردئون زیرمجموعه‌ها در لیست
+    private SubCheck? SelectedSub;
+    private HashSet<string> ExpandedIds = new();
+
+    private void OpenDrawer(Finding f) { SelectedFinding = f; SelectedSub = null; }
+    private void OpenSubDrawer(Finding f, SubCheck sc) { SelectedFinding = f; SelectedSub = sc; }
+    private void ToggleExpanded(string id)
+    {
+        if (!ExpandedIds.Add(id)) ExpandedIds.Remove(id);
+    }
+    private void OnDrawerClose() { SelectedFinding = null; SelectedSub = null; }
 
     private async Task DownloadFindingsAsCsv(List<Finding> items, string filename)
     {
