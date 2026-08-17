@@ -17,14 +17,15 @@ public class Finding : BaseEntity
     public string Recommendation { get; private set; } = string.Empty;
     public string? ErrorMessage { get; private set; }
 
-    // متادیتای غنی (گام ۲۳-د)
     public string CisReference { get; private set; } = "";
     public int RiskScore { get; private set; } = 0;
     public string SourceType { get; private set; } = "";
     public string SourceCommand { get; private set; } = "";
     public IReadOnlyList<string> FixTools { get; private set; } = new List<string>();
 
-    // وضعیت قبلی برای قابلیت Undo (مشترک بین Ignore و FP)
+    // EDIT (گام ۲۶): زیرمجموعه‌های راهنما
+    public IReadOnlyList<SubCheck> SubChecks { get; private set; } = new List<SubCheck>();
+
     private CheckStatus? _previousStatus;
 
     private Finding() { }
@@ -45,7 +46,8 @@ public class Finding : BaseEntity
         int riskScore = 0,
         string sourceType = "",
         string sourceCommand = "",
-        IReadOnlyList<string>? fixTools = null)
+        IReadOnlyList<string>? fixTools = null,
+        IReadOnlyList<SubCheck>? subChecks = null)   // EDIT (گام ۲۶)
     {
         if (string.IsNullOrWhiteSpace(checkId))
             throw new ArgumentException("CheckId cannot be empty.", nameof(checkId));
@@ -68,6 +70,7 @@ public class Finding : BaseEntity
         SourceType = sourceType;
         SourceCommand = sourceCommand;
         FixTools = fixTools ?? new List<string>();
+        SubChecks = subChecks ?? new List<SubCheck>();   // EDIT (گام ۲۶)
     }
 
     public void Ignore()
@@ -78,7 +81,6 @@ public class Finding : BaseEntity
         MarkModified();
     }
 
-    // EDIT (گام ۲۴): علامت‌گذاری به‌عنوان مثبت کاذب — مستقل از Ignore
     public void MarkFalsePositive()
     {
         if (Status == CheckStatus.FalsePositive) return;
@@ -87,7 +89,6 @@ public class Finding : BaseEntity
         MarkModified();
     }
 
-    // EDIT (گام ۲۴): Undo حالا هر دو حالت Ignored و FalsePositive را برمی‌گرداند
     public void Undo()
     {
         if (Status != CheckStatus.Ignored && Status != CheckStatus.FalsePositive) return;
@@ -96,7 +97,6 @@ public class Finding : BaseEntity
         MarkModified();
     }
 
-    // EDIT (گام ۲۴): سرکوب‌شده = Ignored یا FP — مبنای کارت KPI و فیلتر ترکیبی
     public bool IsSuppressed => Status == CheckStatus.Ignored || Status == CheckStatus.FalsePositive;
 
     public void SetError(string errorMessage)

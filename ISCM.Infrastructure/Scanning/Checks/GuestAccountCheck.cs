@@ -1,7 +1,6 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
-using System.DirectoryServices.AccountManagement;
 using System.Runtime.InteropServices;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
@@ -12,6 +11,35 @@ public class GuestAccountCheck : IHardeningCheck
     public string Name => "Guest Account";
     public CheckCategory Category => CheckCategory.Account;
     public CheckSeverity Severity => CheckSeverity.Critical;
+
+    // EDIT (گام ۲۶): دو زیرمجموعهٔ تیتر ۳ PDF — هر کدام با مسیریابی مستقیم و CLI
+    private static readonly List<SubCheck> SubChecks = new()
+    {
+        new SubCheck
+        {
+            Id = "GUEST-001.1",
+            Title = "Accounts: Guest account status",
+            Expected = "Disabled",
+            WhatItDoes = "Turns off the built-in Guest account entirely.",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            ConsoleTool = "secpol.msc",
+            DestinationLabel = "Security Options → Guest account status",
+            RegistryPath = null,
+            CliCommand = "net user Guest /active:no"
+        },
+        new SubCheck
+        {
+            Id = "GUEST-001.2",
+            Title = "Accounts: Rename guest account",
+            Expected = "Unique complex name",
+            WhatItDoes = "Renames Guest so attackers cannot target a known account name.",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            ConsoleTool = "secpol.msc",
+            DestinationLabel = "Security Options → Rename guest account",
+            RegistryPath = null,
+            CliCommand = "$g = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }; Rename-LocalUser -SID $g.SID -NewName 'Seyedi.pro'"
+        }
+    };
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct USER_INFO_1
@@ -70,11 +98,15 @@ public class GuestAccountCheck : IHardeningCheck
             currentValue = $"Exception: {ex.GetType().Name}";
         }
 
-        // EDIT (مرحله د): تغذیه متادیتای واقعی
         return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            expectedValue: "Disabled",
-            recommendation: "Disable the built-in Guest account via Local Security Policy or net command.",
+            CheckId,
+            Name,
+            Category,
+            Severity,
+            status,
+            currentValue,
+            "Disabled",
+            "Disable the built-in Guest account via Local Security Policy or net command.",
             errorMessage: errorMessage,
             description: "The built-in Guest account provides anonymous access to the system and must always be disabled to prevent unauthorized access.",
             registryPath: null,
@@ -82,7 +114,7 @@ public class GuestAccountCheck : IHardeningCheck
             riskScore: 95,
             sourceType: "NetUserGetInfo (Netapi32)",
             sourceCommand: "net user Guest",
-            fixTools: new List<string> { "net.exe", "lusrmgr.msc" }
-        ));
+            fixTools: new List<string> { "net.exe", "lusrmgr.msc" },
+            subChecks: SubChecks));   // EDIT (گام 23)
     }
 }
