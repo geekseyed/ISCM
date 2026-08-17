@@ -11,6 +11,7 @@ namespace ISCM.Web.Components;
 public partial class FindingDrawer
 {
     [Parameter] public Finding? SelectedFinding { get; set; }
+    [Parameter] public SubCheck? InitialSubCheck { get; set; }
     [Parameter] public EventCallback Close { get; set; }
 
     [Inject] private ScanStateService StateService { get; set; } = default!;
@@ -33,6 +34,7 @@ public partial class FindingDrawer
         {
             _lastFinding = SelectedFinding;
             ResetPanels();
+            SelectedSubCheck = InitialSubCheck;
         }
     }
 
