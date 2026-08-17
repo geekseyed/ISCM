@@ -15,7 +15,7 @@ public class SmbV1ProtocolCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.Network;
     public CheckSeverity Severity => CheckSeverity.High;
 
-    // EDIT (گام ۲۶): چهار زیرمجموعهٔ تیتر ۱۳ PDF
+    // EDIT (گام ۲۶): طبق PDF دو زیرمجموعه (دو جدول) — نه چهارتا
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck
@@ -24,47 +24,35 @@ public class SmbV1ProtocolCheck : IHardeningCheck
             Title = "Disable SMBv1 client/server (Windows Feature)",
             Expected = "Feature removed",
             WhatItDoes = "Removes the SMBv1 feature from the OS.",
-            ConsolePath = "Control Panel > Programs > Turn Windows features on or off",
+            Recommendation = "Remove the legacy SMBv1 feature to eliminate the WannaCry/NotPetya attack surface. A restart is required after removal.",
+            CliCommand = "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart",
+            Verification = "Run: Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol → State must be 'Disabled'. Or in OptionalFeatures.exe, 'SMB 1.0/CIFS File Sharing Support' must be unchecked. Restart afterwards.",
             ConsoleTool = "OptionalFeatures.exe",
             DestinationLabel = "Windows Features → SMB 1.0/CIFS Support",
-            RegistryPath = null,
-            CliCommand = "Disable-WindowsOptionalFeature -Online -FeatureName SMB1Protocol -NoRestart"
+            YouAreHere = "OptionalFeatures window (Turn Windows features on or off)",
+            GoTo = "SMB 1.0/CIFS File Sharing Support → uncheck → OK → Restart",
+            GraphicalSteps = "1) Scroll to 'SMB 1.0/CIFS File Sharing Support'. 2) Uncheck it. 3) Click OK. 4) Restart the PC.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\SMB1",
+            AlternativeToRegistry = "Do not edit the registry by hand. Use the PowerShell prompt above (recommended) or the Windows Features graphical path."
         },
         new SubCheck
         {
             Id = "SMB-001.2",
-            Title = "SMB1 server (registry)",
-            Expected = "0",
-            WhatItDoes = "Disables SMBv1 on the server side via registry.",
-            ConsolePath = "Registry (no GPO console)",
-            ConsoleTool = "regedit.exe",
-            DestinationLabel = "Registry → LanmanServer\\Parameters → SMB1",
-            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\SMB1",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -Name SMB1 -Value 0 -Type DWord"
-        },
-        new SubCheck
-        {
-            Id = "SMB-001.3",
-            Title = "Allow insecure guest logons",
-            Expected = "Disabled",
-            WhatItDoes = "Blocks unauthenticated guest access over SMB.",
-            ConsolePath = "Computer Configuration > Administrative Templates > Network > Lanman Workstation > Enable insecure guest logons",
+            Title = "SMB1 server, insecure guest logons & SMB signing",
+            Expected = "SMB1=0 · Guest logons=Disabled · Signing=Enabled",
+            WhatItDoes = "Disables SMBv1 server, blocks unauthenticated guest access and enforces signed SMB sessions to prevent relay attacks.",
+            Recommendation = "Apply the three network-hardening values with one PowerShell prompt instead of manual registry editing.",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -Name SMB1 -Value 0 -Type DWord; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name AllowInsecureGuestAuth -Value 0 -Type DWord; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -Name RequireSecuritySignature -Value 1 -Type DWord; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name RequireSecuritySignature -Value 1 -Type DWord",
+            Verification = "Run: Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' → SMB1=0 and RequireSecuritySignature=1; and '...\\LanmanWorkstation\\Parameters' → AllowInsecureGuestAuth=0 and RequireSecuritySignature=1.",
             ConsoleTool = "gpedit.msc",
             DestinationLabel = "Lanman Workstation → Insecure guest logons",
+            YouAreHere = "Local Group Policy Editor (root)",
+            GoTo = "Computer Configuration → Administrative Templates → Network → Lanman Workstation → Enable insecure guest logons → Disabled",
+            GraphicalSteps = "1) Expand Computer Configuration → Administrative Templates → Network → Lanman Workstation. 2) Open 'Enable insecure guest logons'. 3) Set Disabled. 4) Then set SMB signing under Security Options.",
+            HasRegistryPath = true,
             RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters\AllowInsecureGuestAuth",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name AllowInsecureGuestAuth -Value 0 -Type DWord"
-        },
-        new SubCheck
-        {
-            Id = "SMB-001.4",
-            Title = "SMB signing (client and server)",
-            Expected = "Enabled",
-            WhatItDoes = "Ensures only signed SMB sessions, preventing relay attacks.",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
-            ConsoleTool = "secpol.msc",
-            DestinationLabel = "Security Options → Digitally sign communications",
-            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\RequireSecuritySignature",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -Name RequireSecuritySignature -Value 1; Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name RequireSecuritySignature -Value 1"
+            AlternativeToRegistry = "Registry editing is not recommended. Run the PowerShell prompt above, or follow the gpedit.msc navigation guide."
         }
     };
 
@@ -121,6 +109,6 @@ public class SmbV1ProtocolCheck : IHardeningCheck
             sourceType: "RegistryReader",
             sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
             fixTools: new List<string> { "powershell.exe", "OptionalFeatures.exe" },
-            subChecks: SubChecks));   // EDIT (گام ۲۶)
+            subChecks: SubChecks));
     }
 }
