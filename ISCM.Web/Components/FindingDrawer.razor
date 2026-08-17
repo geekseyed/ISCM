@@ -15,7 +15,7 @@
             <button class="btn-close" @onclick="CloseDrawer">X</button>
         </div>
 
-        @* EDIT (بخش ۲): نوار بالا — powershell حذف شد، ⚡ اضافه شد *@
+        @* نوار بالا — powershell حذف شد، ⚡ اضافه شد *@
         <div class="drawer-actions">
             @if (!string.IsNullOrEmpty(CurrentCli))
             {
@@ -36,7 +36,7 @@
             <div class="rescan-note">@RescanMessage</div>
         }
 
-        @* EDIT (بخش ۲): پنل ⚡ — توصیه → پرامپت → بررسی *@
+        @* پنل ⚡ — توصیه → پرامپت → بررسی *@
         @if (ShowPsPanel)
         {
             <div class="tool-panel">
@@ -61,34 +61,10 @@
 
         <div class="drawer-body">
 
-            @if (f.SubChecks.Count > 0 && SelectedSubCheck == null)
+            @if (SelectedSubCheck != null)
             {
                 <div class="detail-section">
-                    <div class="detail-label">Sub-settings (@f.SubChecks.Count)</div>
-                    <div class="section-sub">برای راهنما و مسیریابی مستقیم، روی هر زیرمجموعه کلیک کنید</div>
-                    @foreach (var sc in f.SubChecks)
-                    {
-                        var capturedSc = sc;
-                        <div class="subcheck-row" @onclick="() => OpenSubCheck(capturedSc)">
-                            <div class="subcheck-id">@sc.Id</div>
-                            <div class="subcheck-main">
-                                <div class="subcheck-title">@sc.Title</div>
-                                <div class="subcheck-dest">🧭 @sc.DestinationLabel</div>
-                            </div>
-                            <div class="subcheck-expected">Expected: @sc.Expected</div>
-                        </div>
-                    }
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">Description</div>
-                    <div class="detail-value">@(string.IsNullOrEmpty(f.Description) ? "No description available." : f.Description)</div>
-                </div>
-            }
-            else if (SelectedSubCheck != null)
-            {
-                <div class="detail-section">
-                    <button class="link-btn" @onclick="BackToSubList">← Back to sub-settings</button>
+                    <button class="link-btn" @onclick="BackToSubList">← Back to finding details</button>
                 </div>
 
                 <div class="detail-section">
@@ -127,7 +103,7 @@
                     }
                 </div>
 
-                @* EDIT (بخش ۲): راهنمای نورانی You are here → Go to *@
+                @* راهنمای نورانی You are here → Go to *@
                 @if (ShowNavGuide)
                 {
                     <div class="tool-panel">
@@ -147,7 +123,7 @@
                     </div>
                 }
 
-                @* EDIT (بخش ۲): جایگزین رجیستری — بدون باز کردن regedit *@
+                @* جایگزین رجیستری — بدون باز کردن regedit *@
                 @if (ShowRegAlt)
                 {
                     <div class="tool-panel reg-alt">
@@ -388,12 +364,6 @@
         line-height: 1.5;
     }
 
-    .section-sub {
-        color: #64748b;
-        font-size: 11px;
-        margin: -4px 0 10px 0;
-    }
-
     .ignored-notice {
         display: inline-block;
         background: rgba(148,163,184,0.15);
@@ -607,55 +577,5 @@
 
     .fv-falsepositive {
         color: #a78bfa;
-    }
-
-    .subcheck-row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #334155;
-        border-radius: 8px;
-        padding: 10px 12px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        transition: 0.2s;
-    }
-
-        .subcheck-row:hover {
-            border-color: #06b6d4;
-            background: rgba(6,182,212,0.06);
-        }
-
-    .subcheck-id {
-        color: #06b6d4;
-        font-family: 'Consolas', monospace;
-        font-size: 10px;
-        font-weight: bold;
-        flex-shrink: 0;
-    }
-
-    .subcheck-main {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .subcheck-title {
-        color: #e2e8f0;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    .subcheck-dest {
-        color: #64748b;
-        font-size: 10px;
-        margin-top: 2px;
-    }
-
-    .subcheck-expected {
-        color: #94a3b8;
-        font-size: 10px;
-        font-family: 'Consolas', monospace;
-        flex-shrink: 0;
     }
 </style>
