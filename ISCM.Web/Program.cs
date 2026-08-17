@@ -26,6 +26,15 @@ builder.Services.AddTransient<IHardeningCheck, RdpNlaCheck>();
 builder.Services.AddTransient<IHardeningCheck, AdminAccountCountCheck>();
 builder.Services.AddTransient<IHardeningCheck, PasswordLengthCheck>();
 builder.Services.AddTransient<IHardeningCheck, LmCompatibilityCheck>();
+builder.Services.AddTransient<IHardeningCheck, ProcessCreationAuditingCheck>();
+builder.Services.AddTransient<IHardeningCheck, PowerShellLoggingCheck>();
+builder.Services.AddTransient<IHardeningCheck, DisableCmdCheck>();
+builder.Services.AddTransient<IHardeningCheck, AccountLockoutCheck>();
+builder.Services.AddTransient<IHardeningCheck, AdvancedAuditCheck>();
+builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
+builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
+builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
+builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
 
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
