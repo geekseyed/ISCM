@@ -850,6 +850,7 @@
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
 
+    // ── فیلتر پایه: دسته‌بندی + جستجو ──
     private IEnumerable<Finding> BaseFilteredFindings
     {
         get
@@ -865,6 +866,7 @@
         }
     }
 
+    // ── KPI ──
     private int KpiTotal => BaseFilteredFindings.Count();
     private int KpiOpenRisk => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
     private int KpiCritical => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
@@ -877,6 +879,7 @@
     private int SevMediumCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Medium);
     private int SevLowCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Low);
 
+    // ── لایه Preset ──
     private IEnumerable<Finding> PreStatusFindings
     {
         get
@@ -892,6 +895,7 @@
     private int CountWarn => PreStatusFindings.Count(f => f.Status == CheckStatus.Warning);
     private int CountPass => PreStatusFindings.Count(f => f.Status == CheckStatus.Pass);
 
+    // ── لیست نهایی + ترتیب پایدار (گام ۲۶) ──
     private IEnumerable<Finding> FinalFindings
     {
         get
@@ -899,7 +903,7 @@
             var findings = PreStatusFindings;
             if (SelectedFilter != "All")
                 findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
-            return findings;
+            return findings.OrderBy(f => f.CheckId).ToList();
         }
     }
 
@@ -1001,10 +1005,7 @@
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
 
-    // کلیک روی کارت → باز شدن Drawer (کامپوننت مستقل)
     private void OpenDrawer(Finding f) { SelectedFinding = f; }
-
-    // بستن Drawer از داخل کامپوننت FindingDrawer
     private void OnDrawerClose() { SelectedFinding = null; }
 
     private async Task DownloadFindingsAsCsv(List<Finding> items, string filename)
