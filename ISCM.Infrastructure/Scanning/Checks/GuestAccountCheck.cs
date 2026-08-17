@@ -12,7 +12,7 @@ public class GuestAccountCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.Account;
     public CheckSeverity Severity => CheckSeverity.Critical;
 
-    // EDIT (گام ۲۶): دو زیرمجموعهٔ تیتر ۳ PDF — هر کدام با مسیریابی مستقیم و CLI
+    // EDIT (گام ۲۶): دو زیرمجموعه با راهنمای کامل (توصیه → پرامپت → verifikasi → ناوبری)
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck
@@ -21,11 +21,17 @@ public class GuestAccountCheck : IHardeningCheck
             Title = "Accounts: Guest account status",
             Expected = "Disabled",
             WhatItDoes = "Turns off the built-in Guest account entirely.",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            Recommendation = "Disable the built-in Guest account to remove the anonymous-access attack vector.",
+            CliCommand = "net user Guest /active:no",
+            Verification = "Run: net user Guest → 'Account active' must show 'No'. Or in secpol.msc → Security Options → 'Accounts: Guest account status' = Disabled.",
             ConsoleTool = "secpol.msc",
             DestinationLabel = "Security Options → Guest account status",
-            RegistryPath = null,
-            CliCommand = "net user Guest /active:no"
+            YouAreHere = "Local Security Policy (root) → Local Policies",
+            GoTo = "Security Settings → Local Policies → Security Options → Accounts: Guest account status → Disabled",
+            GraphicalSteps = "1) Expand Local Policies. 2) Click Security Options. 3) Double-click 'Accounts: Guest account status'. 4) Set Disabled.",
+            HasRegistryPath = false,
+            RegistryPath = "",
+            AlternativeToRegistry = ""
         },
         new SubCheck
         {
@@ -33,11 +39,17 @@ public class GuestAccountCheck : IHardeningCheck
             Title = "Accounts: Rename guest account",
             Expected = "Unique complex name",
             WhatItDoes = "Renames Guest so attackers cannot target a known account name.",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            Recommendation = "Rename Guest to a unique complex name so attackers cannot target a known account.",
+            CliCommand = "$g = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }; Rename-LocalUser -SID $g.SID -NewName 'Seyedi.pro'",
+            Verification = "Run: Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } → Name must NOT be 'Guest'.",
             ConsoleTool = "secpol.msc",
             DestinationLabel = "Security Options → Rename guest account",
-            RegistryPath = null,
-            CliCommand = "$g = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }; Rename-LocalUser -SID $g.SID -NewName 'Seyedi.pro'"
+            YouAreHere = "Local Security Policy (root) → Local Policies",
+            GoTo = "Security Settings → Local Policies → Security Options → Accounts: Rename guest account → set unique name",
+            GraphicalSteps = "1) In Security Options, double-click 'Accounts: Rename guest account'. 2) Enter a unique complex name.",
+            HasRegistryPath = false,
+            RegistryPath = "",
+            AlternativeToRegistry = ""
         }
     };
 
@@ -115,6 +127,6 @@ public class GuestAccountCheck : IHardeningCheck
             sourceType: "NetUserGetInfo (Netapi32)",
             sourceCommand: "net user Guest",
             fixTools: new List<string> { "net.exe", "lusrmgr.msc" },
-            subChecks: SubChecks));   // EDIT (گام 23)
+            subChecks: SubChecks));
     }
 }
