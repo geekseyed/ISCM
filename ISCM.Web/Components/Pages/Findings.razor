@@ -859,7 +859,8 @@
             {
                 if (finding is null) continue;
                 var f = finding;
-                var hasSubs = f.SubChecks.Count > 0;
+                var subs = f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
+                var hasSubs = subs.Count > 0;
                 var isExpanded = ExpandedIds.Contains(f.CheckId);
                 <div class="finding-wrap">
                     <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
@@ -908,7 +909,7 @@
                         @if (hasSubs)
                         {
                             <button class="sub-toggle" @onclick="() => ToggleExpanded(f.CheckId)" @onclick:stopPropagation="true">
-                                @(isExpanded ? "▾" : "▸") @f.SubChecks.Count sub
+                                @(isExpanded ? "▾" : "▸") @subs.Count sub
                             </button>
                         }
                     </div>
@@ -917,7 +918,7 @@
                     @if (hasSubs && isExpanded)
                     {
                         <div class="sub-grid">
-                            @foreach (var sc in f.SubChecks)
+                            @foreach (var sc in subs)
                             {
                                 var capturedSc = sc;
                                 <div class="sub-row" @onclick="() => OpenSubDrawer(f, capturedSc)">
