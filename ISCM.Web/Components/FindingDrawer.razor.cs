@@ -4,11 +4,10 @@ using ISCM.Domain.Enums;
 using ISCM.Web.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Microsoft.Win32;
 
 namespace ISCM.Web.Components;
 
-// EDIT (گام ۲۶): بخش کدِ کامپوننت FindingDrawer — جدا از مارک‌آپ برای جلوگیری از خرابی Paste
+// EDIT (گام ۲۶-بخش ۲): بخش کد Drawer — پنل‌های جدید ⚡ / 🧭 /  + پیام Rescan
 public partial class FindingDrawer
 {
     [Parameter] public Finding? SelectedFinding { get; set; }
@@ -22,15 +21,30 @@ public partial class FindingDrawer
     private SubCheck? SelectedSubCheck;
     private Finding? _lastFinding;
 
+    // پنل‌های جدید بخش ۲
+    private bool ShowPsPanel;
+    private bool ShowNavGuide;
+    private bool ShowRegAlt;
+    private string? RescanMessage;
+
     protected override void OnParametersSet()
     {
         if (!ReferenceEquals(_lastFinding, SelectedFinding))
         {
             _lastFinding = SelectedFinding;
-            SelectedSubCheck = null;
-            ActiveToolPanel = null;
-            ShowUndoPanel = false;
+            ResetPanels();
         }
+    }
+
+    private void ResetPanels()
+    {
+        SelectedSubCheck = null;
+        ActiveToolPanel = null;
+        ShowUndoPanel = false;
+        ShowPsPanel = false;
+        ShowNavGuide = false;
+        ShowRegAlt = false;
+        RescanMessage = null;
     }
 
     private sealed class ToolPathInfo
@@ -41,75 +55,86 @@ public partial class FindingDrawer
 
     private async Task CloseDrawer()
     {
-        ActiveToolPanel = null;
-        ShowUndoPanel = false;
-        SelectedSubCheck = null;
+        ResetPanels();
         await Close.InvokeAsync();
     }
 
     // ── ناوبری زیرمجموعه‌ها ──
-    private void OpenSubCheck(SubCheck sc) => SelectedSubCheck = sc;
+    private void OpenSubCheck(SubCheck sc)
+    {
+        SelectedSubCheck = sc;
+        ShowNavGuide = false;
+        ShowRegAlt = false;
+    }
+
     private void BackToSubList() => SelectedSubCheck = null;
 
-    private void OpenSubConsole()
+    // ──  PowerShell Prompt & Guide (نوار بالا) ──
+    private string CurrentCli =>
+        SelectedSubCheck != null ? SelectedSubCheck.CliCommand
+        : SelectedFinding != null ? GetUndoCliCommand(SelectedFinding) : "";
+
+    private string CurrentRecommendation =>
+        SelectedSubCheck?.Recommendation ?? "Run the prompt below in an elevated PowerShell, then verify the result.";
+
+    private string CurrentVerification =>
+        SelectedSubCheck?.Verification ?? "After running, click Rescan and confirm the status flips to Pass.";
+
+    private void TogglePsPanel() => ShowPsPanel = !ShowPsPanel;
+
+    private async Task CopyCurrentCli() => await CopyToClipboard(CurrentCli);
+
+    // ── 🧭 دکمهٔ مقصد: باز کردن کنسول + راهنمای نورانی ──
+    private void OpenConsoleWithGuide()
     {
         if (SelectedSubCheck == null) return;
         try
         {
-            Process.Start(new ProcessStartInfo(SelectedSubCheck.ConsoleTool) { UseShellExecute = true });
-            StateService.LogAction($"Console opened: {SelectedSubCheck.ConsoleTool} for {SelectedSubCheck.Id}");
-        }
-        catch (Exception ex)
-        {
-            StateService.LogAction($"Failed to open console {SelectedSubCheck.ConsoleTool}: {ex.Message}");
-        }
-    }
-
-    private void JumpSubRegistry()
-    {
-        if (SelectedSubCheck == null || string.IsNullOrEmpty(SelectedSubCheck.RegistryPath)) return;
-        try
-        {
-            var hive = SelectedSubCheck.RegistryPath
-                .Replace("HKLM\\", "HKEY_LOCAL_MACHINE\\")
-                .Replace("HKCU\\", "HKEY_CURRENT_USER\\");
-
-            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Applets\Regedit");
-            key.SetValue("LastKey", hive);
-            Process.Start(new ProcessStartInfo("regedit.exe") { UseShellExecute = true });
-            StateService.LogAction($"Registry jump: {hive}");
-        }
-        catch (Exception ex)
-        {
-            StateService.LogAction($"Registry jump failed: {ex.Message}");
-        }
-    }
-
-    private void RunSubAutoFix()
-    {
-        if (SelectedSubCheck == null) return;
-        try
-        {
-            var psi = new ProcessStartInfo
+            if (!string.IsNullOrEmpty(SelectedSubCheck.ConsoleTool))
             {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -Command \"{SelectedSubCheck.CliCommand.Replace("\"", "\\\"")}\"",
-                UseShellExecute = true,
-                Verb = "runas"
-            };
-            Process.Start(psi);
-            StateService.LogAction($"Auto-fix executed: {SelectedSubCheck.Id}");
+                Process.Start(new ProcessStartInfo(SelectedSubCheck.ConsoleTool) { UseShellExecute = true });
+                StateService.LogAction($"Console opened: {SelectedSubCheck.ConsoleTool} for {SelectedSubCheck.Id}");
+            }
         }
         catch (Exception ex)
         {
-            StateService.LogAction($"Auto-fix failed: {ex.Message}");
+            StateService.LogAction($"Failed to open console: {ex.Message}");
         }
+        ShowNavGuide = true;
+        ShowRegAlt = false;
     }
 
-    private async Task CopySubCli()
+    // ── 🎯 جایگزین رجیستری (بدون باز کردن regedit) ──
+    private void ShowRegistryAlternative()
     {
-        if (SelectedSubCheck != null)
-            await CopyToClipboard(SelectedSubCheck.CliCommand);
+        ShowRegAlt = true;
+        ShowNavGuide = false;
+    }
+
+    // ── 🔄 Rescan با پیام درون‌خطی ──
+    private async Task RescanFinding()
+    {
+        if (SelectedFinding == null) return;
+        var scan = StateService.CurrentScanResult;
+        var old = scan?.Findings.FirstOrDefault(x => x.CheckId == SelectedFinding.CheckId);
+        var oldStatus = old?.Status;
+        var oldValue = old?.CurrentValue;
+
+        await StateService.RescanSingleCheckAsync(SelectedFinding.CheckId);
+
+        var neu = StateService.CurrentScanResult?.Findings.FirstOrDefault(x => x.CheckId == SelectedFinding.CheckId);
+        if (neu == null)
+        {
+            RescanMessage = "⚠️ Finding not found after rescan.";
+        }
+        else if (neu.Status == oldStatus && neu.CurrentValue == oldValue)
+        {
+            RescanMessage = $"ℹ️ No change detected — still {neu.CurrentValue} ({neu.Status}). Apply the fix via the ⚡ prompt, then rescan.";
+        }
+        else
+        {
+            RescanMessage = $"✅ Change detected: {oldValue} ({oldStatus}) → {neu.CurrentValue} ({neu.Status}).";
+        }
     }
 
     // ── اکشن‌های سطح پدر ──
@@ -140,12 +165,6 @@ public partial class FindingDrawer
         }
     }
 
-    private async Task RescanFinding()
-    {
-        if (SelectedFinding != null)
-            await StateService.RescanSingleCheckAsync(SelectedFinding.CheckId);
-    }
-
     private async Task CopySourceCommand()
     {
         if (SelectedFinding != null)
@@ -154,15 +173,23 @@ public partial class FindingDrawer
 
     private async Task CopyUndoCommand(Finding f) => await CopyToClipboard(GetUndoCliCommand(f));
 
+    private async Task CopySubCli()
+    {
+        if (SelectedSubCheck != null)
+            await CopyToClipboard(SelectedSubCheck.CliCommand);
+    }
+
     private async Task CopyToClipboard(string text)
     {
         try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); } catch { }
     }
 
+    // EDIT (بخش ۲): powershell از نوار بالا حذف شد؛ دکمهٔ ⚡ جای آن را گرفت
     private IEnumerable<string> GetTools(Finding? finding)
     {
         if (finding is null) return Array.Empty<string>();
-        return finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
+        var tools = finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
+        return tools.Where(t => !t.Contains("powershell", StringComparison.OrdinalIgnoreCase));
     }
 
     private string GetFixMethod(string checkId)
@@ -197,7 +224,6 @@ public partial class FindingDrawer
         if (tool == "secpol.msc") return "Open secpol.msc → Account Policies / Local Policies → Security Options → Locate setting";
         if (tool == "gpedit.msc") return "Open gpedit.msc → Computer Configuration → Administrative Templates → Locate policy";
         if (tool == "wf.msc") return "Open wf.msc → Inbound Rules / Outbound Rules → Configure";
-        if (tool == "powershell.exe") return "Open PowerShell as Administrator → Execute CLI command";
         if (tool == "regedit.exe") return "Open regedit.exe → Navigate to: " + (finding.RegistryPath ?? "HKLM");
         if (tool == "net.exe") return "Open CMD/PowerShell as Administrator → Run net user / net localgroup commands";
         if (tool == "lusrmgr.msc") return "Open lusrmgr.msc → Users → Double-click user → Modify settings";
