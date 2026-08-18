@@ -2,311 +2,349 @@
 @using ISCM.Domain.Enums
 @using ISCM.Web.Services
 @using Microsoft.JSInterop
-@using System.Diagnostics
-@using Microsoft.Win32
+
+@* ════════════════════════════════════════════════════════════════
+   FindingDrawer — centered glass modal with blurred backdrop.
+   Layout: fixed header / tab bar / scrollable body / sticky footer.
+   ════════════════════════════════════════════════════════════════ *@
 
 @if (SelectedFinding != null)
 {
     var f = SelectedFinding;
-    <div class="drawer-overlay active" @onclick="CloseDrawer"></div>
-    <div class="drawer open">
-        <div class="drawer-header">
-            <div class="drawer-title">@f.Name (@f.CheckId)</div>
-            <button class="btn-close" @onclick="CloseDrawer">X</button>
-        </div>
 
-        @* نوار بالا — powershell حذف شد، ⚡ اضافه شد *@
-        <div class="drawer-actions">
-            @if (!string.IsNullOrEmpty(CurrentCli))
-            {
-                <button class="action-btn" @onclick="TogglePsPanel">⚡ PowerShell Prompt & Guide</button>
-            }
-            @foreach (var tool in GetTools(f))
-            {
-                var capturedTool = tool;
-                <button class="action-btn" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
-            }
-            <button class="action-btn" @onclick="ToggleUndoPanel">↶ Undo</button>
-            <button class="action-btn" @onclick="RescanFinding">🔄 Rescan</button>
-            <button class="action-btn" @onclick="ToggleIgnore">@(f.IsSuppressed ? "🚫 Unignore" : "🚫 Ignore")</button>
-        </div>
+    @* Blurred backdrop — click to close *@
+    <div class="fd-overlay" @onclick="CloseDrawer"></div>
 
-        @if (!string.IsNullOrEmpty(RescanMessage))
-        {
-            <div class="rescan-note">@RescanMessage</div>
-        }
+    @* Centered glass modal *@
+    <div class="fd-modal" tabindex="-1" @onkeydown="OnModalKeyDown">
 
-        @* پنل ⚡ — توصیه → پرامپت → بررسی *@
-        @if (ShowPsPanel)
-        {
-            <div class="tool-panel">
-                <div class="tool-panel-header">⚡ PowerShell Prompt & Guide</div>
-                <div class="tool-row">
-                    <div class="tool-row-label">1) Recommended</div>
-                    <div class="tool-row-value" style="line-height:1.6;">@CurrentRecommendation</div>
-                </div>
-                <div class="tool-row">
-                    <div class="tool-row-label">2) Executable Prompt</div>
-                    <div class="code-block" style="margin:0;">
-                        <span>@CurrentCli</span>
-                        <button class="code-copy-btn" @onclick="CopyCurrentCli">Copy</button>
-                    </div>
-                </div>
-                <div class="tool-row">
-                    <div class="tool-row-label">3) Verify success</div>
-                    <div class="tool-row-value" style="line-height:1.6;">@CurrentVerification</div>
-                </div>
+        @* ── Header: title + badges + close ── *@
+        <div class="fd-header">
+            <div class="fd-title-row">
+                <div class="fd-title">@f.Name <span class="fd-id">(@f.CheckId)</span></div>
+                <button class="fd-close" @onclick="CloseDrawer">X</button>
             </div>
-        }
+            <div class="fd-badges">
+                <span class="fd-badge st-@f.Status.ToString().ToLower()">@f.Status</span>
+                <span class="fd-badge sev-@f.Severity.ToString().ToLower()">@f.Severity</span>
+                <span class="fd-badge risk @GetRiskClass(f.RiskScore)">Risk @f.RiskScore/100</span>
+                @if (!string.IsNullOrEmpty(f.CisReference))
+                {
+                    <span class="fd-badge cis">@f.CisReference</span>
+                }
+                <span class="fd-badge cat">@f.Category</span>
+            </div>
+        </div>
 
-        <div class="drawer-body">
+        @* ── Tab bar ── *@
+        <div class="fd-tabs">
+            <button class="fd-tab @(ActiveTab == TabOverview ? "active" : "")" @onclick="() => SetTab(TabOverview)">Overview</button>
+            <button class="fd-tab @(ActiveTab == TabGuidance ? "active" : "")" @onclick="() => SetTab(TabGuidance)">Guidance</button>
+            <button class="fd-tab @(ActiveTab == TabSubs ? "active" : "")" @onclick="() => SetTab(TabSubs)">Sub-settings (@SubsFor(f).Count)</button>
+            <button class="fd-tab @(ActiveTab == TabSource ? "active" : "")" @onclick="() => SetTab(TabSource)">Source</button>
+        </div>
 
-            @if (SelectedSubCheck != null)
+        @* ── Scrollable body (only this pane scrolls) ── *@
+        <div class="fd-body">
+
+            @* ═══ TAB: Overview ═══ *@
+            @if (ActiveTab == TabOverview)
             {
-                <div class="detail-section">
-                    <button class="link-btn" @onclick="BackToSubList">← Back to finding details</button>
+                <div class="fd-section">
+                    <div class="fd-label">Description</div>
+                    <div class="fd-value">@(string.IsNullOrEmpty(f.Description) ? "No description available." : f.Description)</div>
                 </div>
 
-                <div class="detail-section">
-                    <div class="drawer-title-sub">@SelectedSubCheck.Id — @SelectedSubCheck.Title</div>
-                    <div class="detail-value">@SelectedSubCheck.WhatItDoes</div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">1) Recommended</div>
-                    <div class="detail-value">@SelectedSubCheck.Recommendation</div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">2) Executable Prompt (PowerShell)</div>
-                    <div class="code-block">
-                        <span>@SelectedSubCheck.CliCommand</span>
-                        <button class="code-copy-btn" @onclick="CopySubCli">Copy</button>
+                <div class="fd-cols">
+                    <div class="fd-col">
+                        <div class="fd-label">Current</div>
+                        <div class="fd-big fv-@f.Status.ToString().ToLower()">@f.CurrentValue</div>
+                    </div>
+                    <div class="fd-col">
+                        <div class="fd-label">Expected</div>
+                        <div class="fd-big">@f.ExpectedValue</div>
                     </div>
                 </div>
 
-                <div class="detail-section">
-                    <div class="detail-label">3) Verify success</div>
-                    <div class="detail-value">@SelectedSubCheck.Verification</div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">GPO / Console Path</div>
-                    <div class="tool-row-value" style="line-height:1.6;">@SelectedSubCheck.ConsolePath</div>
-                </div>
-
-                <div class="drawer-actions-sub">
-                    <button class="action-btn" @onclick="OpenConsoleWithGuide">🧭 @SelectedSubCheck.DestinationLabel</button>
-                    @if (SelectedSubCheck.HasRegistryPath)
-                    {
-                        <button class="action-btn" @onclick="ShowRegistryAlternative">🎯 Jump to Registry</button>
-                    }
-                </div>
-
-                @* راهنمای نورانی You are here → Go to *@
-                @if (ShowNavGuide)
+                @if (f.Status == CheckStatus.Ignored)
                 {
-                    <div class="tool-panel">
-                        <div class="tool-panel-header">🧭 Navigation Guide</div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">You are here</div>
-                            <div class="tool-row-value">@SelectedSubCheck.YouAreHere</div>
-                        </div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">Go to</div>
-                            <div class="glow-target">@SelectedSubCheck.GoTo</div>
-                        </div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">Steps</div>
-                            <div class="tool-row-value" style="line-height:1.7;">@SelectedSubCheck.GraphicalSteps</div>
-                        </div>
+                    <div class="fd-notice">This finding has been ignored</div>
+                }
+                else if (f.Status == CheckStatus.FalsePositive)
+                {
+                    <div class="fd-notice">This finding has been marked as false positive</div>
+                }
+
+                <div class="fd-section">
+                    <div class="fd-label">Recommendation</div>
+                    <div class="fd-value">@f.Recommendation</div>
+                </div>
+            }
+
+            @* ═══ TAB: Guidance ═══ *@
+            else if (ActiveTab == TabGuidance)
+            {
+                @if (SelectedSubCheck != null)
+                {
+                    <div class="fd-section">
+                        <button class="fd-link" @onclick="BackToSubList">← Back to sub-settings</button>
+                    </div>
+                    <div class="fd-section">
+                        <div class="fd-subtitle">@SelectedSubCheck.Id — @SelectedSubCheck.Title</div>
+                        <div class="fd-value">@SelectedSubCheck.WhatItDoes</div>
                     </div>
                 }
 
-                @* جایگزین رجیستری — بدون باز کردن regedit *@
-                @if (ShowRegAlt)
-                {
-                    <div class="tool-panel reg-alt">
-                        <div class="tool-panel-header" style="color:#ef4444;">🎯 Registry is not recommended</div>
-                        <div class="tool-row-value" style="line-height:1.6;">@SelectedSubCheck.AlternativeToRegistry</div>
+                @* PowerShell Prompt & Guide (Recommended → Prompt → Verify) *@
+                <div class="fd-panel">
+                    <div class="fd-panel-header">⚡ PowerShell Prompt & Guide</div>
+                    <div class="fd-row">
+                        <div class="fd-row-label">1) Recommended</div>
+                        <div class="fd-row-value">@CurrentRecommendation</div>
                     </div>
+                    <div class="fd-row">
+                        <div class="fd-row-label">2) Executable Prompt</div>
+                        <div class="fd-code">
+                            <span>@CurrentCli</span>
+                            <button class="fd-copy" @onclick="CopyCurrentCli">Copy</button>
+                        </div>
+                    </div>
+                    <div class="fd-row">
+                        <div class="fd-row-label">3) Verify success</div>
+                        <div class="fd-row-value">@CurrentVerification</div>
+                    </div>
+                </div>
+
+                @* Destination-aware actions for the selected sub-check *@
+                @if (SelectedSubCheck != null)
+                {
+                    <div class="fd-actions">
+                        <button class="fd-action" @onclick="OpenConsoleWithGuide">🧭 @SelectedSubCheck.DestinationLabel</button>
+                        @if (SelectedSubCheck.HasRegistryPath)
+                        {
+                            <button class="fd-action" @onclick="ShowRegistryAlternative">🎯 Jump to Registry</button>
+                        }
+                    </div>
+
+                    @* Glowing navigation guide (You are here → Go to) *@
+                    @if (ShowNavGuide)
+                    {
+                        <div class="fd-panel">
+                            <div class="fd-panel-header">🧭 Navigation Guide</div>
+                            <div class="fd-row">
+                                <div class="fd-row-label">You are here</div>
+                                <div class="fd-row-value">@SelectedSubCheck.YouAreHere</div>
+                            </div>
+                            <div class="fd-row">
+                                <div class="fd-row-label">Go to</div>
+                                <div class="glow-target">@SelectedSubCheck.GoTo</div>
+                            </div>
+                            <div class="fd-row">
+                                <div class="fd-row-label">Steps</div>
+                                <div class="fd-row-value" style="line-height:1.7;">@SelectedSubCheck.GraphicalSteps</div>
+                            </div>
+                        </div>
+                    }
+
+                    @* Registry alternative (instead of opening regedit) *@
+                    @if (ShowRegAlt)
+                    {
+                        <div class="fd-panel reg-alt">
+                            <div class="fd-panel-header" style="color:#ef4444;">🎯 Registry is not recommended</div>
+                            <div class="fd-row-value" style="line-height:1.6;">@SelectedSubCheck.AlternativeToRegistry</div>
+                        </div>
+                    }
                 }
             }
-            else
+
+            @* ═══ TAB: Sub-settings (two-column grid) ═══ *@
+            else if (ActiveTab == TabSubs)
             {
-                <div class="detail-section">
-                    <div class="detail-label">Description</div>
-                    <div class="detail-value">@(string.IsNullOrEmpty(f.Description) ? "No description available." : f.Description)</div>
-                </div>
-                <div class="detail-section">
-                    <div class="drawer-values">
-                        <div>
-                            <div class="dv-label">Current</div>
-                            <div class="dv-value fv-@f.Status.ToString().ToLower()">@f.CurrentValue</div>
-                        </div>
-                        <div>
-                            <div class="dv-label">Expected</div>
-                            <div class="dv-value">@f.ExpectedValue</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="detail-section">
-                    <div class="drawer-badges-row">
-                        @if (!string.IsNullOrEmpty(f.CisReference))
+                @if (SubsFor(f).Count == 0)
+                {
+                    <div class="fd-empty">No sub-settings defined for this finding.</div>
+                }
+                else
+                {
+                    <div class="fd-subgrid">
+                        @foreach (var sc in SubsFor(f))
                         {
-                            <div>
-                                <div class="detail-label">CIS Reference</div>
-                                <span class="cis-badge">@f.CisReference</span>
+                            var captured = sc;
+                            <div class="fd-subrow" @onclick="() => OpenSubFromModal(captured)">
+                                <div class="fd-subid">@sc.Id</div>
+                                <div class="fd-submain">
+                                    <div class="fd-subtitle2">@sc.Title</div>
+                                    <div class="fd-subdest">🧭 @sc.DestinationLabel</div>
+                                </div>
+                                <div class="fd-subexp">Expected: @sc.Expected</div>
                             </div>
                         }
-                        <div>
-                            <div class="detail-label">Risk Score</div>
-                            <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk: @f.RiskScore/100</span>
-                        </div>
+                    </div>
+                }
+            }
+
+            @* ═══ TAB: Source ═══ *@
+            else if (ActiveTab == TabSource)
+            {
+                <div class="fd-section">
+                    <div class="fd-label">Source Type</div>
+                    <div class="fd-value">@GetSourceType(f) · Category @f.Category</div>
+                </div>
+
+                <div class="fd-section">
+                    <div class="fd-label">Source Command</div>
+                    <div class="fd-code">
+                        <span>@GetSourceCommand(f)</span>
+                        <button class="fd-copy" @onclick="CopySourceCommand">Copy</button>
                     </div>
                 </div>
+
                 @if (!string.IsNullOrEmpty(f.RegistryPath))
                 {
-                    <div class="detail-section">
-                        <div class="detail-label">Registry Path</div>
-                        <div class="code-block">
+                    <div class="fd-section">
+                        <div class="fd-label">Registry Path</div>
+                        <div class="fd-code">
                             <span>@f.RegistryPath</span>
-                            <button class="code-copy-btn" @onclick="() => CopyToClipboard(f.RegistryPath!)">Copy</button>
+                            <button class="fd-copy" @onclick="() => CopyToClipboard(f.RegistryPath!)">Copy</button>
                         </div>
                     </div>
                 }
-                <div class="detail-section">
-                    <div class="detail-label">Source Type</div>
-                    <div class="detail-value">@GetSourceType(f) · Category @f.Category</div>
-                </div>
-                <div class="detail-section">
-                    <div class="detail-label">Source Command</div>
-                    <div class="code-block">
-                        <span>@GetSourceCommand(f)</span>
-                        <button class="code-copy-btn" @onclick="CopySourceCommand">Copy</button>
+
+                <div class="fd-section">
+                    <div class="fd-label">Fix Tools</div>
+                    <div class="fd-actions">
+                        @foreach (var tool in GetTools(f))
+                        {
+                            var capturedTool = tool;
+                            <button class="fd-action" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
+                        }
                     </div>
                 </div>
-                <div class="detail-section">
-                    <div class="detail-label">Recommendation</div>
-                    <div class="detail-value">@f.Recommendation</div>
-                    @if (f.Status == CheckStatus.Ignored)
-                    {
-                        <div class="ignored-notice">This finding has been ignored</div>
-                    }
-                    else if (f.Status == CheckStatus.FalsePositive)
-                    {
-                        <div class="ignored-notice">This finding has been marked as false positive</div>
-                    }
-                </div>
 
+                @* Undo guidance panel *@
                 @if (ShowUndoPanel)
                 {
-                    <div class="tool-panel">
-                        <div class="tool-panel-header">↶ Undo Guidance</div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">CLI Command (PowerShell)</div>
-                            <div class="code-block" style="margin: 0;">
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">↶ Undo Guidance</div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">CLI Command (PowerShell)</div>
+                            <div class="fd-code" style="margin:0;">
                                 <span>@GetUndoCliCommand(f)</span>
-                                <button class="code-copy-btn" @onclick="() => CopyUndoCommand(f)">Copy</button>
+                                <button class="fd-copy" @onclick="() => CopyUndoCommand(f)">Copy</button>
                             </div>
                         </div>
-                        <div class="tool-row" style="margin-top: 10px;">
-                            <div class="tool-row-label">Graphical Path</div>
-                            <div class="tool-row-value" style="line-height: 1.6;">@GetGraphicalPath(f)</div>
+                        <div class="fd-row" style="margin-top:10px;">
+                            <div class="fd-row-label">Graphical Path</div>
+                            <div class="fd-row-value" style="line-height:1.6;">@GetGraphicalPath(f)</div>
                         </div>
                     </div>
                 }
                 else if (ActiveToolPanel != null)
                 {
-                    <div class="tool-panel">
-                        <div class="tool-panel-header">🔧 Policy Tool Path</div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">Tool</div>
-                            <div class="tool-row-value">@ActiveToolPanel.Tool</div>
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">🔧 Policy Tool Path</div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">Tool</div>
+                            <div class="fd-row-value">@ActiveToolPanel.Tool</div>
                         </div>
-                        <div class="tool-row">
-                            <div class="tool-row-label">Navigation Path</div>
-                            <div class="tool-row-value" style="line-height: 1.6;">@ActiveToolPanel.NavigationPath</div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">Navigation Path</div>
+                            <div class="fd-row-value" style="line-height:1.6;">@ActiveToolPanel.NavigationPath</div>
                         </div>
                     </div>
                 }
             }
         </div>
+
+        @* ── Sticky footer: actions always visible ── *@
+        <div class="fd-footer">
+            @if (!string.IsNullOrEmpty(RescanMessage))
+            {
+                <div class="fd-rescan-note">@RescanMessage</div>
+            }
+            <div class="fd-footer-actions">
+                <button class="fd-action" @onclick="ToggleUndoPanel">↶ Undo</button>
+                <button class="fd-action" @onclick="RescanFinding">🔄 Rescan</button>
+                <button class="fd-action" @onclick="ToggleIgnore">@(f.IsSuppressed ? "🚫 Unignore" : "🚫 Ignore")</button>
+            </div>
+        </div>
     </div>
 }
 
 <style>
-    .drawer-overlay {
+    /* ── Backdrop: dim + blur the page behind the modal ── */
+    .fd-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
+        inset: 0;
+        background: rgba(2,6,23,0.55);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         z-index: 1000;
-        display: none;
     }
 
-        .drawer-overlay.active {
-            display: block;
-        }
-
-    .drawer {
+    /* ── Centered glass modal ── */
+    .fd-modal {
         position: fixed;
-        top: 0;
-        right: 0;
-        width: 520px;
-        height: 100%;
-        background: #1e293b;
-        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%);
+        width: min(960px, 94vw);
+        height: min(760px, 90vh);
+        background: rgba(30,41,59,0.92);
+        backdrop-filter: blur(14px);
+        border: 1px solid rgba(6,182,212,0.35);
+        border-radius: 16px;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 40px rgba(6,182,212,0.12);
         z-index: 1001;
-        transform: translateX(100%);
-        transition: transform 0.3s ease-in-out;
-        padding: 30px;
-        overflow: hidden;
-        border-left: 2px solid #06b6d4;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+        outline: none;
+        animation: fdIn 0.22s ease-out;
     }
 
-        .drawer.open {
-            transform: translateX(0);
+    @@keyframes fdIn {
+        from {
+            opacity: 0;
+            transform: translate(-50%,-50%) scale(0.95);
         }
 
-    .drawer-body {
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: #164e63 #1e293b;
+        to {
+            opacity: 1;
+            transform: translate(-50%,-50%) scale(1);
+        }
     }
 
-    .drawer-header {
+    /* ── Header ─ */
+    .fd-header {
+        flex-shrink: 0;
+        padding: 18px 24px 12px;
+        border-bottom: 1px solid #334155;
+    }
+
+    .fd-title-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid #334155;
-        padding-bottom: 15px;
-        margin-bottom: 12px;
-        flex-shrink: 0;
+        gap: 12px;
     }
 
-    .drawer-title {
+    .fd-title {
         color: #06b6d4;
         font-size: 18px;
         font-weight: bold;
     }
 
-    .drawer-title-sub {
-        color: #06b6d4;
-        font-size: 15px;
-        font-weight: bold;
-        margin-bottom: 8px;
+    .fd-id {
+        color: #64748b;
+        font-size: 12px;
+        font-family: 'Consolas', monospace;
+        font-weight: normal;
     }
 
-    .btn-close {
+    .fd-close {
         background: #ef4444;
-        color: white;
+        color: #fff;
         border: none;
         width: 30px;
         height: 30px;
@@ -316,243 +354,175 @@
         flex-shrink: 0;
     }
 
-    .drawer-actions {
-        flex-shrink: 0;
+    .fd-badges {
         display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        align-items: center;
-        padding: 0 0 12px 0;
-        margin-bottom: 12px;
-        border-bottom: 1px solid #334155;
-        flex-wrap: wrap;
-    }
-
-    .drawer-actions-sub {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 10px;
-    }
-
-    .rescan-note {
-        flex-shrink: 0;
-        margin: 0 0 10px 0;
-        padding: 8px 10px;
-        border: 1px solid rgba(6,182,212,0.4);
-        background: rgba(6,182,212,0.08);
-        color: #06b6d4;
-        font-size: 11px;
-        border-radius: 6px;
-    }
-
-    .detail-section {
-        margin-bottom: 16px;
-        flex-shrink: 0;
-    }
-
-    .detail-label {
-        color: #64748b;
-        font-size: 12px;
-        text-transform: uppercase;
-        margin-bottom: 5px;
-    }
-
-    .detail-value {
-        color: #e2e8f0;
-        font-size: 14px;
-        line-height: 1.5;
-    }
-
-    .ignored-notice {
-        display: inline-block;
-        background: rgba(148,163,184,0.15);
-        border: 1px solid #475569;
-        color: #94a3b8;
-        font-size: 10px;
-        font-weight: bold;
-        letter-spacing: 1px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        margin-top: 10px;
-        text-transform: uppercase;
-    }
-
-    .drawer-values {
-        display: flex;
-        gap: 30px;
-    }
-
-    .dv-label {
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-    }
-
-    .dv-value {
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-        color: #e2e8f0;
-        font-size: 14px;
-    }
-
-    .drawer-badges-row {
-        display: flex;
-        gap: 30px;
-        flex-wrap: wrap;
-    }
-
-    .code-block {
-        background: #0a0e1a;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-        color: #7dd3fc;
-        word-break: break-all;
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        align-items: center;
-    }
-
-    .code-copy-btn {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #06b6d4;
-        font-size: 10px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        white-space: nowrap;
-    }
-
-    .tool-panel {
-        background: rgba(245,158,11,0.04);
-        border: 1px solid rgba(245,158,11,0.25);
-        border-radius: 8px;
-        padding: 14px;
-        margin-bottom: 15px;
-    }
-
-        .tool-panel.reg-alt {
-            border-color: rgba(239,68,68,0.4);
-            background: rgba(239,68,68,0.05);
-        }
-
-    .tool-panel-header {
-        color: #f59e0b;
-        font-weight: bold;
-        font-size: 13px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
         gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
     }
 
-    .tool-row {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 8px;
-    }
-
-    .tool-row-label {
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-        margin-bottom: 3px;
-    }
-
-    .tool-row-value {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-    }
-
-    .glow-target {
-        color: #06b6d4;
+    .fd-badge {
+        font-size: 9px;
         font-weight: bold;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-        padding: 6px 8px;
-        border: 1px dashed rgba(6,182,212,0.5);
-        border-radius: 6px;
-        animation: glowPulse 1.6s ease-in-out infinite;
-    }
-
-    @@keyframes glowPulse {
-        0%, 100% {
-            text-shadow: 0 0 4px rgba(6,182,212,0.4);
-            box-shadow: 0 0 4px rgba(6,182,212,0.2);
-        }
-
-        50% {
-            text-shadow: 0 0 14px rgba(6,182,212,1);
-            box-shadow: 0 0 12px rgba(6,182,212,0.5);
-        }
-    }
-
-    .action-btn {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        font-size: 10px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: 'Consolas', monospace;
-        transition: 0.2s;
-        white-space: nowrap;
-    }
-
-        .action-btn:hover {
-            border-color: #06b6d4;
-            color: #06b6d4;
-        }
-
-    .link-btn {
-        background: none;
-        border: none;
-        color: #06b6d4;
-        font-size: 11px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    .cis-badge {
-        color: #06b6d4;
-        border: 1px solid rgba(6,182,212,0.4);
-        background: rgba(6,182,212,0.08);
-        font-family: 'Consolas', monospace;
-        font-size: 10px;
-        padding: 2px 8px;
-        border-radius: 4px;
-    }
-
-    .risk-badge {
-        font-size: 10px;
         font-family: 'Consolas', monospace;
         padding: 3px 8px;
         border-radius: 4px;
         border: 1px solid;
-        white-space: nowrap;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 
-    .risk-low {
-        color: #10b981;
-        border-color: rgba(16,185,129,0.5);
+        .fd-badge.st-pass {
+            color: #10b981;
+            border-color: rgba(16,185,129,0.5);
+        }
+
+        .fd-badge.st-fail {
+            color: #ef4444;
+            border-color: rgba(239,68,68,0.5);
+        }
+
+        .fd-badge.st-warning {
+            color: #f59e0b;
+            border-color: rgba(245,158,11,0.5);
+        }
+
+        .fd-badge.st-ignored, .fd-badge.st-falsepositive {
+            color: #94a3b8;
+            border-color: #475569;
+        }
+
+        .fd-badge.sev-critical {
+            color: #ef4444;
+            border-color: rgba(239,68,68,0.5);
+            background: rgba(239,68,68,0.12);
+        }
+
+        .fd-badge.sev-high {
+            color: #f59e0b;
+            border-color: rgba(245,158,11,0.5);
+            background: rgba(245,158,11,0.12);
+        }
+
+        .fd-badge.sev-medium {
+            color: #e2e8f0;
+            border-color: #475569;
+            background: rgba(226,232,240,0.08);
+        }
+
+        .fd-badge.sev-low {
+            color: #94a3b8;
+            border-color: #475569;
+            background: rgba(148,163,184,0.12);
+        }
+
+        .fd-badge.risk {
+            color: #e2e8f0;
+            border-color: #475569;
+        }
+
+        .fd-badge.risk-high {
+            color: #ef4444;
+            border-color: rgba(239,68,68,0.5);
+        }
+
+        .fd-badge.risk-mid {
+            color: #f59e0b;
+            border-color: rgba(245,158,11,0.5);
+        }
+
+        .fd-badge.cis {
+            color: #06b6d4;
+            border-color: rgba(6,182,212,0.4);
+            background: rgba(6,182,212,0.08);
+        }
+
+        .fd-badge.cat {
+            color: #94a3b8;
+            border-color: #475569;
+        }
+
+    /* ── Tab bar ── */
+    .fd-tabs {
+        flex-shrink: 0;
+        display: flex;
+        gap: 4px;
+        padding: 10px 24px 0;
+        border-bottom: 1px solid #334155;
     }
 
-    .risk-mid {
-        color: #f59e0b;
-        border-color: rgba(245,158,11,0.5);
+    .fd-tab {
+        background: transparent;
+        border: 1px solid transparent;
+        border-bottom: 2px solid transparent;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: bold;
+        padding: 8px 16px;
+        border-radius: 8px 8px 0 0;
+        cursor: pointer;
+        transition: 0.2s;
     }
 
-    .risk-high {
-        color: #ef4444;
-        border-color: rgba(239,68,68,0.5);
+        .fd-tab:hover {
+            color: #e2e8f0;
+            background: rgba(6,182,212,0.05);
+        }
+
+        .fd-tab.active {
+            color: #06b6d4;
+            border-color: rgba(6,182,212,0.4);
+            border-bottom-color: #06b6d4;
+            background: rgba(6,182,212,0.08);
+        }
+
+    /* ── Body: the only scrolling region ── */
+    .fd-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 20px 24px;
+        scrollbar-width: thin;
+        scrollbar-color: #164e63 transparent;
+    }
+
+    .fd-section {
+        margin-bottom: 18px;
+    }
+
+    .fd-label {
+        color: #64748b;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+
+    .fd-value {
+        color: #e2e8f0;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .fd-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .fd-col {
+        background: rgba(15,23,42,0.7);
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 14px;
+    }
+
+    .fd-big {
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+        font-size: 16px;
+        color: #e2e8f0;
     }
 
     .fv-pass {
@@ -577,5 +547,237 @@
 
     .fv-falsepositive {
         color: #a78bfa;
+    }
+
+    .fd-notice {
+        display: inline-block;
+        background: rgba(148,163,184,0.15);
+        border: 1px solid #475569;
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        margin-bottom: 18px;
+        text-transform: uppercase;
+    }
+
+    /* ── Panels (guidance / tool path / undo) ── */
+    .fd-panel {
+        background: rgba(245,158,11,0.04);
+        border: 1px solid rgba(245,158,11,0.25);
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+    }
+
+        .fd-panel.reg-alt {
+            border-color: rgba(239,68,68,0.4);
+            background: rgba(239,68,68,0.05);
+        }
+
+    .fd-panel-header {
+        color: #f59e0b;
+        font-weight: bold;
+        font-size: 13px;
+        margin-bottom: 10px;
+    }
+
+    .fd-row {
+        margin-bottom: 10px;
+    }
+
+    .fd-row-label {
+        color: #64748b;
+        font-size: 10px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    }
+
+    .fd-row-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+    }
+
+    /* ── Code block + copy ── */
+    .fd-code {
+        background: #0a0e1a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        color: #7dd3fc;
+        word-break: break-all;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .fd-copy {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #06b6d4;
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    /* ── Action buttons ── */
+    .fd-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+    }
+
+    .fd-action {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 10px;
+        padding: 5px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: 'Consolas', monospace;
+        transition: 0.2s;
+        white-space: nowrap;
+    }
+
+        .fd-action:hover {
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+
+    .fd-link {
+        background: none;
+        border: none;
+        color: #06b6d4;
+        font-size: 11px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    /* ── Glowing "Go to" target ── */
+    .glow-target {
+        color: #06b6d4;
+        font-weight: bold;
+        font-family: 'Consolas', monospace;
+        font-size: 12px;
+        padding: 6px 8px;
+        border: 1px dashed rgba(6,182,212,0.5);
+        border-radius: 6px;
+        animation: fdGlow 1.6s ease-in-out infinite;
+    }
+
+    @@keyframes fdGlow {
+        0%, 100% {
+            text-shadow: 0 0 4px rgba(6,182,212,0.4);
+            box-shadow: 0 0 4px rgba(6,182,212,0.2);
+        }
+
+        50% {
+            text-shadow: 0 0 14px rgba(6,182,212,1);
+            box-shadow: 0 0 12px rgba(6,182,212,0.5);
+        }
+    }
+
+    /* ── Sub-settings two-column grid ── */
+    .fd-subgrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .fd-subrow {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: rgba(15,23,42,0.8);
+        border: 1px solid #334155;
+        border-radius: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .fd-subrow:hover {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.06);
+        }
+
+    .fd-subid {
+        color: #06b6d4;
+        font-family: 'Consolas', monospace;
+        font-size: 9px;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .fd-submain {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .fd-subtitle2 {
+        color: #e2e8f0;
+        font-size: 11px;
+        font-weight: bold;
+    }
+
+    .fd-subdest {
+        color: #64748b;
+        font-size: 9px;
+        margin-top: 2px;
+    }
+
+    .fd-subexp {
+        color: #94a3b8;
+        font-size: 9px;
+        font-family: 'Consolas', monospace;
+        flex-shrink: 0;
+    }
+
+    .fd-empty {
+        color: #64748b;
+        text-align: center;
+        padding: 30px;
+        font-size: 12px;
+    }
+
+    .fd-subtitle {
+        color: #06b6d4;
+        font-size: 15px;
+        font-weight: bold;
+        margin-bottom: 6px;
+    }
+
+    /* ── Sticky footer ── */
+    .fd-footer {
+        flex-shrink: 0;
+        border-top: 1px solid #334155;
+        padding: 12px 24px;
+        background: rgba(15,23,42,0.6);
+    }
+
+    .fd-rescan-note {
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        border: 1px solid rgba(6,182,212,0.4);
+        background: rgba(6,182,212,0.08);
+        color: #06b6d4;
+        font-size: 11px;
+        border-radius: 6px;
+    }
+
+    .fd-footer-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
     }
 </style>

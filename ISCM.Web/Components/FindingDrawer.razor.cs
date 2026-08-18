@@ -3,13 +3,22 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Web.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using Microsoft.Win32;
 
 namespace ISCM.Web.Components;
 
-// EDIT (گام ۲۶-بخش ۲): بخش کد Drawer — پنل‌های جدید ⚡ / 🧭 /  + پیام Rescan
+// Code-behind for the FindingDrawer glass modal.
+// All UI logic lives here; the .razor file contains markup + CSS only.
 public partial class FindingDrawer
 {
+    // Tab identifiers (exposed to the .razor markup to avoid nested quotes).
+    private const string TabOverview = "overview";
+    private const string TabGuidance = "guidance";
+    private const string TabSubs = "subs";
+    private const string TabSource = "source";
+
     [Parameter] public Finding? SelectedFinding { get; set; }
     [Parameter] public SubCheck? InitialSubCheck { get; set; }
     [Parameter] public EventCallback Close { get; set; }
@@ -17,17 +26,16 @@ public partial class FindingDrawer
     [Inject] private ScanStateService StateService { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
+    private string ActiveTab = TabOverview;
     private ToolPathInfo? ActiveToolPanel;
     private bool ShowUndoPanel;
     private SubCheck? SelectedSubCheck;
     private Finding? _lastFinding;
-
-    // پنل‌های جدید بخش ۲
-    private bool ShowPsPanel;
     private bool ShowNavGuide;
     private bool ShowRegAlt;
     private string? RescanMessage;
 
+    // Reset panels whenever a different finding is selected.
     protected override void OnParametersSet()
     {
         if (!ReferenceEquals(_lastFinding, SelectedFinding))
@@ -35,6 +43,8 @@ public partial class FindingDrawer
             _lastFinding = SelectedFinding;
             ResetPanels();
             SelectedSubCheck = InitialSubCheck;
+            // Open directly on Guidance when a sub-check was requested.
+            ActiveTab = InitialSubCheck != null ? TabGuidance : TabOverview;
         }
     }
 
@@ -43,7 +53,6 @@ public partial class FindingDrawer
         SelectedSubCheck = null;
         ActiveToolPanel = null;
         ShowUndoPanel = false;
-        ShowPsPanel = false;
         ShowNavGuide = false;
         ShowRegAlt = false;
         RescanMessage = null;
@@ -55,23 +64,42 @@ public partial class FindingDrawer
         public string NavigationPath { get; set; } = "";
     }
 
+    // Sub-settings with GuidanceCatalog fallback for checks that do not embed them.
+    private static IReadOnlyList<SubCheck> SubsFor(Finding f) =>
+        f.SubChecks != null && f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
+
+    private void SetTab(string tab) => ActiveTab = tab;
+
+    // Close the modal when Escape is pressed.
+    private void OnModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { _ = CloseDrawer(); }
+    }
+
     private async Task CloseDrawer()
     {
         ResetPanels();
+        ActiveTab = TabOverview;
         await Close.InvokeAsync();
     }
 
-    // ── ناوبری زیرمجموعه‌ها ──
-    private void OpenSubCheck(SubCheck sc)
+    // Open a sub-check from the Sub-settings tab and jump to Guidance.
+    private void OpenSubFromModal(SubCheck sc)
     {
         SelectedSubCheck = sc;
         ShowNavGuide = false;
         ShowRegAlt = false;
+        ActiveTab = TabGuidance;
     }
 
-    private void BackToSubList() => SelectedSubCheck = null;
+    // Return from a sub-check back to the sub-settings grid.
+    private void BackToSubList()
+    {
+        SelectedSubCheck = null;
+        ActiveTab = TabSubs;
+    }
 
-    // ──  PowerShell Prompt & Guide (نوار بالا) ──
+    // ── PowerShell Prompt & Guide context ──
     private string CurrentCli =>
         SelectedSubCheck != null ? SelectedSubCheck.CliCommand
         : SelectedFinding != null ? GetUndoCliCommand(SelectedFinding) : "";
@@ -82,11 +110,9 @@ public partial class FindingDrawer
     private string CurrentVerification =>
         SelectedSubCheck?.Verification ?? "After running, click Rescan and confirm the status flips to Pass.";
 
-    private void TogglePsPanel() => ShowPsPanel = !ShowPsPanel;
-
     private async Task CopyCurrentCli() => await CopyToClipboard(CurrentCli);
 
-    // ── 🧭 دکمهٔ مقصد: باز کردن کنسول + راهنمای نورانی ──
+    // ── 🧭 Destination button: launch the console tool + show glowing guide ──
     private void OpenConsoleWithGuide()
     {
         if (SelectedSubCheck == null) return;
@@ -106,14 +132,14 @@ public partial class FindingDrawer
         ShowRegAlt = false;
     }
 
-    // ── 🎯 جایگزین رجیستری (بدون باز کردن regedit) ──
+    // ──  Registry alternative: advise instead of opening regedit ──
     private void ShowRegistryAlternative()
     {
         ShowRegAlt = true;
         ShowNavGuide = false;
     }
 
-    // ── 🔄 Rescan با پیام درون‌خطی ──
+    // ── 🔄 Rescan with inline change/no-change feedback ──
     private async Task RescanFinding()
     {
         if (SelectedFinding == null) return;
@@ -139,17 +165,18 @@ public partial class FindingDrawer
         }
     }
 
-    // ── اکشن‌های سطح پدر ──
+    // ── Parent-level actions ──
     private void ShowPolicyToolPath(Finding finding, string tool)
     {
         ShowUndoPanel = false;
         ActiveToolPanel = new ToolPathInfo { Tool = tool, NavigationPath = BuildNavigationPath(finding, tool) };
     }
 
+    // Undo lives on the Source tab; jump there when toggled from the footer.
     private void ToggleUndoPanel()
     {
         if (ShowUndoPanel) { ShowUndoPanel = false; }
-        else { ActiveToolPanel = null; ShowUndoPanel = true; }
+        else { ActiveToolPanel = null; ShowUndoPanel = true; ActiveTab = TabSource; }
     }
 
     private void ToggleIgnore()
@@ -175,18 +202,12 @@ public partial class FindingDrawer
 
     private async Task CopyUndoCommand(Finding f) => await CopyToClipboard(GetUndoCliCommand(f));
 
-    private async Task CopySubCli()
-    {
-        if (SelectedSubCheck != null)
-            await CopyToClipboard(SelectedSubCheck.CliCommand);
-    }
-
     private async Task CopyToClipboard(string text)
     {
         try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); } catch { }
     }
 
-    // EDIT (بخش ۲): powershell از نوار بالا حذف شد؛ دکمهٔ ⚡ جای آن را گرفت
+    // powershell.exe is excluded from the top bar; the ⚡ panel replaces it.
     private IEnumerable<string> GetTools(Finding? finding)
     {
         if (finding is null) return Array.Empty<string>();
