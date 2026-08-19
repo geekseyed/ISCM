@@ -9,15 +9,21 @@ using Microsoft.Win32;
 
 namespace ISCM.Web.Components;
 
-// Code-behind for the FindingDrawer glass modal.
-// All UI logic lives here; the .razor file contains markup + CSS only.
+// Code-behind for the FindingDrawer glass modal (step 28 rework).
+// 5-button action model: PS / Graphical / Undo / Rescan / Ignore.
+// When no panel is open, the default "What & Why" description is shown.
 public partial class FindingDrawer
 {
-    // Tab identifiers (exposed to the .razor markup to avoid nested quotes).
     private const string TabOverview = "overview";
-    private const string TabGuidance = "guidance";
     private const string TabSubs = "subs";
     private const string TabSource = "source";
+
+    private const string PNone = "";
+    private const string PPs = "ps";
+    private const string PGraph = "graph";
+    private const string PUndo = "undo";
+    private const string PRescan = "rescan";
+    private const string PIgnore = "ignore";
 
     [Parameter] public Finding? SelectedFinding { get; set; }
     [Parameter] public SubCheck? InitialSubCheck { get; set; }
@@ -27,187 +33,186 @@ public partial class FindingDrawer
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private string ActiveTab = TabOverview;
-    private ToolPathInfo? ActiveToolPanel;
-    private bool ShowUndoPanel;
+    private string OpenPanel = PNone;
     private SubCheck? SelectedSubCheck;
     private Finding? _lastFinding;
     private bool ShowNavGuide;
     private bool ShowRegAlt;
-    private string? RescanMessage;
+    private string _undoNote = "";
+    private string _rescanNote = "";
 
-    // Reset panels whenever a different finding is selected.
     protected override void OnParametersSet()
     {
         if (!ReferenceEquals(_lastFinding, SelectedFinding))
         {
             _lastFinding = SelectedFinding;
-            ResetPanels();
+            ResetAll();
             SelectedSubCheck = InitialSubCheck;
-            // Open directly on Guidance when a sub-check was requested.
-            ActiveTab = InitialSubCheck != null ? TabGuidance : TabOverview;
         }
     }
 
-    private void ResetPanels()
+    private void ResetAll()
     {
         SelectedSubCheck = null;
-        ActiveToolPanel = null;
-        ShowUndoPanel = false;
+        OpenPanel = PNone;
         ShowNavGuide = false;
         ShowRegAlt = false;
-        RescanMessage = null;
+        _undoNote = "";
+        _rescanNote = "";
+        ActiveTab = TabOverview;
     }
 
-    private sealed class ToolPathInfo
-    {
-        public string Tool { get; set; } = "";
-        public string NavigationPath { get; set; } = "";
-    }
-
-    // Sub-settings with GuidanceCatalog fallback for checks that do not embed them.
     private static IReadOnlyList<SubCheck> SubsFor(Finding f) =>
         f.SubChecks != null && f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
 
-    private void SetTab(string tab) => ActiveTab = tab;
+    private void SetTab(string tab) { ActiveTab = tab; OpenPanel = PNone; }
 
-    // Close the modal when Escape is pressed.
     private void OnModalKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") { _ = CloseDrawer(); }
-    }
+    { if (e.Key == "Escape") { _ = CloseDrawer(); } }
 
     private async Task CloseDrawer()
+    { ResetAll(); await Close.InvokeAsync(); }
+
+    // Toggle one of the 5 panels; closing returns to the default description.
+    private void TogglePanel(string panel)
     {
-        ResetPanels();
-        ActiveTab = TabOverview;
-        await Close.InvokeAsync();
+        if (OpenPanel == panel) { OpenPanel = PNone; return; }
+        OpenPanel = panel;
+        ShowNavGuide = false; ShowRegAlt = false;
+        if (panel == PUndo) EvaluateUndo();
+        if (panel == PRescan) _ = EvaluateRescan();
     }
 
-    // Open a sub-check from the Sub-settings tab and jump to Guidance.
-    private void OpenSubFromModal(SubCheck sc)
+    private string DefaultDescription()
     {
-        SelectedSubCheck = sc;
-        ShowNavGuide = false;
-        ShowRegAlt = false;
-        ActiveTab = TabGuidance;
+        if (SelectedSubCheck != null)
+            return $"{SelectedSubCheck.WhatItDoes} {SelectedSubCheck.Recommendation}";
+        if (SelectedFinding != null)
+            return $"{SelectedFinding.Description} {SelectedFinding.Recommendation}";
+        return "";
     }
 
-    // Return from a sub-check back to the sub-settings grid.
-    private void BackToSubList()
-    {
-        SelectedSubCheck = null;
-        ActiveTab = TabSubs;
-    }
+    // ⚡ PowerShell 3-line guide (with fallbacks)
+    private string PsCheck() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.CheckCurrentCli) ? SelectedSubCheck!.CheckCurrentCli
+        : SelectedSubCheck != null && SelectedSubCheck.HasRegistryPath ? $"reg query \"{SelectedSubCheck.RegistryPath}\""
+        : SelectedFinding != null ? GetSourceCommand(SelectedFinding) : "";
 
-    // ── PowerShell Prompt & Guide context ──
-    private string CurrentCli =>
-        SelectedSubCheck != null ? SelectedSubCheck.CliCommand
+    private string PsApply() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.CliCommand) ? SelectedSubCheck!.CliCommand
         : SelectedFinding != null ? GetUndoCliCommand(SelectedFinding) : "";
 
-    private string CurrentRecommendation =>
-        SelectedSubCheck?.Recommendation ?? "Run the prompt below in an elevated PowerShell, then verify the result.";
+    private string PsVerify() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.VerifyCli) ? SelectedSubCheck!.VerifyCli
+        : !string.IsNullOrEmpty(SelectedSubCheck?.Verification) ? SelectedSubCheck!.Verification
+        : PsCheck();
 
-    private string CurrentVerification =>
-        SelectedSubCheck?.Verification ?? "After running, click Rescan and confirm the status flips to Pass.";
+    private string PsValueMap() => SelectedSubCheck?.ValueMap ?? "";
+    private string PsTokens() => SelectedSubCheck?.CliTokens ?? "";
 
-    private async Task CopyCurrentCli() => await CopyToClipboard(CurrentCli);
+    // 🖱️ Graphical fix
+    private string GraphTool() => SelectedSubCheck?.ConsoleTool ?? GetTools(SelectedFinding).FirstOrDefault() ?? "gpedit.msc";
+    private string GraphPath() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.GraphicalPathFull) ? SelectedSubCheck!.GraphicalPathFull
+        : SelectedSubCheck != null ? $"{SelectedSubCheck.YouAreHere} → {SelectedSubCheck.GoTo}"
+        : SelectedFinding != null ? GetGraphicalPath(SelectedFinding) : "";
 
-    // ── 🧭 Destination button: launch the console tool + show glowing guide ──
-    private void OpenConsoleWithGuide()
+    private string GraphSteps() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.GraphicalSteps) ? SelectedSubCheck!.GraphicalSteps
+        : SelectedFinding != null ? GetGraphicalPath(SelectedFinding) : "";
+
+    private void OpenTool()
     {
-        if (SelectedSubCheck == null) return;
+        var tool = GraphTool();
         try
         {
-            if (!string.IsNullOrEmpty(SelectedSubCheck.ConsoleTool))
-            {
-                Process.Start(new ProcessStartInfo(SelectedSubCheck.ConsoleTool) { UseShellExecute = true });
-                StateService.LogAction($"Console opened: {SelectedSubCheck.ConsoleTool} for {SelectedSubCheck.Id}");
-            }
+            Process.Start(new ProcessStartInfo(tool) { UseShellExecute = true });
+            StateService.LogAction($"Tool opened: {tool}");
         }
-        catch (Exception ex)
-        {
-            StateService.LogAction($"Failed to open console: {ex.Message}");
-        }
+        catch (Exception ex) { StateService.LogAction($"Failed to open {tool}: {ex.Message}"); }
         ShowNavGuide = true;
-        ShowRegAlt = false;
     }
 
-    // ──  Registry alternative: advise instead of opening regedit ──
-    private void ShowRegistryAlternative()
+    // Launch an elevated PowerShell window for manual execution.
+    private void OpenPowerShell()
     {
-        ShowRegAlt = true;
-        ShowNavGuide = false;
+        try
+        {
+            Process.Start(new ProcessStartInfo("powershell.exe") { UseShellExecute = true, Verb = "runas" });
+            StateService.LogAction("PowerShell opened (elevated).");
+        }
+        catch (Exception ex) { StateService.LogAction($"Failed to open PowerShell: {ex.Message}"); }
     }
 
-    // ── 🔄 Rescan with inline change/no-change feedback ──
-    private async Task RescanFinding()
+    // ↶ Undo: check whether the item changed, then guide the reverse.
+    private void EvaluateUndo()
     {
-        if (SelectedFinding == null) return;
+        var f = SelectedFinding;
+        if (f == null) { _undoNote = "No finding selected."; return; }
+        _undoNote = f.Status == CheckStatus.Pass
+            ? "✅ This item WAS changed/hardened. Use the reverse guide below to restore the original state."
+            : $"ℹ️ No change detected (current: {f.CurrentValue}). Nothing to undo yet.";
+    }
+
+    private string UndoCli() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.UndoCli) ? SelectedSubCheck!.UndoCli
+        : SelectedFinding != null ? GetUndoCliCommand(SelectedFinding) : "";
+
+    // 🔄 Rescan: fresh message on every click.
+    private async Task EvaluateRescan()
+    {
+        if (SelectedFinding == null) { _rescanNote = "No finding selected."; return; }
         var scan = StateService.CurrentScanResult;
         var old = scan?.Findings.FirstOrDefault(x => x.CheckId == SelectedFinding.CheckId);
-        var oldStatus = old?.Status;
-        var oldValue = old?.CurrentValue;
+        var oldStatus = old?.Status; var oldValue = old?.CurrentValue;
 
         await StateService.RescanSingleCheckAsync(SelectedFinding.CheckId);
 
         var neu = StateService.CurrentScanResult?.Findings.FirstOrDefault(x => x.CheckId == SelectedFinding.CheckId);
-        if (neu == null)
-        {
-            RescanMessage = "⚠️ Finding not found after rescan.";
-        }
+        if (neu == null) _rescanNote = "⚠️ Finding not found after rescan.";
         else if (neu.Status == oldStatus && neu.CurrentValue == oldValue)
-        {
-            RescanMessage = $"ℹ️ No change detected — still {neu.CurrentValue} ({neu.Status}). Apply the fix via the ⚡ prompt, then rescan.";
-        }
+            _rescanNote = $"⚠️ No change — still {neu.CurrentValue} ({neu.Status}). Apply the fix first, then rescan.";
         else
-        {
-            RescanMessage = $"✅ Change detected: {oldValue} ({oldStatus}) → {neu.CurrentValue} ({neu.Status}).";
-        }
+            _rescanNote = $"✅ Change detected: {oldValue} ({oldStatus}) → {neu.CurrentValue} ({neu.Status}).";
     }
 
-    // ── Parent-level actions ──
-    private void ShowPolicyToolPath(Finding finding, string tool)
+    private int BulkReadyCount => StateService.CurrentScanResult?.Findings.Count(f => f.Status == CheckStatus.Fail) ?? 0;
+
+    private async Task BulkRescan()
     {
-        ShowUndoPanel = false;
-        ActiveToolPanel = new ToolPathInfo { Tool = tool, NavigationPath = BuildNavigationPath(finding, tool) };
+        if (StateService.CurrentScanResult == null) return;
+        var n = BulkReadyCount;
+        foreach (var f in StateService.CurrentScanResult.Findings.Where(x => x.Status == CheckStatus.Fail).ToList())
+            await StateService.RescanSingleCheckAsync(f.CheckId);
+        _rescanNote = $"✅ Bulk rescan finished for {n} failed items.";
     }
 
-    // Undo lives on the Source tab; jump there when toggled from the footer.
-    private void ToggleUndoPanel()
-    {
-        if (ShowUndoPanel) { ShowUndoPanel = false; }
-        else { ActiveToolPanel = null; ShowUndoPanel = true; ActiveTab = TabSource; }
-    }
+    // 🚫 Ignore consequence + confirm
+    private string IgnoreConsequence() =>
+        !string.IsNullOrEmpty(SelectedSubCheck?.IgnoreConsequence) ? SelectedSubCheck!.IgnoreConsequence
+        : "Ignoring this finding leaves the current risk unaddressed. It moves to the Ignored list and is excluded from compliance scoring.";
 
-    private void ToggleIgnore()
+    private void ConfirmIgnore()
     {
         if (SelectedFinding == null) return;
-        if (SelectedFinding.IsSuppressed)
-        {
-            SelectedFinding.Undo();
-            StateService.LogAction($"User undid suppression: {SelectedFinding.CheckId}");
-        }
-        else
-        {
-            SelectedFinding.Ignore();
-            StateService.LogAction($"User ignored: {SelectedFinding.CheckId}");
-        }
+        if (SelectedFinding.IsSuppressed) { SelectedFinding.Undo(); StateService.LogAction($"Undid suppression: {SelectedFinding.CheckId}"); }
+        else { SelectedFinding.Ignore(); StateService.LogAction($"Ignored: {SelectedFinding.CheckId}"); }
+        OpenPanel = PNone;
     }
 
-    private async Task CopySourceCommand()
-    {
-        if (SelectedFinding != null)
-            await CopyToClipboard(GetSourceCommand(SelectedFinding));
-    }
+    private void OpenSubFromModal(SubCheck sc)
+    { SelectedSubCheck = sc; OpenPanel = PNone; ShowNavGuide = false; ShowRegAlt = false; ActiveTab = TabOverview; }
 
-    private async Task CopyUndoCommand(Finding f) => await CopyToClipboard(GetUndoCliCommand(f));
+    private void BackToSubList()
+    { SelectedSubCheck = null; OpenPanel = PNone; ActiveTab = TabSubs; }
+
+    private void ShowRegistryAlternative() { ShowRegAlt = true; ShowNavGuide = false; }
+
+    private async Task CopyText(string text) => await CopyToClipboard(text);
 
     private async Task CopyToClipboard(string text)
-    {
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); } catch { }
-    }
+    { try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", text); } catch { } }
 
-    // powershell.exe is excluded from the top bar; the ⚡ panel replaces it.
     private IEnumerable<string> GetTools(Finding? finding)
     {
         if (finding is null) return Array.Empty<string>();
@@ -242,17 +247,23 @@ public partial class FindingDrawer
         return string.IsNullOrEmpty(f.RegistryPath) ? "reg query HKLM" : $"reg query {f.RegistryPath}";
     }
 
-    private string BuildNavigationPath(Finding finding, string tool)
+    private string GetGraphicalPath(Finding finding)
     {
-        if (tool == "secpol.msc") return "Open secpol.msc → Account Policies / Local Policies → Security Options → Locate setting";
-        if (tool == "gpedit.msc") return "Open gpedit.msc → Computer Configuration → Administrative Templates → Locate policy";
-        if (tool == "wf.msc") return "Open wf.msc → Inbound Rules / Outbound Rules → Configure";
-        if (tool == "regedit.exe") return "Open regedit.exe → Navigate to: " + (finding.RegistryPath ?? "HKLM");
-        if (tool == "net.exe") return "Open CMD/PowerShell as Administrator → Run net user / net localgroup commands";
-        if (tool == "lusrmgr.msc") return "Open lusrmgr.msc → Users → Double-click user → Modify settings";
-        if (tool == "compmgmt.msc") return "Open compmgmt.msc → Local Users and Groups → Groups → Administrators";
-        if (tool == "OptionalFeatures.exe") return "Open OptionalFeatures.exe → Locate feature → Uncheck → OK → Restart";
-        return "Open " + tool + " → Navigate to relevant policy section";
+        if (finding.CheckId.StartsWith("FW")) return "wf.msc → Windows Defender Firewall with Advanced Security → Properties → profile state On / Inbound Block";
+        if (finding.CheckId.StartsWith("SMB")) return "Control Panel → Programs → Turn Windows features on/off → uncheck SMB 1.0/CIFS File Sharing Support";
+        if (finding.CheckId.StartsWith("RDP")) return "System Properties → Remote → Allow connections only with NLA";
+        if (finding.CheckId.StartsWith("USB")) return "gpedit.msc → Computer Configuration → Administrative Templates → System → Removable Storage Access";
+        if (finding.CheckId.StartsWith("DEF")) return "Windows Security → Virus & threat protection → Manage settings → Real-time protection On";
+        if (finding.CheckId.StartsWith("UAC")) return "Control Panel → User Accounts → Change UAC settings → raise slider";
+        if (finding.CheckId.StartsWith("ARD")) return "gpedit.msc → Windows Components → AutoPlay Policies → Turn off AutoPlay = Enabled (All drives)";
+        if (finding.CheckId.StartsWith("GUEST")) return "compmgmt.msc → Local Users and Groups → Users → Guest → Properties → Account is disabled";
+        if (finding.CheckId.StartsWith("ADM")) return "compmgmt.msc → Local Users and Groups → Groups → Administrators → review members";
+        if (finding.CheckId.StartsWith("ALG")) return "netplwiz → uncheck 'Users must enter a user name and password'";
+        if (finding.CheckId.StartsWith("PWD")) return "secpol.msc → Account Policies → Password Policy → Minimum password length = 14";
+        if (finding.CheckId.StartsWith("WUP")) return "gpedit.msc → Windows Components → Windows Update → Configure Automatic Updates = Enabled (4)";
+        if (finding.CheckId.StartsWith("LM")) return "secpol.msc → Security Options → LAN Manager authentication level = NTLMv2 only";
+        if (finding.CheckId.StartsWith("EVL")) return "eventvwr.msc → Windows Logs → right-click log → Properties → Maximum log size (KB)";
+        return finding.Recommendation;
     }
 
     private static string GetUndoCliCommand(Finding finding)
@@ -271,23 +282,5 @@ public partial class FindingDrawer
         if (finding.CheckId.StartsWith("WUP")) return "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU' -Name NoAutoUpdate -Value 1";
         if (finding.CheckId.StartsWith("LM")) return "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 5";
         return "# Use " + (finding.FixTools.FirstOrDefault() ?? "relevant tool") + " to set to " + finding.ExpectedValue;
-    }
-
-    private static string GetGraphicalPath(Finding finding)
-    {
-        if (finding.CheckId.StartsWith("FW")) return "Control Panel → Windows Defender Firewall → Turn on for Domain";
-        if (finding.CheckId.StartsWith("SMB")) return "Open wf.msc → Advanced Settings → Inbound Rules → Disable SMBv1 rules. Or: Control Panel → Programs → Turn Windows features on/off → uncheck SMB 1.0/CIFS.";
-        if (finding.CheckId.StartsWith("RDP")) return "System Properties → Remote → Allow remote connections → Check NLA";
-        if (finding.CheckId.StartsWith("USB")) return "Group Policy Editor → Computer Configuration → Administrative Templates → System → Removable Storage Access";
-        if (finding.CheckId.StartsWith("DEF")) return "Windows Security → Virus & threat protection → Manage settings → Turn on Real-time";
-        if (finding.CheckId.StartsWith("UAC")) return "Control Panel → User Accounts → Change UAC settings → Raise slider";
-        if (finding.CheckId.StartsWith("ARD")) return "Group Policy Editor → Administrative Templates → Windows Components → AutoPlay Policies";
-        if (finding.CheckId.StartsWith("GUEST")) return "Computer Management → Local Users and Groups → Users → Guest → Disable";
-        if (finding.CheckId.StartsWith("ADM")) return "Computer Management → Local Users and Groups → Groups → Administrators → Review members";
-        if (finding.CheckId.StartsWith("ALG")) return "netplwiz → Uncheck 'Users must enter a user name and password'";
-        if (finding.CheckId.StartsWith("PWD")) return "Open secpol.msc → Account Policies → Password Policy → Minimum password length → Set to 14.";
-        if (finding.CheckId.StartsWith("WUP")) return "Group Policy Editor → Windows Update → Configure Automatic Updates → Disabled";
-        if (finding.CheckId.StartsWith("LM")) return "Local Security Policy → Security Options → LAN Manager authentication level = NTLMv2 only";
-        return finding.Recommendation;
     }
 }

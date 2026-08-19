@@ -3,22 +3,14 @@
 @using ISCM.Web.Services
 @using Microsoft.JSInterop
 
-@* ════════════════════════════════════════════════════════════════
-   FindingDrawer — centered glass modal with blurred backdrop.
-   Layout: fixed header / tab bar / scrollable body / sticky footer.
-   ════════════════════════════════════════════════════════════════ *@
-
 @if (SelectedFinding != null)
 {
     var f = SelectedFinding;
 
-    @* Blurred backdrop — click to close *@
     <div class="fd-overlay" @onclick="CloseDrawer"></div>
 
-    @* Centered glass modal *@
     <div class="fd-modal" tabindex="-1" @onkeydown="OnModalKeyDown">
 
-        @* ── Header: title + badges + close ── *@
         <div class="fd-header">
             <div class="fd-title-row">
                 <div class="fd-title">@f.Name <span class="fd-id">(@f.CheckId)</span></div>
@@ -36,128 +28,130 @@
             </div>
         </div>
 
-        @* ── Tab bar ── *@
+        <div class="fd-actionbar">
+            <button class="fd-action @(OpenPanel == PPs ? "active" : "")" @onclick="() => TogglePanel(PPs)">⚡ PowerShell Prompt & Guide</button>
+            <button class="fd-action @(OpenPanel == PGraph ? "active" : "")" @onclick="() => TogglePanel(PGraph)">🖱️ Graphical Fix (@GraphTool())</button>
+            <button class="fd-action @(OpenPanel == PUndo ? "active" : "")" @onclick="() => TogglePanel(PUndo)">↶ Undo</button>
+            <button class="fd-action @(OpenPanel == PRescan ? "active" : "")" @onclick="() => TogglePanel(PRescan)">🔄 Rescan</button>
+            <button class="fd-action @(OpenPanel == PIgnore ? "active" : "")" @onclick="() => TogglePanel(PIgnore)">🚫 Ignore</button>
+        </div>
+
         <div class="fd-tabs">
             <button class="fd-tab @(ActiveTab == TabOverview ? "active" : "")" @onclick="() => SetTab(TabOverview)">Overview</button>
-            <button class="fd-tab @(ActiveTab == TabGuidance ? "active" : "")" @onclick="() => SetTab(TabGuidance)">Guidance</button>
             <button class="fd-tab @(ActiveTab == TabSubs ? "active" : "")" @onclick="() => SetTab(TabSubs)">Sub-settings (@SubsFor(f).Count)</button>
             <button class="fd-tab @(ActiveTab == TabSource ? "active" : "")" @onclick="() => SetTab(TabSource)">Source</button>
         </div>
 
-        @* ── Scrollable body (only this pane scrolls) ── *@
         <div class="fd-body">
 
-            @* ═══ TAB: Overview ═══ *@
             @if (ActiveTab == TabOverview)
-            {
-                <div class="fd-section">
-                    <div class="fd-label">Description</div>
-                    <div class="fd-value">@(string.IsNullOrEmpty(f.Description) ? "No description available." : f.Description)</div>
-                </div>
-
-                <div class="fd-cols">
-                    <div class="fd-col">
-                        <div class="fd-label">Current</div>
-                        <div class="fd-big fv-@f.Status.ToString().ToLower()">@f.CurrentValue</div>
-                    </div>
-                    <div class="fd-col">
-                        <div class="fd-label">Expected</div>
-                        <div class="fd-big">@f.ExpectedValue</div>
-                    </div>
-                </div>
-
-                @if (f.Status == CheckStatus.Ignored)
-                {
-                    <div class="fd-notice">This finding has been ignored</div>
-                }
-                else if (f.Status == CheckStatus.FalsePositive)
-                {
-                    <div class="fd-notice">This finding has been marked as false positive</div>
-                }
-
-                <div class="fd-section">
-                    <div class="fd-label">Recommendation</div>
-                    <div class="fd-value">@f.Recommendation</div>
-                </div>
-            }
-
-            @* ═══ TAB: Guidance ═══ *@
-            else if (ActiveTab == TabGuidance)
             {
                 @if (SelectedSubCheck != null)
                 {
                     <div class="fd-section">
                         <button class="fd-link" @onclick="BackToSubList">← Back to sub-settings</button>
-                    </div>
-                    <div class="fd-section">
                         <div class="fd-subtitle">@SelectedSubCheck.Id — @SelectedSubCheck.Title</div>
-                        <div class="fd-value">@SelectedSubCheck.WhatItDoes</div>
                     </div>
                 }
 
-                @* PowerShell Prompt & Guide (Recommended → Prompt → Verify) *@
-                <div class="fd-panel">
-                    <div class="fd-panel-header">⚡ PowerShell Prompt & Guide</div>
-                    <div class="fd-row">
-                        <div class="fd-row-label">1) Recommended</div>
-                        <div class="fd-row-value">@CurrentRecommendation</div>
-                    </div>
-                    <div class="fd-row">
-                        <div class="fd-row-label">2) Executable Prompt</div>
-                        <div class="fd-code">
-                            <span>@CurrentCli</span>
-                            <button class="fd-copy" @onclick="CopyCurrentCli">Copy</button>
-                        </div>
-                    </div>
-                    <div class="fd-row">
-                        <div class="fd-row-label">3) Verify success</div>
-                        <div class="fd-row-value">@CurrentVerification</div>
-                    </div>
-                </div>
-
-                @* Destination-aware actions for the selected sub-check *@
-                @if (SelectedSubCheck != null)
+                @if (OpenPanel == PPs)
                 {
-                    <div class="fd-actions">
-                        <button class="fd-action" @onclick="OpenConsoleWithGuide">🧭 @SelectedSubCheck.DestinationLabel</button>
-                        @if (SelectedSubCheck.HasRegistryPath)
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">⚡ PowerShell Prompt & Guide</div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">1) Check current state</div>
+                            <div class="fd-code"><span>@PsCheck()</span><button class="fd-copy" @onclick="() => CopyText(PsCheck())">Copy</button></div>
+                        </div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">2) Apply (enable / disable)</div>
+                            <div class="fd-code"><span>@PsApply()</span><button class="fd-copy" @onclick="() => CopyText(PsApply())">Copy</button></div>
+                            @if (!string.IsNullOrEmpty(PsValueMap()))
+                            {
+                                <div class="fd-note">Value map: @PsValueMap()</div>
+                            }
+                        </div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">3) Verify success</div>
+                            <div class="fd-code"><span>@PsVerify()</span><button class="fd-copy" @onclick="() => CopyText(PsVerify())">Copy</button></div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(PsTokens()))
                         {
-                            <button class="fd-action" @onclick="ShowRegistryAlternative">🎯 Jump to Registry</button>
+                            <div class="fd-note">Parameters: @PsTokens()</div>
+                        }
+                        <div class="fd-actions"><button class="fd-action" @onclick="OpenPowerShell">⚡ Open PowerShell (Admin)</button></div>
+                    </div>
+                }
+                else if (OpenPanel == PGraph)
+                {
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">🖱️ Graphical Fix (@GraphTool())</div>
+                        <div class="fd-row"><div class="fd-row-label">Precise path</div><div class="fd-row-value" style="line-height:1.6;">@GraphPath()</div></div>
+                        <div class="fd-row"><div class="fd-row-label">Steps</div><div class="fd-row-value" style="line-height:1.7;">@GraphSteps()</div></div>
+                        <div class="fd-actions">
+                            <button class="fd-action" @onclick="OpenTool">🖱️ Open @GraphTool()</button>
+                            @if (SelectedSubCheck != null && SelectedSubCheck.HasRegistryPath)
+                            {
+                                <button class="fd-action" @onclick="ShowRegistryAlternative">🎯 Jump to Registry</button>
+                            }
+                        </div>
+                        @if (ShowNavGuide)
+                        {
+                            <div class="fd-row"><div class="fd-row-label">You are here</div><div class="fd-row-value">@(SelectedSubCheck?.YouAreHere ?? "")</div></div>
+                            <div class="fd-row"><div class="fd-row-label">Go to</div><div class="glow-target">@(SelectedSubCheck?.GoTo ?? "")</div></div>
+                        }
+                        @if (ShowRegAlt)
+                        {
+                            <div class="fd-panel reg-alt">
+                                <div class="fd-panel-header" style="color:#ef4444;">🎯 Registry is not recommended</div>
+                                <div class="fd-row-value" style="line-height:1.6;">@(SelectedSubCheck?.AlternativeToRegistry ?? "")</div>
+                            </div>
                         }
                     </div>
-
-                    @* Glowing navigation guide (You are here → Go to) *@
-                    @if (ShowNavGuide)
-                    {
-                        <div class="fd-panel">
-                            <div class="fd-panel-header">🧭 Navigation Guide</div>
-                            <div class="fd-row">
-                                <div class="fd-row-label">You are here</div>
-                                <div class="fd-row-value">@SelectedSubCheck.YouAreHere</div>
-                            </div>
-                            <div class="fd-row">
-                                <div class="fd-row-label">Go to</div>
-                                <div class="glow-target">@SelectedSubCheck.GoTo</div>
-                            </div>
-                            <div class="fd-row">
-                                <div class="fd-row-label">Steps</div>
-                                <div class="fd-row-value" style="line-height:1.7;">@SelectedSubCheck.GraphicalSteps</div>
-                            </div>
+                }
+                else if (OpenPanel == PUndo)
+                {
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">↶ Undo (restore original state)</div>
+                        <div class="fd-note">@_undoNote</div>
+                        <div class="fd-row">
+                            <div class="fd-row-label">Reverse command</div>
+                            <div class="fd-code"><span>@UndoCli()</span><button class="fd-copy" @onclick="() => CopyText(UndoCli())">Copy</button></div>
                         </div>
-                    }
-
-                    @* Registry alternative (instead of opening regedit) *@
-                    @if (ShowRegAlt)
-                    {
-                        <div class="fd-panel reg-alt">
-                            <div class="fd-panel-header" style="color:#ef4444;">🎯 Registry is not recommended</div>
-                            <div class="fd-row-value" style="line-height:1.6;">@SelectedSubCheck.AlternativeToRegistry</div>
+                        <div class="fd-row"><div class="fd-row-label">Graphical reverse</div><div class="fd-row-value" style="line-height:1.6;">@GetGraphicalPath(f)</div></div>
+                        <div class="fd-actions">
+                            <button class="fd-action" @onclick="OpenPowerShell">⚡ Open PowerShell (Admin)</button>
+                            <button class="fd-action" @onclick="OpenTool">🖱️ Open @GraphTool()</button>
                         </div>
-                    }
+                    </div>
+                }
+                else if (OpenPanel == PRescan)
+                {
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">🔄 Rescan</div>
+                        <div class="fd-note">@_rescanNote</div>
+                        <div class="fd-actions">
+                            <button class="fd-action" @onclick="EvaluateRescan">🔄 Rescan this item</button>
+                            <button class="fd-action" @onclick="BulkRescan">🔄 Bulk Rescan (@BulkReadyCount ready)</button>
+                        </div>
+                    </div>
+                }
+                else if (OpenPanel == PIgnore)
+                {
+                    <div class="fd-panel">
+                        <div class="fd-panel-header">🚫 Ignore this finding</div>
+                        <div class="fd-note">@IgnoreConsequence()</div>
+                        <div class="fd-actions"><button class="fd-action" @onclick="ConfirmIgnore">🚫 Confirm Ignore</button></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="fd-panel default">
+                        <div class="fd-panel-header">❔ What & Why</div>
+                        <div class="fd-value" style="line-height:1.7;">@DefaultDescription()</div>
+                        <div class="fd-note">Use the buttons above for PowerShell, graphical fix, undo, rescan, or ignore.</div>
+                    </div>
                 }
             }
-
-            @* ═══ TAB: Sub-settings (two-column grid) ═══ *@
             else if (ActiveTab == TabSubs)
             {
                 @if (SubsFor(f).Count == 0)
@@ -182,97 +176,34 @@
                     </div>
                 }
             }
-
-            @* ═══ TAB: Source ═══ *@
             else if (ActiveTab == TabSource)
             {
-                <div class="fd-section">
-                    <div class="fd-label">Source Type</div>
-                    <div class="fd-value">@GetSourceType(f) · Category @f.Category</div>
-                </div>
-
+                <div class="fd-section"><div class="fd-label">Source Type</div><div class="fd-value">@GetSourceType(f) · Category @f.Category</div></div>
                 <div class="fd-section">
                     <div class="fd-label">Source Command</div>
-                    <div class="fd-code">
-                        <span>@GetSourceCommand(f)</span>
-                        <button class="fd-copy" @onclick="CopySourceCommand">Copy</button>
-                    </div>
+                    <div class="fd-code"><span>@GetSourceCommand(f)</span><button class="fd-copy" @onclick="() => CopyText(GetSourceCommand(f))">Copy</button></div>
                 </div>
-
                 @if (!string.IsNullOrEmpty(f.RegistryPath))
                 {
                     <div class="fd-section">
                         <div class="fd-label">Registry Path</div>
-                        <div class="fd-code">
-                            <span>@f.RegistryPath</span>
-                            <button class="fd-copy" @onclick="() => CopyToClipboard(f.RegistryPath!)">Copy</button>
-                        </div>
-                    </div>
-                }
-
-                <div class="fd-section">
-                    <div class="fd-label">Fix Tools</div>
-                    <div class="fd-actions">
-                        @foreach (var tool in GetTools(f))
-                        {
-                            var capturedTool = tool;
-                            <button class="fd-action" @onclick="() => ShowPolicyToolPath(f, capturedTool)">🔧 @capturedTool</button>
-                        }
-                    </div>
-                </div>
-
-                @* Undo guidance panel *@
-                @if (ShowUndoPanel)
-                {
-                    <div class="fd-panel">
-                        <div class="fd-panel-header">↶ Undo Guidance</div>
-                        <div class="fd-row">
-                            <div class="fd-row-label">CLI Command (PowerShell)</div>
-                            <div class="fd-code" style="margin:0;">
-                                <span>@GetUndoCliCommand(f)</span>
-                                <button class="fd-copy" @onclick="() => CopyUndoCommand(f)">Copy</button>
-                            </div>
-                        </div>
-                        <div class="fd-row" style="margin-top:10px;">
-                            <div class="fd-row-label">Graphical Path</div>
-                            <div class="fd-row-value" style="line-height:1.6;">@GetGraphicalPath(f)</div>
-                        </div>
-                    </div>
-                }
-                else if (ActiveToolPanel != null)
-                {
-                    <div class="fd-panel">
-                        <div class="fd-panel-header">🔧 Policy Tool Path</div>
-                        <div class="fd-row">
-                            <div class="fd-row-label">Tool</div>
-                            <div class="fd-row-value">@ActiveToolPanel.Tool</div>
-                        </div>
-                        <div class="fd-row">
-                            <div class="fd-row-label">Navigation Path</div>
-                            <div class="fd-row-value" style="line-height:1.6;">@ActiveToolPanel.NavigationPath</div>
-                        </div>
+                        <div class="fd-code"><span>@f.RegistryPath</span><button class="fd-copy" @onclick="() => CopyText(f.RegistryPath!)">Copy</button></div>
                     </div>
                 }
             }
         </div>
 
-        @* ── Sticky footer: actions always visible ── *@
         <div class="fd-footer">
-            @if (!string.IsNullOrEmpty(RescanMessage))
-            {
-                <div class="fd-rescan-note">@RescanMessage</div>
-            }
             <div class="fd-footer-actions">
-                <button class="fd-action" @onclick="ToggleUndoPanel">↶ Undo</button>
-                <button class="fd-action" @onclick="RescanFinding">🔄 Rescan</button>
-                <button class="fd-action" @onclick="ToggleIgnore">@(f.IsSuppressed ? "🚫 Unignore" : "🚫 Ignore")</button>
+                <button class="fd-action" @onclick="() => TogglePanel(PUndo)">↶ Undo</button>
+                <button class="fd-action" @onclick="() => TogglePanel(PRescan)">🔄 Rescan</button>
+                <button class="fd-action" @onclick="() => TogglePanel(PIgnore)">@(f.IsSuppressed ? "🚫 Unignore" : "🚫 Ignore")</button>
             </div>
         </div>
     </div>
 }
 
 <style>
-    /* ── Backdrop: dim + blur the page behind the modal ── */
     .fd-overlay {
         position: fixed;
         inset: 0;
@@ -282,14 +213,13 @@
         z-index: 1000;
     }
 
-    /* ── Centered glass modal ── */
     .fd-modal {
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%,-50%);
-        width: min(960px, 94vw);
-        height: min(760px, 90vh);
+        width: min(960px,94vw);
+        height: min(760px,90vh);
         background: rgba(30,41,59,0.92);
         backdrop-filter: blur(14px);
         border: 1px solid rgba(6,182,212,0.35);
@@ -315,10 +245,9 @@
         }
     }
 
-    /* ── Header ─ */
     .fd-header {
         flex-shrink: 0;
-        padding: 18px 24px 12px;
+        padding: 16px 24px 10px;
         border-bottom: 1px solid #334155;
     }
 
@@ -338,7 +267,7 @@
     .fd-id {
         color: #64748b;
         font-size: 12px;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         font-weight: normal;
     }
 
@@ -364,7 +293,7 @@
     .fd-badge {
         font-size: 9px;
         font-weight: bold;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         padding: 3px 8px;
         border-radius: 4px;
         border: 1px solid;
@@ -407,13 +336,11 @@
         .fd-badge.sev-medium {
             color: #e2e8f0;
             border-color: #475569;
-            background: rgba(226,232,240,0.08);
         }
 
         .fd-badge.sev-low {
             color: #94a3b8;
             border-color: #475569;
-            background: rgba(148,163,184,0.12);
         }
 
         .fd-badge.risk {
@@ -442,12 +369,46 @@
             border-color: #475569;
         }
 
-    /* ── Tab bar ── */
+    .fd-actionbar {
+        flex-shrink: 0;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 12px 24px;
+        border-bottom: 1px solid #334155;
+        background: rgba(15,23,42,0.5);
+    }
+
+    .fd-action {
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        font-size: 12px;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: 'Consolas',monospace;
+        transition: 0.2s;
+        white-space: nowrap;
+    }
+
+        .fd-action:hover {
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+
+        .fd-action.active {
+            border-color: #06b6d4;
+            color: #06b6d4;
+            background: rgba(6,182,212,0.1);
+            box-shadow: 0 0 8px rgba(6,182,212,0.25);
+        }
+
     .fd-tabs {
         flex-shrink: 0;
         display: flex;
         gap: 4px;
-        padding: 10px 24px 0;
+        padding: 8px 24px 0;
         border-bottom: 1px solid #334155;
     }
 
@@ -466,7 +427,6 @@
 
         .fd-tab:hover {
             color: #e2e8f0;
-            background: rgba(6,182,212,0.05);
         }
 
         .fd-tab.active {
@@ -476,18 +436,17 @@
             background: rgba(6,182,212,0.08);
         }
 
-    /* ── Body: the only scrolling region ── */
     .fd-body {
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        padding: 20px 24px;
+        padding: 18px 24px;
         scrollbar-width: thin;
         scrollbar-color: #164e63 transparent;
     }
 
     .fd-section {
-        margin-bottom: 18px;
+        margin-bottom: 16px;
     }
 
     .fd-label {
@@ -504,73 +463,25 @@
         line-height: 1.6;
     }
 
-    .fd-cols {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 18px;
-    }
-
-    .fd-col {
-        background: rgba(15,23,42,0.7);
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 14px;
-    }
-
-    .fd-big {
-        font-family: 'Consolas', monospace;
+    .fd-subtitle {
+        color: #06b6d4;
+        font-size: 15px;
         font-weight: bold;
-        font-size: 16px;
-        color: #e2e8f0;
+        margin-top: 6px;
     }
 
-    .fv-pass {
-        color: #10b981;
-    }
-
-    .fv-fail {
-        color: #ef4444;
-    }
-
-    .fv-warning {
-        color: #f59e0b;
-    }
-
-    .fv-ignored {
-        color: #94a3b8;
-    }
-
-    .fv-error {
-        color: #dc2626;
-    }
-
-    .fv-falsepositive {
-        color: #a78bfa;
-    }
-
-    .fd-notice {
-        display: inline-block;
-        background: rgba(148,163,184,0.15);
-        border: 1px solid #475569;
-        color: #94a3b8;
-        font-size: 10px;
-        font-weight: bold;
-        letter-spacing: 1px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        margin-bottom: 18px;
-        text-transform: uppercase;
-    }
-
-    /* ── Panels (guidance / tool path / undo) ── */
     .fd-panel {
         background: rgba(245,158,11,0.04);
         border: 1px solid rgba(245,158,11,0.25);
         border-radius: 10px;
         padding: 14px 16px;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
+
+        .fd-panel.default {
+            background: rgba(6,182,212,0.05);
+            border-color: rgba(6,182,212,0.3);
+        }
 
         .fd-panel.reg-alt {
             border-color: rgba(239,68,68,0.4);
@@ -597,17 +508,26 @@
 
     .fd-row-value {
         color: #e2e8f0;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         font-size: 12px;
     }
 
-    /* ── Code block + copy ── */
+    .fd-note {
+        margin-top: 6px;
+        padding: 6px 10px;
+        border: 1px dashed #475569;
+        border-radius: 6px;
+        color: #94a3b8;
+        font-size: 11px;
+        line-height: 1.6;
+    }
+
     .fd-code {
         background: #0a0e1a;
         border: 1px solid #334155;
         border-radius: 6px;
         padding: 10px 12px;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         font-size: 12px;
         color: #7dd3fc;
         word-break: break-all;
@@ -628,31 +548,12 @@
         white-space: nowrap;
     }
 
-    /* ── Action buttons ── */
     .fd-actions {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
-        margin-bottom: 14px;
+        margin-top: 10px;
     }
-
-    .fd-action {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        font-size: 10px;
-        padding: 5px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: 'Consolas', monospace;
-        transition: 0.2s;
-        white-space: nowrap;
-    }
-
-        .fd-action:hover {
-            border-color: #06b6d4;
-            color: #06b6d4;
-        }
 
     .fd-link {
         background: none;
@@ -663,11 +564,10 @@
         font-weight: bold;
     }
 
-    /* ── Glowing "Go to" target ── */
     .glow-target {
         color: #06b6d4;
         font-weight: bold;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         font-size: 12px;
         padding: 6px 8px;
         border: 1px dashed rgba(6,182,212,0.5);
@@ -687,7 +587,6 @@
         }
     }
 
-    /* ── Sub-settings two-column grid ── */
     .fd-subgrid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -713,7 +612,7 @@
 
     .fd-subid {
         color: #06b6d4;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         font-size: 9px;
         font-weight: bold;
         flex-shrink: 0;
@@ -739,7 +638,7 @@
     .fd-subexp {
         color: #94a3b8;
         font-size: 9px;
-        font-family: 'Consolas', monospace;
+        font-family: 'Consolas',monospace;
         flex-shrink: 0;
     }
 
@@ -750,29 +649,11 @@
         font-size: 12px;
     }
 
-    .fd-subtitle {
-        color: #06b6d4;
-        font-size: 15px;
-        font-weight: bold;
-        margin-bottom: 6px;
-    }
-
-    /* ── Sticky footer ── */
     .fd-footer {
         flex-shrink: 0;
         border-top: 1px solid #334155;
         padding: 12px 24px;
         background: rgba(15,23,42,0.6);
-    }
-
-    .fd-rescan-note {
-        margin-bottom: 8px;
-        padding: 8px 10px;
-        border: 1px solid rgba(6,182,212,0.4);
-        background: rgba(6,182,212,0.08);
-        color: #06b6d4;
-        font-size: 11px;
-        border-radius: 6px;
     }
 
     .fd-footer-actions {
