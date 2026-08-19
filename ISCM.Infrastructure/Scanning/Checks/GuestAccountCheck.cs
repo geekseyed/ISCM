@@ -2,6 +2,7 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
@@ -12,45 +13,38 @@ public class GuestAccountCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.Account;
     public CheckSeverity Severity => CheckSeverity.Critical;
 
-    // EDIT (گام ۲۶): دو زیرمجموعه با راهنمای کامل (توصیه → پرامپت → verifikasi → ناوبری)
+    // Paths verified against the Revised PDF (item 3): both under Local Policies > Security Options.
     private static readonly List<SubCheck> SubChecks = new()
     {
-        new SubCheck
-        {
-            Id = "GUEST-001.1",
-            Title = "Accounts: Guest account status",
-            Expected = "Disabled",
+        new SubCheck { Id = "GUEST-001.1", Title = "Accounts: Guest account status", Expected = "Disabled",
             WhatItDoes = "Turns off the built-in Guest account entirely.",
-            Recommendation = "Disable the built-in Guest account to remove the anonymous-access attack vector.",
-            CliCommand = "net user Guest /active:no",
-            Verification = "Run: net user Guest → 'Account active' must show 'No'. Or in secpol.msc → Security Options → 'Accounts: Guest account status' = Disabled.",
-            ConsoleTool = "secpol.msc",
-            DestinationLabel = "Security Options → Guest account status",
-            YouAreHere = "Local Security Policy (root) → Local Policies",
-            GoTo = "Security Settings → Local Policies → Security Options → Accounts: Guest account status → Disabled",
-            GraphicalSteps = "1) Expand Local Policies. 2) Click Security Options. 3) Double-click 'Accounts: Guest account status'. 4) Set Disabled.",
-            HasRegistryPath = false,
-            RegistryPath = "",
-            AlternativeToRegistry = ""
-        },
-        new SubCheck
-        {
-            Id = "GUEST-001.2",
-            Title = "Accounts: Rename guest account",
-            Expected = "Unique complex name",
+            Recommendation = "Disable the built-in Guest account.",
+            CheckCurrentCli = "net user Guest", CliCommand = "net user Guest /active:no",
+            VerifyCli = "net user Guest", Verification = "'Account active' shows No.",
+            ValueMap = "/active:no = Disabled.", CliTokens = "Guest: built-in account; /active:no disables it.",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → Guest account status",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Guest account status",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            YouAreHere = "secpol.msc → Security Settings → Local Policies",
+            GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > 'Accounts: Guest account status' > Disabled",
+            GraphicalSteps = "1) secpol.msc. 2) Expand Local Policies. 3) Click Security Options. 4) Right pane: double-click 'Accounts: Guest account status'. 5) Disabled.",
+            UndoCli = "net user Guest /active:yes", IgnoreConsequence = "Anonymous guest access remains an attack vector.",
+            HasRegistryPath = false, RegistryPath = "", AlternativeToRegistry = "" },
+        new SubCheck { Id = "GUEST-001.2", Title = "Accounts: Rename guest account", Expected = "Unique complex name",
             WhatItDoes = "Renames Guest so attackers cannot target a known account name.",
-            Recommendation = "Rename Guest to a unique complex name so attackers cannot target a known account.",
+            Recommendation = "Rename the SID -501 account.",
+            CheckCurrentCli = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select Name",
             CliCommand = "$g = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }; Rename-LocalUser -SID $g.SID -NewName 'Seyedi.pro'",
-            Verification = "Run: Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } → Name must NOT be 'Guest'.",
-            ConsoleTool = "secpol.msc",
-            DestinationLabel = "Security Options → Rename guest account",
-            YouAreHere = "Local Security Policy (root) → Local Policies",
-            GoTo = "Security Settings → Local Policies → Security Options → Accounts: Rename guest account → set unique name",
-            GraphicalSteps = "1) In Security Options, double-click 'Accounts: Rename guest account'. 2) Enter a unique complex name.",
-            HasRegistryPath = false,
-            RegistryPath = "",
-            AlternativeToRegistry = ""
-        }
+            VerifyCli = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select Name",
+            Verification = "Name is not 'Guest'.", ValueMap = "", CliTokens = "SID -501: built-in guest; Rename-LocalUser changes its name.",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → Rename guest account",
+            GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > 'Accounts: Rename guest account' > Set to a unique complex name",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Rename guest account",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            YouAreHere = "secpol.msc → Security Settings → Local Policies",
+            GraphicalSteps = "1) secpol.msc → Local Policies → Security Options. 2) Double-click 'Accounts: Rename guest account'. 3) Enter a unique complex name.",
+            UndoCli = "# rename back if required", IgnoreConsequence = "Known account name stays targetable.",
+            HasRegistryPath = false, RegistryPath = "", AlternativeToRegistry = "" }
     };
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -90,10 +84,8 @@ public class GuestAccountCheck : IHardeningCheck
             {
                 USER_INFO_1 userInfo = Marshal.PtrToStructure<USER_INFO_1>(bufPtr);
                 bool isDisabled = (userInfo.usri1_flags & UF_ACCOUNTDISABLE) != 0;
-
                 currentValue = isDisabled ? "Disabled" : "Enabled";
                 status = isDisabled ? CheckStatus.Pass : CheckStatus.Fail;
-
                 NetApiBufferFree(bufPtr);
             }
             else
@@ -111,16 +103,11 @@ public class GuestAccountCheck : IHardeningCheck
         }
 
         return Task.FromResult(new Finding(
-            CheckId,
-            Name,
-            Category,
-            Severity,
-            status,
-            currentValue,
+            CheckId, Name, Category, Severity, status, currentValue,
             "Disabled",
             "Disable the built-in Guest account via Local Security Policy or net command.",
             errorMessage: errorMessage,
-            description: "The built-in Guest account provides anonymous access to the system and must always be disabled to prevent unauthorized access.",
+            description: "The built-in Guest account provides anonymous access and must be disabled.",
             registryPath: null,
             cisReference: "CIS 2.3.1.1",
             riskScore: 95,
