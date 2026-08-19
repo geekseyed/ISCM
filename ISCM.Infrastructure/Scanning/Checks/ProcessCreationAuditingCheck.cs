@@ -15,27 +15,52 @@ public class ProcessCreationAuditingCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.Audit;
     public CheckSeverity Severity => CheckSeverity.Medium;
 
+    // Revised PDF item 5: three SEPARATE controls (Detailed Tracking / Admin Templates / Security Options).
     private static readonly List<SubCheck> SubChecks = new()
     {
-        new SubCheck { Id = "PRC-001.1", Title = "Audit Process Creation", Expected = "Success (Event 4688)",
-            WhatItDoes = "Logs every new process started on the system.",
-            Recommendation = "Enable success auditing for Process Creation.",
-            CliCommand = "auditpol /set /subcategory:\"Process Creation\" /success:enable",
-            Verification = "Run: auditpol /get /subcategory:\"Process Creation\" → Success enabled.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Advanced Audit → Detailed Tracking → Process Creation",
-            YouAreHere = "Audit Policy (root)", GoTo = "Advanced Audit → Detailed Tracking → Process Creation → Success",
-            GraphicalSteps = "1) Advanced Audit Policy → Detailed Tracking. 2) 'Audit Process Creation' → Success.",
-            HasRegistryPath = false },
+        new SubCheck { Id = "PRC-001.1", Title = "Audit Process Creation (Event 4688)", Expected = "Success",
+            WhatItDoes = "Generates Event 4688 for every new process.", Recommendation = "Enable Success for Process Creation.",
+            CheckCurrentCli = "auditpol /get /subcategory:\"Process Creation\"", CliCommand = "auditpol /set /subcategory:\"Process Creation\" /success:enable",
+            VerifyCli = "auditpol /get /subcategory:\"Process Creation\"", Verification = "Success auditing enabled.",
+            ValueMap = "", CliTokens = "/subcategory: the Detailed Tracking subcategory; /success:enable logs creations.",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Advanced Audit → Detailed Tracking → Audit Process Creation",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > Detailed Tracking > Audit Process Creation",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > Detailed Tracking",
+            YouAreHere = "secpol.msc → Advanced Audit Policy Configuration → System Audit Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > Detailed Tracking > 'Audit Process Creation' > Success",
+            GraphicalSteps = "1) secpol.msc → Advanced Audit Policy Configuration → System Audit Policies → Detailed Tracking. 2) Double-click 'Audit Process Creation'. 3) Check Success.",
+            UndoCli = "auditpol /set /subcategory:\"Process Creation\" /success:disable", IgnoreConsequence = "No process-creation trail for forensics.", HasRegistryPath = false },
         new SubCheck { Id = "PRC-001.2", Title = "Include command line in process creation events", Expected = "Enabled",
-            WhatItDoes = "Adds the full command line to Event 4688 for forensic detail.",
-            Recommendation = "Set ProcessCreationIncludeCmdLine_Enabled = 1.",
+            WhatItDoes = "Adds full command-line arguments to Event 4688.", Recommendation = "ProcessCreationIncludeCmdLine_Enabled = 1.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit' | Select ProcessCreationIncludeCmdLine_Enabled",
             CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit' -Name ProcessCreationIncludeCmdLine_Enabled -Value 1 -Type DWord",
-            Verification = "Get-ItemProperty '...\\System\\Audit' → ProcessCreationIncludeCmdLine_Enabled = 1.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "System → Audit Process Creation → Include cmdline",
-            YouAreHere = "Registry Editor (root)", GoTo = "Policies\\System\\Audit → ProcessCreationIncludeCmdLine_Enabled = 1",
-            GraphicalSteps = "1) gpedit → System → Audit Process Creation. 2) 'Include command line…' = Enabled.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit\ProcessCreationIncludeCmdLine_Enabled",
-            AlternativeToRegistry = "Prefer gpedit.msc → System → Audit Process Creation over manual registry editing." }
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit' | Select ProcessCreationIncludeCmdLine_Enabled",
+            Verification = "ProcessCreationIncludeCmdLine_Enabled = 1.", ValueMap = "1 = Enabled, 0 = Disabled.",
+            CliTokens = "-Name ProcessCreationIncludeCmdLine_Enabled: embeds command lines in 4688.",
+            ConsoleTool = "gpedit.msc", DestinationLabel = "System → Audit Process Creation → Include command line",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Audit Process Creation > Include command line in process creation events",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Audit Process Creation",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > System > Audit Process Creation > 'Include command line in process creation events' > Enabled",
+            GraphicalSteps = "1) gpedit.msc → Computer Configuration → Administrative Templates → System → Audit Process Creation. 2) 'Include command line in process creation events' = Enabled.",
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit' -Name ProcessCreationIncludeCmdLine_Enabled -Value 0",
+            IgnoreConsequence = "4688 events lack command-line detail.", HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit\ProcessCreationIncludeCmdLine_Enabled",
+            AlternativeToRegistry = "Prefer gpedit.msc → System → Audit Process Creation." },
+        new SubCheck { Id = "PRC-001.3", Title = "Audit: Force audit policy subcategory settings to override category settings", Expected = "Enabled",
+            WhatItDoes = "Prevents basic audit policy from overwriting advanced subcategory settings.", Recommendation = "SCENoApplyLegacyAuditPolicy = 1.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select SCENoApplyLegacyAuditPolicy",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name SCENoApplyLegacyAuditPolicy -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select SCENoApplyLegacyAuditPolicy",
+            Verification = "SCENoApplyLegacyAuditPolicy = 1.", ValueMap = "1 = subcategories override categories.",
+            CliTokens = "-Name SCENoApplyLegacyAuditPolicy: forces advanced audit subcategories to win.",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → Force audit subcategory override",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Audit: Force audit policy subcategory settings (Windows Vista or later) to override audit policy category settings",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            YouAreHere = "secpol.msc → Security Settings → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > 'Audit: Force audit policy subcategory settings (Windows Vista or later) to override audit policy category settings' > Enabled",
+            GraphicalSteps = "1) secpol.msc → Local Policies → Security Options. 2) Double-click 'Audit: Force audit policy subcategory settings (Windows Vista or later) to override audit policy category settings'. 3) Enabled.",
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name SCENoApplyLegacyAuditPolicy -Value 0",
+            IgnoreConsequence = "Legacy audit policy may overwrite your subcategory settings.", HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\SCENoApplyLegacyAuditPolicy",
+            AlternativeToRegistry = "Prefer secpol.msc → Security Options." }
     };
 
     public Task<Finding> EvaluateAsync()
@@ -50,13 +75,15 @@ public class ProcessCreationAuditingCheck : IHardeningCheck
         }
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 
-        return Task.FromResult(new Finding(CheckId, Name, Category, Severity, status, currentValue,
+        return Task.FromResult(new Finding(
+            CheckId, Name, Category, Severity, status, currentValue,
             "Enabled", "Enable process-creation auditing with command-line capture for forensic visibility.",
             errorMessage: errorMessage,
             description: "Records every new process along with its full command line (Event 4688).",
             registryPath: $@"HKLM\{RegPath}\{ValueName}",
             cisReference: "CIS 10.2", riskScore: 55, sourceType: "RegistryReader",
             sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc" }, subChecks: SubChecks));
+            fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
+            subChecks: SubChecks));
     }
 }
