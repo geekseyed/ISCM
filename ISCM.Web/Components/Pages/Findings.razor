@@ -25,128 +25,70 @@
         box-sizing: border-box;
     }
 
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 10px;
+    .stats-tabs {
+        display: flex;
+        gap: 12px;
         margin-bottom: 16px;
+        flex-wrap: wrap;
     }
 
-    .kpi-card {
+    .stat-tab {
         background: rgba(15,23,42,0.6);
-        border: 1px solid #1e293b;
-        border-radius: 8px;
-        padding: 12px 14px;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 14px 20px;
         cursor: pointer;
         transition: 0.2s;
-        border-left: 3px solid #334155;
+        min-width: 140px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
     }
 
-        .kpi-card:hover {
+        .stat-tab:hover {
             border-color: #06b6d4;
-            transform: translateY(-1px);
+            transform: translateY(-2px);
         }
 
-        .kpi-card.active {
-            border-color: #06b6d4 !important;
-            background: rgba(6,182,212,0.08);
+        .stat-tab.active {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.12);
+            box-shadow: 0 0 12px rgba(6,182,212,0.2);
         }
 
-    .kpi-value {
-        font-size: 22px;
+    .stat-value {
+        font-size: 28px;
         font-weight: 800;
         font-family: 'Consolas', monospace;
         color: #e2e8f0;
         line-height: 1;
     }
 
-    .kpi-label {
-        font-size: 10px;
-        color: #64748b;
-        text-transform: uppercase;
-        margin-top: 4px;
-    }
-
-    .kpi-sub {
-        font-size: 9px;
-        color: #475569;
-        margin-top: 2px;
-    }
-
-    .kpi-total {
-        border-left-color: #06b6d4 !important;
-    }
-
-    .kpi-open {
-        border-left-color: #f59e0b !important;
-    }
-
-    .kpi-critical {
-        border-left-color: #ef4444 !important;
-    }
-
-    .kpi-warning {
-        border-left-color: #f59e0b !important;
-    }
-
-    .kpi-suppressed {
-        border-left-color: #94a3b8 !important;
-    }
-
-    .kpi-compliance {
-        border-left-color: #10b981 !important;
-    }
-
-    .sev-dist-row {
-        display: flex;
-        gap: 20px;
-        align-items: center;
-        margin-bottom: 14px;
-        flex-wrap: wrap;
-    }
-
-    .sev-chips {
-        display: flex;
-        gap: 14px;
-        align-items: center;
-    }
-
-    .sev-chip {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        font-size: 12px;
+    .stat-label {
+        font-size: 11px;
         color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
 
-    .sev-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
+    .stat-tab.all {
+        border-left: 4px solid #06b6d4;
     }
 
-        .sev-dot.critical {
-            background: #ef4444;
-            box-shadow: 0 0 6px #ef4444;
-        }
+    .stat-tab.fail {
+        border-left: 4px solid #ef4444;
+    }
 
-        .sev-dot.high {
-            background: #f59e0b;
-            box-shadow: 0 0 6px #f59e0b;
-        }
+    .stat-tab.pass {
+        border-left: 4px solid #10b981;
+    }
 
-        .sev-dot.medium {
-            background: #eab308;
-        }
+    .stat-tab.ignored {
+        border-left: 4px solid #94a3b8;
+    }
 
-        .sev-dot.low {
-            background: #64748b;
-        }
-
-    .sev-count {
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-        color: #e2e8f0;
+    .stat-tab.madanchi {
+        border-left: 4px solid #f59e0b;
     }
 
     .search-wrap {
@@ -175,76 +117,6 @@
 
         .search-box::placeholder {
             color: #64748b;
-        }
-
-    .filter-tabs {
-        display: flex;
-        gap: 20px;
-        border-bottom: 1px solid #1e293b;
-        margin-bottom: 12px;
-    }
-
-    .filter-tab {
-        background: none;
-        border: none;
-        color: #94a3b8;
-        font-weight: bold;
-        font-size: 13px;
-        padding: 8px 4px;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        text-transform: uppercase;
-        transition: 0.2s;
-    }
-
-        .filter-tab:hover {
-            color: #e2e8f0;
-        }
-
-        .filter-tab.active {
-            color: #e2e8f0;
-            border-bottom-color: #06b6d4;
-        }
-
-    .ft-count {
-        color: #64748b;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-        margin-left: 5px;
-    }
-
-    .filter-tab.active .ft-count {
-        color: #06b6d4;
-    }
-
-    .toolbar-row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 12px;
-        flex-wrap: wrap;
-    }
-
-    .preset-btn {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        font-size: 11px;
-        padding: 5px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: 0.2s;
-    }
-
-        .preset-btn:hover {
-            border-color: #06b6d4;
-            color: #e2e8f0;
-        }
-
-        .preset-btn.active {
-            background: rgba(6,182,212,0.15);
-            border-color: #06b6d4;
-            color: #06b6d4;
         }
 
     .bulk-bar {
@@ -300,6 +172,7 @@
     .cat-links {
         display: flex;
         gap: 16px;
+        flex-wrap: wrap;
     }
 
     .cat-link {
@@ -354,6 +227,7 @@
         padding: 12px 14px;
         cursor: pointer;
         transition: 0.2s;
+        flex-wrap: wrap;
     }
 
         .finding-card:hover {
@@ -471,6 +345,17 @@
         font-weight: bold;
     }
 
+    .madanchi-badge {
+        color: #f59e0b;
+        border: 1px solid rgba(245,158,11,0.4);
+        background: rgba(245,158,11,0.1);
+        font-family: 'Consolas', monospace;
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+
     .finding-source {
         color: #64748b;
         font-size: 11px;
@@ -495,6 +380,12 @@
     .fv-current {
         font-family: 'Consolas', monospace;
         font-weight: bold;
+        font-size: 11px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        word-break: break-all;
     }
 
     .fv-pass {
@@ -530,6 +421,7 @@
         display: flex;
         gap: 6px;
         align-items: center;
+        flex-wrap: wrap;
     }
 
     .action-btn {
@@ -563,6 +455,7 @@
         display: flex;
         gap: 6px;
         align-items: center;
+        flex-wrap: wrap;
     }
 
     .status-pass {
@@ -677,7 +570,7 @@
         padding: 40px;
         font-size: 13px;
     }
-    /* ── EDIT (گام ۲۶-ادامه): آکاردئون زیرمجموعه‌ها ── */
+
     .finding-wrap {
         display: flex;
         flex-direction: column;
@@ -754,47 +647,26 @@
 </style>
 
 <div class="glass-panel">
-    <div class="kpi-grid">
-        <div class="kpi-card kpi-total @(ActivePreset == "all" && SelectedFilter == "All" ? "active" : "")" @onclick="ApplyPresetAll">
-            <div class="kpi-value">@KpiTotal</div>
-            <div class="kpi-label">Total Findings</div>
-            <div class="kpi-sub">across all checks</div>
+    <div class="stats-tabs">
+        <div class="stat-tab all @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">
+            <div class="stat-value">@CountFail</div>
+            <div class="stat-label">Fail</div>
         </div>
-        <div class="kpi-card kpi-open @(ActivePreset == "needs-remediation" ? "active" : "")" @onclick="ApplyPresetNeedsRemediation">
-            <div class="kpi-value">@KpiOpenRisk</div>
-            <div class="kpi-label">Open Risk</div>
-            <div class="kpi-sub">fail + warn</div>
+        <div class="stat-tab fail @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">
+            <div class="stat-value">@CountFail</div>
+            <div class="stat-label">Fail</div>
         </div>
-        <div class="kpi-card kpi-critical @(ActivePreset == "critical-open" ? "active" : "")" @onclick="ApplyPresetCriticalOpen">
-            <div class="kpi-value">@KpiCritical</div>
-            <div class="kpi-label">Critical</div>
-            <div class="kpi-sub">immediate action</div>
+        <div class="stat-tab pass @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">
+            <div class="stat-value">@CountPass</div>
+            <div class="stat-label">Pass</div>
         </div>
-        <div class="kpi-card kpi-warning @(SelectedFilter == "Warning" ? "active" : "")" @onclick="ApplyPresetWarnings">
-            <div class="kpi-value">@KpiWarnings</div>
-            <div class="kpi-label">Warnings</div>
-            <div class="kpi-sub">needs review</div>
+        <div class="stat-tab ignored @(SelectedFilter == "Ignored" ? "active" : "")" @onclick="SetFilterIgnored">
+            <div class="stat-value">@CountIgnored</div>
+            <div class="stat-label">Ignored</div>
         </div>
-        <div class="kpi-card kpi-suppressed @(ActivePreset == "ignored" ? "active" : "")" @onclick="ApplyPresetIgnored">
-            <div class="kpi-value">@KpiSuppressed</div>
-            <div class="kpi-label">Ignored / FP</div>
-            <div class="kpi-sub">suppressed</div>
-        </div>
-        <div class="kpi-card kpi-compliance" @onclick="ApplyPresetAll">
-            <div class="kpi-value">@KpiCompliance%</div>
-            <div class="kpi-label">Compliance</div>
-            <div class="kpi-sub">pass rate</div>
-        </div>
-    </div>
-
-    <div class="sev-dist-row">
-        <div class="sev-chips">
-            <span style="color:#94a3b8; font-size: 12px; font-weight: bold;">Severity Distribution</span>
-            <span style="color:#e2e8f0; font-size: 13px; font-family: Consolas;">@BaseFilteredFindings.Count() total</span>
-            <div class="sev-chip"><span class="sev-dot critical"></span>Critical <span class="sev-count">@SevCriticalCount</span></div>
-            <div class="sev-chip"><span class="sev-dot high"></span>High <span class="sev-count">@SevHighCount</span></div>
-            <div class="sev-chip"><span class="sev-dot medium"></span>Medium <span class="sev-count">@SevMediumCount</span></div>
-            <div class="sev-chip"><span class="sev-dot low"></span>Low <span class="sev-count">@SevLowCount</span></div>
+        <div class="stat-tab madanchi @(SelectedFilter == "Madanchi" ? "active" : "")" @onclick="SetFilterMadanchi">
+            <div class="stat-value">@CountMadanchi</div>
+            <div class="stat-label">Madanchi</div>
         </div>
     </div>
 
@@ -806,21 +678,6 @@
             </svg>
         </span>
         <input type="text" class="search-box" placeholder="Search findings..." @bind="SearchTerm" @bind:event="oninput" />
-    </div>
-
-    <div class="filter-tabs">
-        <button class="filter-tab @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">All <span class="ft-count">@CountAll</span></button>
-        <button class="filter-tab @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">Fail <span class="ft-count">@CountFail</span></button>
-        <button class="filter-tab @(SelectedFilter == "Warning" ? "active" : "")" @onclick="SetFilterWarn">Warn <span class="ft-count">@CountWarn</span></button>
-        <button class="filter-tab @(SelectedFilter == "Pass" ? "active" : "")" @onclick="SetFilterPass">Pass <span class="ft-count">@CountPass</span></button>
-    </div>
-
-    <div class="toolbar-row">
-        <button class="preset-btn @(ActivePreset == "all" ? "active" : "")" @onclick="ApplyPresetAll">All</button>
-        <button class="preset-btn @(ActivePreset == "critical-open" ? "active" : "")" @onclick="ApplyPresetCriticalOpen">Critical Open</button>
-        <button class="preset-btn @(ActivePreset == "needs-remediation" ? "active" : "")" @onclick="ApplyPresetNeedsRemediation">Needs Remediation</button>
-        <button class="preset-btn @(ActivePreset == "quick-wins" ? "active" : "")" @onclick="ApplyPresetQuickWins">Quick Wins (Low Risk)</button>
-        <button class="preset-btn @(ActivePreset == "ignored" ? "active" : "")" @onclick="ApplyPresetIgnored">Ignored / FP</button>
     </div>
 
     <div class="bulk-bar @(SelectedFindingIds.Count > 0 ? "visible" : "")">
@@ -862,6 +719,8 @@
                 var subs = f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
                 var hasSubs = subs.Count > 0;
                 var isExpanded = ExpandedIds.Contains(f.CheckId);
+                var isMadanchi = IsMadanchiFinding(f);
+
                 <div class="finding-wrap">
                     <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
                         <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
@@ -871,6 +730,10 @@
                             <div class="finding-title-row">
                                 <span class="finding-name">@f.Name</span>
                                 <span class="finding-id">@f.CheckId</span>
+                                @if (isMadanchi)
+                                {
+                                    <span class="madanchi-badge">Madanchi</span>
+                                }
                                 @if (!string.IsNullOrEmpty(f.CisReference))
                                 {
                                     <span class="cis-badge">@f.CisReference</span>
@@ -914,7 +777,6 @@
                         }
                     </div>
 
-                    @* EDIT: زیرمجموعه‌ها زیر همان کارت — گرید دوستونه *@
                     @if (hasSubs && isExpanded)
                     {
                         <div class="sub-grid">
@@ -938,13 +800,11 @@
     }
 </div>
 
-@* EDIT: Drawer حالا یک کامپوننت مستقل است — همیشه رندر می‌شود تا استایل‌هایش فعال بمانند *@
 <FindingDrawer SelectedFinding="SelectedFinding" InitialSubCheck="SelectedSub" Close="OnDrawerClose" />
 
 @code {
     private string SelectedFilter = "All";
     private string SearchTerm = "";
-    private string ActivePreset = "all";
     private HashSet<string> SelectedFindingIds = new();
     private Finding? SelectedFinding;
 
@@ -954,7 +814,6 @@
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
 
-    // ── فیلتر پایه: دسته‌بندی + جستجو ──
     private IEnumerable<Finding> BaseFilteredFindings
     {
         get
@@ -970,55 +829,35 @@
         }
     }
 
-    // ── KPI ──
-    private int KpiTotal => BaseFilteredFindings.Count();
-    private int KpiOpenRisk => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
-    private int KpiCritical => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
-    private int KpiWarnings => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Warning);
-    private int KpiSuppressed => BaseFilteredFindings.Count(f => f.IsSuppressed);
-    private int KpiCompliance => StateService.CurrentScanResult?.ComplianceScore ?? 0;
+    private int CountFail => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+    private int CountPass => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Pass);
+    private int CountIgnored => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Ignored);
+    private int CountMadanchi => BaseFilteredFindings.Count(f => IsMadanchiFinding(f));
 
-    private int SevCriticalCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Critical);
-    private int SevHighCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.High);
-    private int SevMediumCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Medium);
-    private int SevLowCount => BaseFilteredFindings.Count(f => f.Severity == CheckSeverity.Low);
-
-    // ── لایه Preset ──
-    private IEnumerable<Finding> PreStatusFindings
-    {
-        get
-        {
-            var findings = BaseFilteredFindings;
-            findings = ApplyPreset(findings, ActivePreset);
-            return findings;
-        }
-    }
-
-    private int CountAll => PreStatusFindings.Count();
-    private int CountFail => PreStatusFindings.Count(f => f.Status == CheckStatus.Fail);
-    private int CountWarn => PreStatusFindings.Count(f => f.Status == CheckStatus.Warning);
-    private int CountPass => PreStatusFindings.Count(f => f.Status == CheckStatus.Pass);
-
-    // ── لیست نهایی + ترتیب پایدار (گام ۲۶) ──
     private IEnumerable<Finding> FinalFindings
     {
         get
         {
-            var findings = PreStatusFindings;
-            if (SelectedFilter != "All")
-                findings = findings.Where(f => f.Status.ToString() == SelectedFilter);
-            return findings.OrderBy(f => f.CheckId).ToList();
+            var findings = BaseFilteredFindings;
+            if (SelectedFilter == "Fail")
+                findings = findings.Where(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+            else if (SelectedFilter == "Pass")
+                findings = findings.Where(f => f.Status == CheckStatus.Pass);
+            else if (SelectedFilter == "Ignored")
+                findings = findings.Where(f => f.Status == CheckStatus.Ignored);
+            else if (SelectedFilter == "Madanchi")
+                findings = findings.Where(f => IsMadanchiFinding(f));
+
+            return findings.OrderBy(f => f.Status == CheckStatus.Pass ? 1 : (f.Status == CheckStatus.Ignored ? 2 : 0))
+                           .ThenBy(f => f.CheckId)
+                           .ToList();
         }
     }
 
-    private static IEnumerable<Finding> ApplyPreset(IEnumerable<Finding> findings, string preset) => preset switch
+    private bool IsMadanchiFinding(Finding f)
     {
-        "critical-open" => findings.Where(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical),
-        "needs-remediation" => findings.Where(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning),
-        "quick-wins" => findings.Where(f => f.Status != CheckStatus.Pass && f.RiskScore < 40),
-        "ignored" => findings.Where(f => f.IsSuppressed),
-        _ => findings
-    };
+        return f.CheckId.StartsWith("MAD-", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string GetSourceType(Finding f)
     {
@@ -1095,21 +934,14 @@
         await DownloadFindingsAsCsv(items, $"DefenDoor_Selected_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
     }
 
-    private void ApplyPresetAll() { ActivePreset = "all"; SelectedFilter = "All"; }
-    private void ApplyPresetCriticalOpen() { ActivePreset = "critical-open"; SelectedFilter = "All"; }
-    private void ApplyPresetNeedsRemediation() { ActivePreset = "needs-remediation"; SelectedFilter = "All"; }
-    private void ApplyPresetQuickWins() { ActivePreset = "quick-wins"; SelectedFilter = "All"; }
-    private void ApplyPresetIgnored() { ActivePreset = "ignored"; SelectedFilter = "All"; }
-    private void ApplyPresetWarnings() { ActivePreset = "all"; SelectedFilter = "Warning"; }
-
     private void SetFilterAll() => SelectedFilter = "All";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
-    private void SetFilterWarn() => SelectedFilter = "Warning";
+    private void SetFilterIgnored() => SelectedFilter = "Ignored";
+    private void SetFilterMadanchi() => SelectedFilter = "Madanchi";
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
 
-    // EDIT (گام ۲۶-ادامه): آکاردئون زیرمجموعه‌ها در لیست
     private SubCheck? SelectedSub;
     private HashSet<string> ExpandedIds = new();
 
