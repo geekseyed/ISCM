@@ -7,6 +7,7 @@ namespace ISCM.Infrastructure.Scanning.Checks;
 
 public class CredentialGuardCheck : IHardeningCheck
 {
+    // Scanner reads two keys as a combined signal.
     private const string LsaPath = @"SYSTEM\CurrentControlSet\Control\Lsa";
     private const string DgPath = @"SYSTEM\CurrentControlSet\Control\DeviceGuard";
 
@@ -15,14 +16,225 @@ public class CredentialGuardCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.System;
     public CheckSeverity Severity => CheckSeverity.High;
 
+    // Revised PDF item 12 — six distinct controls across three separate GPO nodes.
     private static readonly List<SubCheck> SubChecks = new()
     {
-        new SubCheck { Id = "CRG-001.1", Title = "Turn On Virtualization Based Security", Expected = "Enabled", WhatItDoes = "Enables VBS, the base for Credential Guard.", Recommendation = "EnableVirtualizationBasedSecurity = 1.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name EnableVirtualizationBasedSecurity -Value 1 -Type DWord", Verification = "Get-ItemProperty DeviceGuard → EnableVirtualizationBasedSecurity = 1.", ConsoleTool = "gpedit.msc", DestinationLabel = "Device Guard → Turn on VBS", YouAreHere = "Registry Editor (root)", GoTo = "DeviceGuard → EnableVirtualizationBasedSecurity = 1", GraphicalSteps = "1) gpedit → Device Guard → Turn on VBS = Enabled.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\EnableVirtualizationBasedSecurity", AlternativeToRegistry = "Prefer gpedit.msc → Device Guard over manual registry editing." },
-        new SubCheck { Id = "CRG-001.2", Title = "Select Platform Security Level", Expected = "Secure Boot + DMA Protection", WhatItDoes = "Stronger isolation for VBS.", Recommendation = "RequirePlatformSecurityFeatures = 3.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name RequirePlatformSecurityFeatures -Value 3 -Type DWord", Verification = "RequirePlatformSecurityFeatures = 3.", ConsoleTool = "gpedit.msc", DestinationLabel = "Device Guard → Platform Security", YouAreHere = "Registry Editor (root)", GoTo = "DeviceGuard → RequirePlatformSecurityFeatures = 3", GraphicalSteps = "1) Set platform security = Secure Boot + DMA.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\RequirePlatformSecurityFeatures", AlternativeToRegistry = "Prefer gpedit.msc → Device Guard." },
-        new SubCheck { Id = "CRG-001.3", Title = "Credential Guard Configuration", Expected = "Enabled with UEFI lock", WhatItDoes = "Protects credentials, locked in firmware.", Recommendation = "LsaCfgFlags = 1.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\LSA' -Name LsaCfgFlags -Value 1 -Type DWord", Verification = "LsaCfgFlags = 1.", ConsoleTool = "gpedit.msc", DestinationLabel = "Device Guard → Credential Guard", YouAreHere = "Registry Editor (root)", GoTo = "LSA → LsaCfgFlags = 1", GraphicalSteps = "1) Credential Guard = Enabled with UEFI lock.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\LSA\LsaCfgFlags", AlternativeToRegistry = "Prefer gpedit.msc → Device Guard." },
-        new SubCheck { Id = "CRG-001.4", Title = "Secure Launch Configuration", Expected = "Enabled", WhatItDoes = "System Guard Secure Launch for boot integrity.", Recommendation = "SystemGuard = 1.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name SystemGuard -Value 1 -Type DWord", Verification = "SystemGuard = 1.", ConsoleTool = "gpedit.msc", DestinationLabel = "Device Guard → Secure Launch", YouAreHere = "Registry Editor (root)", GoTo = "DeviceGuard → SystemGuard = 1", GraphicalSteps = "1) Secure Launch = Enabled.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\SystemGuard", AlternativeToRegistry = "Prefer gpedit.msc → Device Guard." },
-        new SubCheck { Id = "CRG-001.5", Title = "Run LSASS as protected process (RunAsPPL)", Expected = "Enabled", WhatItDoes = "Blocks Mimikatz-style LSASS reads.", Recommendation = "RunAsPPL = 1.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name RunAsPPL -Value 1 -Type DWord", Verification = "RunAsPPL = 1.", ConsoleTool = "regedit.exe", DestinationLabel = "Lsa → RunAsPPL", YouAreHere = "Registry Editor (root)", GoTo = "Control\\Lsa → RunAsPPL = 1", GraphicalSteps = "1) Set RunAsPPL = 1.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\RunAsPPL", AlternativeToRegistry = "Registry is the supported method for RunAsPPL." },
-        new SubCheck { Id = "CRG-001.6", Title = "Send unencrypted password to 3rd-party SMB", Expected = "Disabled", WhatItDoes = "Reinforces credential protection over SMB.", Recommendation = "EnablePlainTextPassword = 0.", CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name EnablePlainTextPassword -Value 0 -Type DWord", Verification = "EnablePlainTextPassword = 0.", ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → unencrypted password", YouAreHere = "Registry Editor (root)", GoTo = "LanmanWorkstation → EnablePlainTextPassword = 0", GraphicalSteps = "1) Security Options → disable plaintext.", HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters\EnablePlainTextPassword", AlternativeToRegistry = "Prefer secpol.msc → Security Options." }
+        // ── 12.1 Turn On Virtualization Based Security (foundation) ──
+        new SubCheck
+        {
+            Id = "CRG-001.1",
+            Title = "Turn On Virtualization Based Security",
+            Expected = "Enabled",
+            WhatItDoes = "Enables the VBS platform required by Credential Guard.",
+            Recommendation = "Enable the Device Guard policy 'Turn On Virtualization Based Security'.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name EnableVirtualizationBasedSecurity -ErrorAction SilentlyContinue | Select-Object -ExpandProperty EnableVirtualizationBasedSecurity",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name EnableVirtualizationBasedSecurity -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name EnableVirtualizationBasedSecurity -ErrorAction SilentlyContinue",
+            Verification = "EnableVirtualizationBasedSecurity = 1.",
+            ValueMap = "1 = Enabled, 0 = Disabled.",
+            CliTokens = "EnableVirtualizationBasedSecurity: VBS master switch.",
+
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "Administrative Templates > System > Device Guard > Turn On Virtualization Based Security",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Device Guard > Turn On Virtualization Based Security",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Device Guard",
+            YouAreHere = "gpedit.msc > Computer Configuration > Administrative Templates > System",
+            GoTo = "Computer Configuration > Administrative Templates > System > Device Guard > 'Turn On Virtualization Based Security' > Enabled",
+            GraphicalSteps =
+                "1) Run gpedit.msc.\n" +
+                "2) Navigate to Computer Configuration > Administrative Templates > System > Device Guard.\n" +
+                "3) Double-click 'Turn On Virtualization Based Security'.\n" +
+                "4) Set the policy to Enabled.\n" +
+                "5) Click OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name EnableVirtualizationBasedSecurity -Value 0 -Type DWord",
+            IgnoreConsequence = "VBS is not available; Credential Guard cannot be enabled.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\EnableVirtualizationBasedSecurity",
+            AlternativeToRegistry = "Prefer gpedit.msc > Device Guard over manual registry editing."
+        },
+
+        // ── 12.2 Select Platform Security Level (option inside 12.1 dialog) ──
+        new SubCheck
+        {
+            Id = "CRG-001.2",
+            Title = "Select Platform Security Level",
+            Expected = "Secure Boot and DMA Protection",
+            WhatItDoes = "Raises the hardware-backed trust level required by VBS.",
+            Recommendation = "Inside the 'Turn On VBS' policy dialog, set Platform Security Level = Secure Boot and DMA Protection.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name RequirePlatformSecurityFeatures -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RequirePlatformSecurityFeatures",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name RequirePlatformSecurityFeatures -Value 3 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name RequirePlatformSecurityFeatures -ErrorAction SilentlyContinue",
+            Verification = "RequirePlatformSecurityFeatures = 3 (1=Secure Boot only, 3=Secure Boot + DMA Protection).",
+            ValueMap = "1 = Secure Boot only, 3 = Secure Boot and DMA Protection.",
+            CliTokens = "RequirePlatformSecurityFeatures: hardware trust level required by VBS.",
+
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "Device Guard > Turn On VBS (dialog) > Select Platform Security Level",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Device Guard > Turn On Virtualization Based Security (policy options inside the dialog)",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Device Guard",
+            YouAreHere = "gpedit.msc > Device Guard > Turn On Virtualization Based Security",
+            GoTo = "Computer Configuration > Administrative Templates > System > Device Guard > 'Turn On Virtualization Based Security' (dialog) > 'Select Platform Security Level' > Secure Boot and DMA Protection",
+            GraphicalSteps =
+                "1) gpedit.msc > Administrative Templates > System > Device Guard.\n" +
+                "2) Open 'Turn On Virtualization Based Security'.\n" +
+                "3) Inside the policy dialog, find 'Select Platform Security Level'.\n" +
+                "4) Choose 'Secure Boot and DMA Protection'.\n" +
+                "5) OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name RequirePlatformSecurityFeatures -Value 1 -Type DWord",
+            IgnoreConsequence = "VBS may run on a weaker hardware trust level.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\RequirePlatformSecurityFeatures",
+            AlternativeToRegistry = "Prefer the policy dialog options over manual registry editing."
+        },
+
+        // ── 12.3 Credential Guard Configuration (option inside 12.1 dialog) ──
+        new SubCheck
+        {
+            Id = "CRG-001.3",
+            Title = "Credential Guard Configuration",
+            Expected = "Enabled with UEFI lock",
+            WhatItDoes = "Protects LSA secrets and stores the enablement in firmware so it cannot be casually rolled back.",
+            Recommendation = "Inside the 'Turn On VBS' policy dialog, set Credential Guard Configuration = Enabled with UEFI lock.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LsaCfgFlags -ErrorAction SilentlyContinue | Select-Object -ExpandProperty LsaCfgFlags",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LsaCfgFlags -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LsaCfgFlags -ErrorAction SilentlyContinue",
+            Verification = "LsaCfgFlags = 1 (1 = Enabled with UEFI lock, 2 = Enabled without UEFI lock, 0 = Disabled).",
+            ValueMap = "1 = Enabled with UEFI lock, 2 = Enabled without UEFI lock, 0 = Disabled.",
+            CliTokens = "LsaCfgFlags: Credential Guard enablement + UEFI lock flag.",
+
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "Device Guard > Turn On VBS (dialog) > Credential Guard Configuration",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Device Guard > Turn On Virtualization Based Security (policy options inside the dialog)",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Device Guard",
+            YouAreHere = "gpedit.msc > Device Guard > Turn On Virtualization Based Security",
+            GoTo = "Computer Configuration > Administrative Templates > System > Device Guard > 'Turn On Virtualization Based Security' (dialog) > 'Credential Guard Configuration' > Enabled with UEFI lock",
+            GraphicalSteps =
+                "1) gpedit.msc > Administrative Templates > System > Device Guard.\n" +
+                "2) Open 'Turn On Virtualization Based Security'.\n" +
+                "3) Inside the policy dialog, find 'Credential Guard Configuration'.\n" +
+                "4) Choose 'Enabled with UEFI lock'.\n" +
+                "5) OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LsaCfgFlags -Value 0 -Type DWord",
+            IgnoreConsequence = "Credential Guard is not enabled; NTLM hashes and Kerberos tickets remain readable in LSASS memory.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\LsaCfgFlags",
+            AlternativeToRegistry = "Prefer the policy dialog options over manual registry editing."
+        },
+
+        // ── 12.4 Secure Launch Configuration (option inside 12.1 dialog) ──
+        new SubCheck
+        {
+            Id = "CRG-001.4",
+            Title = "Secure Launch Configuration",
+            Expected = "Enabled",
+            WhatItDoes = "Uses System Guard Secure Launch where supported to protect boot integrity.",
+            Recommendation = "Inside the 'Turn On VBS' policy dialog, set Secure Launch Configuration = Enabled.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name SystemGuard -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SystemGuard",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name SystemGuard -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name SystemGuard -ErrorAction SilentlyContinue",
+            Verification = "SystemGuard = 1.",
+            ValueMap = "1 = Enabled.",
+            CliTokens = "SystemGuard: System Guard Secure Launch switch.",
+
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "Device Guard > Turn On VBS (dialog) > Secure Launch Configuration",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Device Guard > Turn On Virtualization Based Security (policy options inside the dialog)",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Device Guard",
+            YouAreHere = "gpedit.msc > Device Guard > Turn On Virtualization Based Security",
+            GoTo = "Computer Configuration > Administrative Templates > System > Device Guard > 'Turn On Virtualization Based Security' (dialog) > 'Secure Launch Configuration' > Enabled",
+            GraphicalSteps =
+                "1) gpedit.msc > Administrative Templates > System > Device Guard.\n" +
+                "2) Open 'Turn On Virtualization Based Security'.\n" +
+                "3) Inside the policy dialog, find 'Secure Launch Configuration'.\n" +
+                "4) Set to Enabled.\n" +
+                "5) OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard' -Name SystemGuard -Value 0 -Type DWord",
+            IgnoreConsequence = "Boot-integrity protection from System Guard is not used.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\SystemGuard",
+            AlternativeToRegistry = "Prefer the policy dialog options over manual registry editing."
+        },
+
+        // ── 12.5 Configure LSASS to run as a protected process (NEW Revised path!) ──
+        new SubCheck
+        {
+            Id = "CRG-001.5",
+            Title = "Configure LSASS to run as a protected process (RunAsPPL)",
+            Expected = "Enabled (with or without UEFI lock)",
+            WhatItDoes = "Prevents unprotected processes (e.g. Mimikatz) from loading into or reading LSASS memory.",
+            Recommendation = "Enable the new dedicated policy under System > Local Security Authority.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name RunAsPPL -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RunAsPPL",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name RunAsPPL -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name RunAsPPL -ErrorAction SilentlyContinue",
+            Verification = "RunAsPPL = 1 (1 = Enabled with UEFI lock, 2 = Enabled without UEFI lock).",
+            ValueMap = "1 = Enabled with UEFI lock, 2 = Enabled without UEFI lock, 0 = Disabled.",
+            CliTokens = "RunAsPPL: LSASS protected-process level.",
+
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "Administrative Templates > System > Local Security Authority > Configure LSASS to run as a protected process",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > System > Local Security Authority > Configure LSASS to run as a protected process",
+            ConsolePath = "Computer Configuration > Administrative Templates > System > Local Security Authority",
+            YouAreHere = "gpedit.msc > Computer Configuration > Administrative Templates > System",
+            GoTo = "Registry Editor > HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa > RunAsPPL > 1",
+            GraphicalSteps =
+                "1) Run gpedit.msc.\n" +
+                "2) Navigate to Computer Configuration > Administrative Templates > System > Local Security Authority.\n" +
+                "3) Double-click 'Configure LSASS to run as a protected process'.\n" +
+                "4) Set to Enabled.\n" +
+                "5) Choose 'Enabled with UEFI Lock' (preferred) or 'Enabled without UEFI Lock'.\n" +
+                "6) OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name RunAsPPL -Value 0 -Type DWord",
+            IgnoreConsequence = "LSASS remains readable by unprotected processes; credential-dumping tools succeed.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\RunAsPPL",
+            AlternativeToRegistry = "Prefer the new Local Security Authority policy over manual registry editing."
+        },
+
+        // ── 12.6 Microsoft network client: Send unencrypted password (in Security Options) ──
+        new SubCheck
+        {
+            Id = "CRG-001.6",
+            Title = "Microsoft network client: Send unencrypted password to third-party SMB servers",
+            Expected = "Disabled",
+            WhatItDoes = "Ensures SMB authentication does not fall back to plaintext password transmission.",
+            Recommendation = "Disable this option in Local Policies > Security Options.",
+
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name EnablePlainTextPassword -ErrorAction SilentlyContinue | Select-Object -ExpandProperty EnablePlainTextPassword",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name EnablePlainTextPassword -Value 0 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name EnablePlainTextPassword -ErrorAction SilentlyContinue",
+            Verification = "EnablePlainTextPassword = 0.",
+            ValueMap = "0 = Disabled (recommended), 1 = Enabled.",
+            CliTokens = "EnablePlainTextPassword: allows plaintext SMB password transmission.",
+
+            ConsoleTool = "secpol.msc",
+            DestinationLabel = "Security Options > Microsoft network client: Send unencrypted password to third-party SMB servers",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Microsoft network client: Send unencrypted password to third-party SMB servers",
+            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
+            YouAreHere = "secpol.msc > Security Settings > Local Policies",
+            GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > 'Microsoft network client: Send unencrypted password to third-party SMB servers' > Disabled",
+            GraphicalSteps =
+                "1) Run secpol.msc.\n" +
+                "2) Navigate to Security Settings > Local Policies > Security Options.\n" +
+                "3) Double-click 'Microsoft network client: Send unencrypted password to third-party SMB servers'.\n" +
+                "4) Set to Disabled.\n" +
+                "5) OK.",
+
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -Name EnablePlainTextPassword -Value 1 -Type DWord",
+            IgnoreConsequence = "SMB client may send plaintext passwords to non-Microsoft SMB servers.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters\EnablePlainTextPassword",
+            AlternativeToRegistry = "Prefer secpol.msc > Security Options over manual registry editing."
+        }
     };
 
     public Task<Finding> EvaluateAsync()
@@ -35,25 +247,35 @@ public class CredentialGuardCheck : IHardeningCheck
         {
             using var lsa = Registry.LocalMachine.OpenSubKey(LsaPath);
             using var dg = Registry.LocalMachine.OpenSubKey(DgPath);
+
             var ppl = lsa?.GetValue("RunAsPPL");
             var vbs = dg?.GetValue("EnableVirtualizationBasedSecurity");
-            bool ok = (ppl != null && ppl.ToString() == "1") && (vbs != null && vbs.ToString() == "1");
-            currentValue = ok ? "Enabled" : "Disabled";
+
+            bool ok = (ppl != null && int.TryParse(ppl.ToString(), out int pplInt) && (pplInt == 1 || pplInt == 2))
+                   && (vbs != null && int.TryParse(vbs.ToString(), out int vbsInt) && vbsInt == 1);
+
+            currentValue = ok ? "Credential Guard + LSASS protection enabled" : "Disabled or incomplete";
             status = ok ? CheckStatus.Pass : CheckStatus.Fail;
         }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            status = CheckStatus.Error;
+            currentValue = $"Error: {ex.GetType().Name}";
+        }
 
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled", "Use VBS + Credential Guard + LSA protection to stop credential theft.",
+            "Enabled",
+            "Enable VBS + Credential Guard + LSASS protection to stop credential theft from memory.",
             errorMessage: errorMessage,
-            description: "Protects NTLM/Kerberos credentials using virtualization-based security.",
+            description: "Uses virtualization-based security, Credential Guard and LSASS protected process to prevent credential-dumping tools from reading NTLM hashes and Kerberos tickets.",
             registryPath: $@"HKLM\{LsaPath}\RunAsPPL",
             cisReference: "CIS 5.5",
-            riskScore: 80,
+            riskScore: 85,
             sourceType: "RegistryReader",
             sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v RunAsPPL",
-            fixTools: new List<string> { "gpedit.msc" },
+            fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
             subChecks: SubChecks));
     }
 }
