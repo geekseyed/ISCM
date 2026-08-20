@@ -45,16 +45,16 @@
         gap: 6px;
     }
 
-        .stat-tab:hover {
-            border-color: #06b6d4;
-            transform: translateY(-2px);
-        }
+    .stat-tab:hover {
+        border-color: #06b6d4;
+        transform: translateY(-2px);
+    }
 
-        .stat-tab.active {
-            border-color: #06b6d4;
-            background: rgba(6,182,212,0.12);
-            box-shadow: 0 0 12px rgba(6,182,212,0.2);
-        }
+    .stat-tab.active {
+        border-color: #06b6d4;
+        background: rgba(6,182,212,0.12);
+        box-shadow: 0 0 12px rgba(6,182,212,0.2);
+    }
 
     .stat-value {
         font-size: 28px;
@@ -71,25 +71,11 @@
         letter-spacing: 1px;
     }
 
-    .stat-tab.all {
-        border-left: 4px solid #06b6d4;
-    }
-
-    .stat-tab.fail {
-        border-left: 4px solid #ef4444;
-    }
-
-    .stat-tab.pass {
-        border-left: 4px solid #10b981;
-    }
-
-    .stat-tab.ignored {
-        border-left: 4px solid #94a3b8;
-    }
-
-    .stat-tab.madanchi {
-        border-left: 4px solid #f59e0b;
-    }
+    .stat-tab.all { border-left: 4px solid #06b6d4; }
+    .stat-tab.fail { border-left: 4px solid #ef4444; }
+    .stat-tab.pass { border-left: 4px solid #10b981; }
+    .stat-tab.ignored { border-left: 4px solid #94a3b8; }
+    .stat-tab.mndchi { border-left: 4px solid #8b5cf6; }
 
     .search-wrap {
         position: relative;
@@ -115,9 +101,9 @@
         font-size: 13px;
     }
 
-        .search-box::placeholder {
-            color: #64748b;
-        }
+    .search-box::placeholder {
+        color: #64748b;
+    }
 
     .bulk-bar {
         display: none;
@@ -130,9 +116,9 @@
         margin-bottom: 12px;
     }
 
-        .bulk-bar.visible {
-            display: flex;
-        }
+    .bulk-bar.visible {
+        display: flex;
+    }
 
     .bulk-count {
         color: #06b6d4;
@@ -152,15 +138,15 @@
         transition: 0.2s;
     }
 
-        .bulk-btn:hover {
-            border-color: #06b6d4;
-        }
+    .bulk-btn:hover {
+        border-color: #06b6d4;
+    }
 
-        .bulk-btn.clear {
-            margin-left: auto;
-            background: transparent;
-            color: #94a3b8;
-        }
+    .bulk-btn.clear {
+        margin-left: auto;
+        background: transparent;
+        color: #94a3b8;
+    }
 
     .category-row {
         display: flex;
@@ -186,13 +172,13 @@
         transition: 0.2s;
     }
 
-        .cat-link:hover {
-            color: #94a3b8;
-        }
+    .cat-link:hover {
+        color: #94a3b8;
+    }
 
-        .cat-link.active {
-            color: #e2e8f0;
-        }
+    .cat-link.active {
+        color: #e2e8f0;
+    }
 
     .btn-back {
         background: #334155;
@@ -230,39 +216,22 @@
         flex-wrap: wrap;
     }
 
-        .finding-card:hover {
-            background: rgba(6,182,212,0.05);
-            border-color: #06b6d4;
-        }
-
-        .finding-card.selected {
-            background: rgba(6,182,212,0.08);
-            border-color: #06b6d4;
-        }
-
-    .border-pass {
-        border-left-color: #10b981 !important;
+    .finding-card:hover {
+        background: rgba(6,182,212,0.05);
+        border-color: #06b6d4;
     }
 
-    .border-fail {
-        border-left-color: #ef4444 !important;
+    .finding-card.selected {
+        background: rgba(6,182,212,0.08);
+        border-color: #06b6d4;
     }
 
-    .border-warning {
-        border-left-color: #f59e0b !important;
-    }
-
-    .border-ignored {
-        border-left-color: #94a3b8 !important;
-    }
-
-    .border-error {
-        border-left-color: #dc2626 !important;
-    }
-
-    .border-falsepositive {
-        border-left-color: #a78bfa !important;
-    }
+    .border-pass { border-left-color: #10b981 !important; }
+    .border-fail { border-left-color: #ef4444 !important; }
+    .border-warning { border-left-color: #f59e0b !important; }
+    .border-ignored { border-left-color: #94a3b8 !important; }
+    .border-error { border-left-color: #dc2626 !important; }
+    .border-falsepositive { border-left-color: #a78bfa !important; }
 
     .finding-checkbox {
         width: 14px;
@@ -278,16 +247,16 @@
         font-size: 10px;
     }
 
-        .finding-checkbox.checked {
-            background: #06b6d4;
-            border-color: #06b6d4;
-        }
+    .finding-checkbox.checked {
+        background: #06b6d4;
+        border-color: #06b6d4;
+    }
 
-            .finding-checkbox.checked::after {
-                content: "✓";
-                color: white;
-                font-weight: bold;
-            }
+    .finding-checkbox.checked::after {
+        content: "✓";
+        color: white;
+        font-weight: bold;
+    }
 
     .finding-main {
         flex: 1 1 260px;
@@ -345,10 +314,10 @@
         font-weight: bold;
     }
 
-    .madanchi-badge {
-        color: #f59e0b;
-        border: 1px solid rgba(245,158,11,0.4);
-        background: rgba(245,158,11,0.1);
+    .mndchi-badge {
+        color: #8b5cf6;
+        border: 1px solid rgba(139,92,246,0.4);
+        background: rgba(139,92,246,0.1);
         font-family: 'Consolas', monospace;
         font-size: 10px;
         padding: 2px 6px;
@@ -388,29 +357,12 @@
         word-break: break-all;
     }
 
-    .fv-pass {
-        color: #10b981;
-    }
-
-    .fv-fail {
-        color: #ef4444;
-    }
-
-    .fv-warning {
-        color: #f59e0b;
-    }
-
-    .fv-ignored {
-        color: #94a3b8;
-    }
-
-    .fv-error {
-        color: #dc2626;
-    }
-
-    .fv-falsepositive {
-        color: #a78bfa;
-    }
+    .fv-pass { color: #10b981; }
+    .fv-fail { color: #ef4444; }
+    .fv-warning { color: #f59e0b; }
+    .fv-ignored { color: #94a3b8; }
+    .fv-error { color: #dc2626; }
+    .fv-falsepositive { color: #a78bfa; }
 
     .fv-expected {
         color: #e2e8f0;
@@ -437,19 +389,19 @@
         white-space: nowrap;
     }
 
-        .action-btn:hover:not(:disabled) {
-            border-color: #06b6d4;
-            color: #06b6d4;
-        }
+    .action-btn:hover:not(:disabled) {
+        border-color: #06b6d4;
+        color: #06b6d4;
+    }
 
-        .action-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
+    .action-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
 
-        .action-btn.preview {
-            cursor: default;
-        }
+    .action-btn.preview {
+        cursor: default;
+    }
 
     .finding-badges {
         display: flex;
@@ -520,25 +472,10 @@
         text-transform: uppercase;
     }
 
-        .sev-badge.low {
-            color: #94a3b8;
-            background: rgba(148,163,184,0.12);
-        }
-
-        .sev-badge.medium {
-            color: #e2e8f0;
-            background: rgba(226,232,240,0.12);
-        }
-
-        .sev-badge.high {
-            color: #f59e0b;
-            background: rgba(245,158,11,0.12);
-        }
-
-        .sev-badge.critical {
-            color: #ef4444;
-            background: rgba(239,68,68,0.15);
-        }
+    .sev-badge.low { color: #94a3b8; background: rgba(148,163,184,0.12); }
+    .sev-badge.medium { color: #e2e8f0; background: rgba(226,232,240,0.12); }
+    .sev-badge.high { color: #f59e0b; background: rgba(245,158,11,0.12); }
+    .sev-badge.critical { color: #ef4444; background: rgba(239,68,68,0.15); }
 
     .risk-badge {
         font-size: 10px;
@@ -549,20 +486,9 @@
         white-space: nowrap;
     }
 
-    .risk-low {
-        color: #10b981;
-        border-color: rgba(16,185,129,0.5);
-    }
-
-    .risk-mid {
-        color: #f59e0b;
-        border-color: rgba(245,158,11,0.5);
-    }
-
-    .risk-high {
-        color: #ef4444;
-        border-color: rgba(239,68,68,0.5);
-    }
+    .risk-low { color: #10b981; border-color: rgba(16,185,129,0.5); }
+    .risk-mid { color: #f59e0b; border-color: rgba(245,158,11,0.5); }
+    .risk-high { color: #ef4444; border-color: rgba(239,68,68,0.5); }
 
     .empty-state {
         color: #64748b;
@@ -608,10 +534,10 @@
         transition: 0.2s;
     }
 
-        .sub-row:hover {
-            border-color: #06b6d4;
-            background: rgba(6,182,212,0.06);
-        }
+    .sub-row:hover {
+        border-color: #06b6d4;
+        background: rgba(6,182,212,0.06);
+    }
 
     .subcheck-id {
         color: #06b6d4;
@@ -649,8 +575,8 @@
 <div class="glass-panel">
     <div class="stats-tabs">
         <div class="stat-tab all @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">
-            <div class="stat-value">@CountFail</div>
-            <div class="stat-label">Fail</div>
+            <div class="stat-value">@CountAll</div>
+            <div class="stat-label">All</div>
         </div>
         <div class="stat-tab fail @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">
             <div class="stat-value">@CountFail</div>
@@ -664,9 +590,9 @@
             <div class="stat-value">@CountIgnored</div>
             <div class="stat-label">Ignored</div>
         </div>
-        <div class="stat-tab madanchi @(SelectedFilter == "Madanchi" ? "active" : "")" @onclick="SetFilterMadanchi">
-            <div class="stat-value">@CountMadanchi</div>
-            <div class="stat-label">Madanchi</div>
+        <div class="stat-tab mndchi @(SelectedFilter == "MNDCHI" ? "active" : "")" @onclick="SetFilterMndchi">
+            <div class="stat-value">@CountMndchi</div>
+            <div class="stat-label">MNDCHI</div>
         </div>
     </div>
 
@@ -719,8 +645,7 @@
                 var subs = f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
                 var hasSubs = subs.Count > 0;
                 var isExpanded = ExpandedIds.Contains(f.CheckId);
-                var isMadanchi = IsMadanchiFinding(f);
-
+                var isMndchi = IsMndchiFinding(f);
                 <div class="finding-wrap">
                     <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
                         <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
@@ -730,9 +655,9 @@
                             <div class="finding-title-row">
                                 <span class="finding-name">@f.Name</span>
                                 <span class="finding-id">@f.CheckId</span>
-                                @if (isMadanchi)
+                                @if (isMndchi)
                                 {
-                                    <span class="madanchi-badge">Madanchi</span>
+                                    <span class="mndchi-badge">MNDCHI</span>
                                 }
                                 @if (!string.IsNullOrEmpty(f.CisReference))
                                 {
@@ -829,10 +754,11 @@
         }
     }
 
+    private int CountAll => BaseFilteredFindings.Count();
     private int CountFail => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
     private int CountPass => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Pass);
     private int CountIgnored => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Ignored);
-    private int CountMadanchi => BaseFilteredFindings.Count(f => IsMadanchiFinding(f));
+    private int CountMndchi => BaseFilteredFindings.Count(f => IsMndchiFinding(f));
 
     private IEnumerable<Finding> FinalFindings
     {
@@ -845,18 +771,18 @@
                 findings = findings.Where(f => f.Status == CheckStatus.Pass);
             else if (SelectedFilter == "Ignored")
                 findings = findings.Where(f => f.Status == CheckStatus.Ignored);
-            else if (SelectedFilter == "Madanchi")
-                findings = findings.Where(f => IsMadanchiFinding(f));
-
+            else if (SelectedFilter == "MNDCHI")
+                findings = findings.Where(f => IsMndchiFinding(f));
+            
             return findings.OrderBy(f => f.Status == CheckStatus.Pass ? 1 : (f.Status == CheckStatus.Ignored ? 2 : 0))
                            .ThenBy(f => f.CheckId)
                            .ToList();
         }
     }
 
-    private bool IsMadanchiFinding(Finding f)
+    private bool IsMndchiFinding(Finding f)
     {
-        return f.CheckId.StartsWith("MAD-", StringComparison.OrdinalIgnoreCase);
+        return f.CheckId.StartsWith("MNDCHI-", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetSourceType(Finding f)
@@ -938,7 +864,7 @@
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
     private void SetFilterIgnored() => SelectedFilter = "Ignored";
-    private void SetFilterMadanchi() => SelectedFilter = "Madanchi";
+    private void SetFilterMndchi() => SelectedFilter = "MNDCHI";
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
 
