@@ -48,25 +48,104 @@
         gap: 10px;
     }
 
+    /* ── EDIT (گروه C): چراغ Connected حرفه‌ای و بزرگ‌تر ── */
     .host-pill {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 12px;
         background: rgba(30, 41, 59, 0.5);
         border: 1px solid #334155;
-        padding: 8px 16px;
-        border-radius: 8px;
+        padding: 10px 20px;
+        border-radius: 10px;
         font-size: 13px;
+        font-weight: bold;
         color: #e2e8f0;
+        transition: all 0.3s ease;
+        font-family: 'Consolas', monospace;
+        letter-spacing: 0.5px;
     }
 
-        .host-pill .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
+    .host-pill.online {
+        border-color: rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+    }
+
+    .host-pill.offline {
+        background: rgba(239, 68, 68, 0.15);
+        border-color: rgba(239, 68, 68, 0.5);
+        color: #ef4444;
+        box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        animation: offlinePillPulse 1.2s ease-in-out infinite;
+    }
+
+    @@keyframes offlinePillPulse {
+        0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
+        50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
+    }
+
+    .host-pill .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    /* EDIT: چراغ online با ضربان آرام */
+    .host-pill.online .dot {
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981, 0 0 20px rgba(16, 185, 129, 0.4);
+        animation: onlinePulse 2.5s ease-in-out infinite;
+    }
+
+    .host-pill.online .dot::after {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid rgba(16, 185, 129, 0.4);
+        animation: onlineRing 2.5s ease-out infinite;
+    }
+
+    @@keyframes onlinePulse {
+        0%, 100% {
             background: #10b981;
-            box-shadow: 0 0 8px #10b981;
+            box-shadow: 0 0 10px #10b981, 0 0 20px rgba(16, 185, 129, 0.4);
         }
+        50% {
+            background: #34d399;
+            box-shadow: 0 0 16px #34d399, 0 0 28px rgba(16, 185, 129, 0.6);
+        }
+    }
+
+    @@keyframes onlineRing {
+        0% { transform: scale(0.8); opacity: 0.8; }
+        100% { transform: scale(1.8); opacity: 0; }
+    }
+
+    /* EDIT: چراغ offline با چشمک سریع */
+    .host-pill.offline .dot {
+        background: #ef4444;
+        box-shadow: 0 0 12px #ef4444, 0 0 24px rgba(239, 68, 68, 0.6);
+        animation: offlineBlink 0.7s ease-in-out infinite;
+    }
+
+    @@keyframes offlineBlink {
+        0%, 100% {
+            background: #ef4444;
+            box-shadow: 0 0 12px #ef4444, 0 0 24px rgba(239, 68, 68, 0.6);
+            opacity: 1;
+        }
+        50% {
+            background: #7f1d1d;
+            box-shadow: 0 0 4px #ef4444;
+            opacity: 0.4;
+        }
+    }
+
+    .host-pill .status-text {
+        font-weight: bold;
+    }
 
     .path-pill {
         background: rgba(30, 41, 59, 0.5);
@@ -128,9 +207,7 @@
         transition: 0.2s;
     }
 
-        .theme-btn:hover {
-            border-color: #06b6d4;
-        }
+    .theme-btn:hover { border-color: #06b6d4; }
 
     .top-nav {
         background: rgba(15, 23, 42, 0.6);
@@ -150,17 +227,17 @@
         transition: 0.2s;
     }
 
-        .nav-link:hover {
-            color: #e2e8f0;
-            background: rgba(51, 65, 85, 0.5);
-        }
+    .nav-link:hover {
+        color: #e2e8f0;
+        background: rgba(51, 65, 85, 0.5);
+    }
 
-        .nav-link.active {
-            color: #06b6d4;
-            background: rgba(6, 182, 212, 0.1);
-            border-bottom: 2px solid #06b6d4;
-            border-radius: 0;
-        }
+    .nav-link.active {
+        color: #06b6d4;
+        background: rgba(6, 182, 212, 0.1);
+        border-bottom: 2px solid #06b6d4;
+        border-radius: 0;
+    }
 
     .nav-badge {
         background: rgba(6, 182, 212, 0.15);
@@ -172,10 +249,7 @@
         margin-left: 6px;
     }
 
-    /* EDIT: کلاس nav-right حالا فقط داخل متد C# اضافه می‌شود، نه داخل مارک‌آپ */
-    .nav-right {
-        margin-left: auto;
-    }
+    .nav-right { margin-left: auto; }
 
     .nav-locked {
         pointer-events: none;
@@ -197,9 +271,7 @@
         flex-direction: column;
     }
 
-        .main-content::-webkit-scrollbar {
-            display: none;
-        }
+    .main-content::-webkit-scrollbar { display: none; }
 
     .reconnect-modal {
         display: none;
@@ -214,9 +286,9 @@
         align-items: center;
     }
 
-        .reconnect-modal.components-reconnect-show, .reconnect-modal.components-reconnect-failed {
-            display: flex;
-        }
+    .reconnect-modal.components-reconnect-show, .reconnect-modal.components-reconnect-failed {
+        display: flex;
+    }
 
     .reconnect-box {
         background: #1e293b;
@@ -232,338 +304,134 @@
         margin-top: 10px;
     }
 
-    /* ════════════════════════════════════════════════════════════════
-           تم روشن — Override سراسری برای تمام صفحات
-           ════════════════════════════════════════════════════════════════ */
+    /* تم روشن */
     .app-container.light {
         background: #f1f5f9;
         color: #0f172a;
     }
 
-        .app-container.light h1, .app-container.light h2, .app-container.light h3 {
-            color: #0f172a !important;
-        }
-
-        .app-container.light p {
-            color: #475569 !important;
-        }
-
-        .app-container.light strong, .app-container.light b {
-            color: #0f172a !important;
-        }
-
-        .app-container.light .app-header {
-            background: rgba(255, 255, 255, 0.9);
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .app-container.light .host-pill {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            color: #334155;
-        }
-
-        .app-container.light .path-pill {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            color: #64748b;
-        }
-
-        .app-container.light .brand-name {
-            color: #0f172a;
-            text-shadow: none;
-        }
-
-        .app-container.light .brand-sub {
-            color: #64748b;
-        }
-
-        .app-container.light .theme-btn {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            color: #334155;
-        }
-
-            .app-container.light .theme-btn:hover {
-                border-color: #0891b2;
-            }
-
-        .app-container.light .top-nav {
-            background: rgba(255, 255, 255, 0.7);
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .app-container.light .nav-link {
-            color: #475569;
-        }
-
-            .app-container.light .nav-link:hover {
-                color: #0f172a;
-                background: rgba(226, 232, 240, 0.6);
-            }
-
-            .app-container.light .nav-link.active {
-                color: #0891b2;
-                background: rgba(6, 182, 212, 0.08);
-            }
-
-        .app-container.light .nav-badge {
-            background: rgba(6, 182, 212, 0.15);
-            color: #0891b2;
-        }
-
-        .app-container.light .glass-panel {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-        }
-
-        .app-container.light .console-header {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-bottom: none;
-            color: #475569;
-        }
-
-        .app-container.light .console-body {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            color: #334155;
-        }
-
-        .app-container.light .log-placeholder {
-            color: #94a3b8;
-        }
-
-        .app-container.light .console-summary {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-top: none;
-        }
-
-        .app-container.light .summary-item {
-            border-right-color: #e2e8f0;
-        }
-
-        .app-container.light .summary-num {
-            color: #0f172a;
-        }
-
-        .app-container.light .summary-label {
-            color: #64748b;
-        }
-
-        .app-container.light .panel-title {
-            color: #475569;
-        }
-
-        .app-container.light .btn-edit {
-            background: #e2e8f0;
-            color: #0f172a;
-        }
-
-            .app-container.light .btn-edit:hover {
-                background: #cbd5e1;
-            }
-
-        .app-container.light .stat-row {
-            color: #475569;
-            border-bottom-color: #e2e8f0;
-        }
-
-        .app-container.light .stat-num {
-            color: #0f172a;
-        }
-
-        .app-container.light .score-percent {
-            color: #0f172a;
-        }
-
-        .app-container.light .score-grade-text {
-            color: #64748b;
-        }
-
-        .app-container.light .ring-bg {
-            stroke: rgba(15, 23, 42, 0.1);
-        }
-
-        .app-container.light .donut-num {
-            color: #0f172a;
-        }
-
-        .app-container.light .donut-label {
-            color: #64748b;
-        }
-
-        .app-container.light .legend-item {
-            color: #475569;
-        }
-
-        .app-container.light .legend-num {
-            color: #0f172a;
-        }
-
-        .app-container.light .sys-row {
-            border-bottom-color: #e2e8f0;
-        }
-
-        .app-container.light .sys-label {
-            color: #64748b;
-        }
-
-        .app-container.light .sys-value {
-            color: #0f172a;
-        }
-
-        .app-container.light .sys-input {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #0f172a;
-        }
-
-        .app-container.light .btn-cancel {
-            background: #94a3b8;
-        }
-
-        .app-container.light .category-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-        }
-
-            .app-container.light .category-card:hover {
-                border-color: #0891b2;
-            }
-
-        .app-container.light .category-title {
-            color: #475569;
-        }
-
-        .app-container.light .category-sub {
-            color: #64748b;
-        }
-
-        .app-container.light .progress-track {
-            background: #e2e8f0;
-        }
-
-        .app-container.light .btn-back {
-            background: #e2e8f0;
-            color: #0891b2;
-        }
-
-        .app-container.light .filter-btn {
-            background: #e2e8f0;
-            color: #334155;
-        }
-
-            .app-container.light .filter-btn.active {
-                background: #06b6d4;
-                color: #ffffff;
-            }
-
-        .app-container.light .search-box {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            color: #0f172a;
-        }
-
-        .app-container.light .table-container {
-            border-color: #e2e8f0;
-        }
-
-        .app-container.light th {
-            background: #f8fafc;
-            color: #0891b2;
-            border-bottom-color: #cbd5e1;
-        }
-
-        .app-container.light td {
-            border-bottom-color: #e2e8f0;
-            color: #0f172a;
-        }
-
-        .app-container.light tr:hover {
-            background: rgba(6, 182, 212, 0.05);
-        }
-
-        .app-container.light .drawer {
-            background: #ffffff;
-            border-left-color: #0891b2;
-        }
-
-        .app-container.light .drawer-header {
-            border-bottom-color: #e2e8f0;
-        }
-
-        .app-container.light .drawer-title {
-            color: #0891b2;
-        }
-
-        .app-container.light .detail-label {
-            color: #64748b;
-        }
-
-        .app-container.light .detail-value {
-            color: #0f172a;
-        }
-
-        .app-container.light .summary-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-        }
-
-        .app-container.light .summary-value {
-            color: #0f172a;
-        }
-
-        .app-container.light .export-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-top-width: 4px;
-        }
-
-        .app-container.light .section-title {
-            color: #0891b2;
-            border-bottom-color: #e2e8f0;
-        }
-
-        .app-container.light .info-row {
-            border-bottom-color: #e2e8f0;
-        }
-
-        .app-container.light .info-label {
-            color: #64748b;
-        }
-
-        .app-container.light .info-value {
-            color: #0f172a;
-        }
-
-        .app-container.light .check-badge {
-            background: rgba(6, 182, 212, 0.1);
-            color: #0891b2;
-        }
-
-        .app-container.light .log-box {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-        }
-
-        .app-container.light .log-line {
-            color: #059669;
-        }
-
-        .app-container.light .grade-badge {
-            background: rgba(6, 182, 212, 0.1);
-            color: #0891b2;
-        }
+    .app-container.light h1, .app-container.light h2, .app-container.light h3 { color: #0f172a !important; }
+    .app-container.light p { color: #475569 !important; }
+    .app-container.light strong, .app-container.light b { color: #0f172a !important; }
+
+    .app-container.light .app-header {
+        background: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .app-container.light .host-pill {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #334155;
+    }
+
+    .app-container.light .host-pill.online {
+        border-color: rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+    }
+
+    .app-container.light .host-pill.offline {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.5);
+        color: #dc2626;
+    }
+
+    .app-container.light .path-pill {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #64748b;
+    }
+
+    .app-container.light .brand-name {
+        color: #0f172a;
+        text-shadow: none;
+    }
+
+    .app-container.light .brand-sub { color: #64748b; }
+
+    .app-container.light .theme-btn {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #334155;
+    }
+
+    .app-container.light .theme-btn:hover { border-color: #0891b2; }
+
+    .app-container.light .top-nav {
+        background: rgba(255, 255, 255, 0.7);
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .app-container.light .nav-link { color: #475569; }
+    .app-container.light .nav-link:hover {
+        color: #0f172a;
+        background: rgba(226, 232, 240, 0.6);
+    }
+    .app-container.light .nav-link.active {
+        color: #0891b2;
+        background: rgba(6, 182, 212, 0.08);
+    }
+
+    .app-container.light .nav-badge {
+        background: rgba(6, 182, 212, 0.15);
+        color: #0891b2;
+    }
+
+    .app-container.light .glass-panel {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .app-container.light .panel-title { color: #475569; }
+    .app-container.light .btn-edit {
+        background: #e2e8f0;
+        color: #0f172a;
+    }
+    .app-container.light .btn-edit:hover { background: #cbd5e1; }
+    .app-container.light .stat-row {
+        color: #475569;
+        border-bottom-color: #e2e8f0;
+    }
+    .app-container.light .stat-num { color: #0f172a; }
+    .app-container.light .score-percent { color: #0f172a; }
+    .app-container.light .score-grade-text { color: #64748b; }
+    .app-container.light .ring-bg { stroke: rgba(15, 23, 42, 0.1); }
+    .app-container.light .donut-num { color: #0f172a; }
+    .app-container.light .donut-label { color: #64748b; }
+    .app-container.light .legend-item { color: #475569; }
+    .app-container.light .legend-num { color: #0f172a; }
+    .app-container.light .sys-row { border-bottom-color: #e2e8f0; }
+    .app-container.light .sys-label { color: #64748b; }
+    .app-container.light .sys-value { color: #0f172a; }
+    .app-container.light .sys-input {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+    }
+    .app-container.light .btn-cancel { background: #94a3b8; }
+    .app-container.light .category-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+    }
+    .app-container.light .category-card:hover { border-color: #0891b2; }
+    .app-container.light .category-title { color: #475569; }
+    .app-container.light .category-sub { color: #64748b; }
+    .app-container.light .progress-track { background: #e2e8f0; }
+    .app-container.light .btn-back {
+        background: #e2e8f0;
+        color: #0891b2;
+    }
 </style>
 
 <div class="app-container @(ThemeService.IsDark ? "" : "light")">
     <div class="app-header">
         <div class="header-left">
-            <div class="host-pill"><span class="dot"></span> Connected to Host</div>
-           
+            @* EDIT (گروه C): چراغ Connected حرفه‌ای با حالت online/offline *@
+            <div class="host-pill @(StateService.IsConnected ? "online" : "offline")">
+                <span class="dot"></span>
+                <span class="status-text">@(StateService.IsConnected ? "CONNECTED" : "DISCONNECTED")</span>
+            </div>
         </div>
 
         <div class="brand-center">
@@ -590,7 +458,6 @@
         <NavLink class="@GetNavClass()" href="/findings">Findings <span class="nav-badge">@FindingsCount</span></NavLink>
         <NavLink class="@GetNavClass()" href="/reports">Reports</NavLink>
         <NavLink class="@GetNavClass()" href="/settings">Settings</NavLink>
-        @* EDIT: رفع ارور complex content — کل مقدار class از یک متد C# می‌آید *@
         <NavLink class="@GetActivityNavClass()" href="/activity">Activity <span class="nav-badge">@ActivityCount</span></NavLink>
     </div>
 
@@ -623,8 +490,6 @@
         return StateService.IsScanning ? "nav-link nav-locked" : "nav-link";
     }
 
-    // EDIT: متد مجزا برای تب Activity — چون Attribute کامپوننت NavLink
-    // اجازه ترکیب «عبارت C# + متن خام» را نمی‌دهد، کل رشته کلاس اینجا ساخته می‌شود.
     private string GetActivityNavClass()
     {
         return StateService.IsScanning ? "nav-link nav-locked nav-right" : "nav-link nav-right";
