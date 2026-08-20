@@ -37,17 +37,17 @@
         gap: 8px;
     }
 
-        .btn-scan:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
-        }
+    .btn-scan:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
+    }
 
-        .btn-scan:disabled {
-            background: #475569;
-            cursor: not-allowed;
-            box-shadow: none;
-            transform: none;
-        }
+    .btn-scan:disabled {
+        background: #475569;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
 
     .dots-wave {
         display: inline-flex;
@@ -55,49 +55,25 @@
         align-items: center;
     }
 
-        .dots-wave span {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: #ffffff;
-            animation: dotWave 1.2s infinite ease-in-out;
-        }
-
-            .dots-wave span:nth-child(1) {
-                animation-delay: 0s;
-            }
-
-            .dots-wave span:nth-child(2) {
-                animation-delay: 0.1s;
-            }
-
-            .dots-wave span:nth-child(3) {
-                animation-delay: 0.2s;
-            }
-
-            .dots-wave span:nth-child(4) {
-                animation-delay: 0.3s;
-            }
-
-            .dots-wave span:nth-child(5) {
-                animation-delay: 0.4s;
-            }
-
-    @@keyframes dotWave {
-        0%, 60%, 100% {
-            transform: translateY(0);
-            opacity: 0.5;
-        }
-
-        30% {
-            transform: translateY(-6px);
-            opacity: 1;
-        }
+    .dots-wave span {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #ffffff;
+        animation: dotWave 1.2s infinite ease-in-out;
     }
 
-    /* ════════════════════════════════════════════════════════════════
-           EDIT: سبک Neon Terminal (خانواده Operator) برای اسکن زنده
-           ════════════════════════════════════════════════════════════════ */
+    .dots-wave span:nth-child(1) { animation-delay: 0s; }
+    .dots-wave span:nth-child(2) { animation-delay: 0.1s; }
+    .dots-wave span:nth-child(3) { animation-delay: 0.2s; }
+    .dots-wave span:nth-child(4) { animation-delay: 0.3s; }
+    .dots-wave span:nth-child(5) { animation-delay: 0.4s; }
+
+    @@keyframes dotWave {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+        30% { transform: translateY(-6px); opacity: 1; }
+    }
+
     .neon-terminal {
         position: relative;
         background: #04060c;
@@ -108,14 +84,13 @@
         margin-bottom: 10px;
     }
 
-        /* EDIT: خطوط اسکن CRT (افکت ترمینال نئونی) */
-        .neon-terminal::after {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 3px);
-            pointer-events: none;
-        }
+    .neon-terminal::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 3px);
+        pointer-events: none;
+    }
 
     .terminal-header {
         display: flex;
@@ -126,35 +101,50 @@
         border-bottom: 1px solid rgba(6, 182, 212, 0.25);
     }
 
-        .terminal-header .btn-scan {
-            padding: 6px 16px;
-            font-size: 12px;
-        }
+    .terminal-header .btn-scan {
+        padding: 6px 16px;
+        font-size: 12px;
+    }
 
     .terminal-dots {
         display: flex;
-        gap: 6px;
+        gap: 8px;
+        align-items: center;
     }
 
-        .terminal-dots span {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-        }
+    .terminal-dots span {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        transition: all 0.15s ease;
+    }
 
     .t-dot-red {
-        background: #ef4444;
-        box-shadow: 0 0 6px #ef4444;
-    }
-
-    .t-dot-yellow {
-        background: #f59e0b;
-        box-shadow: 0 0 6px #f59e0b;
+        background: #4a1515;
+        box-shadow: 0 0 3px #4a1515;
     }
 
     .t-dot-green {
+        background: #0d3d2c;
+        box-shadow: 0 0 3px #0d3d2c;
+    }
+
+    .t-dot-red.pulse {
+        background: #ef4444;
+        box-shadow: 0 0 14px #ef4444, 0 0 24px rgba(239, 68, 68, 0.6);
+        animation: dotPulse 0.45s ease-out;
+    }
+
+    .t-dot-green.pulse {
         background: #10b981;
-        box-shadow: 0 0 6px #10b981;
+        box-shadow: 0 0 14px #10b981, 0 0 24px rgba(16, 185, 129, 0.6);
+        animation: dotPulse 0.45s ease-out;
+    }
+
+    @@keyframes dotPulse {
+        0% { transform: scale(1); }
+        40% { transform: scale(1.7); }
+        100% { transform: scale(1); }
     }
 
     .terminal-title {
@@ -166,7 +156,6 @@
         flex-grow: 1;
     }
 
-    /* EDIT: چیپ وضعیت (Ready / Scanning / Complete / Failed) با درخشش نئونی */
     .terminal-chip {
         font-family: 'Consolas', monospace;
         font-size: 11px;
@@ -177,25 +166,24 @@
         white-space: nowrap;
     }
 
-        .terminal-chip.scanning {
-            color: #ffb020;
-            border-color: rgba(255, 176, 32, 0.5);
-            text-shadow: 0 0 8px rgba(255, 176, 32, 0.7);
-        }
+    .terminal-chip.scanning {
+        color: #ffb020;
+        border-color: rgba(255, 176, 32, 0.5);
+        text-shadow: 0 0 8px rgba(255, 176, 32, 0.7);
+    }
 
-        .terminal-chip.complete {
-            color: #00ff9c;
-            border-color: rgba(0, 255, 156, 0.5);
-            text-shadow: 0 0 8px rgba(0, 255, 156, 0.7);
-        }
+    .terminal-chip.complete {
+        color: #00ff9c;
+        border-color: rgba(0, 255, 156, 0.5);
+        text-shadow: 0 0 8px rgba(0, 255, 156, 0.7);
+    }
 
-        .terminal-chip.failed {
-            color: #ff3860;
-            border-color: rgba(255, 56, 96, 0.5);
-            text-shadow: 0 0 8px rgba(255, 56, 96, 0.7);
-        }
+    .terminal-chip.failed {
+        color: #ff3860;
+        border-color: rgba(255, 56, 96, 0.5);
+        text-shadow: 0 0 8px rgba(255, 56, 96, 0.7);
+    }
 
-    /* EDIT: ترفند column-reverse = اسکرول خودکار به پایین بدون حتی یک خط JS */
     .terminal-body {
         height: 220px;
         overflow-y: auto;
@@ -209,37 +197,13 @@
         scrollbar-color: #164e63 #04060c;
     }
 
-    .log-placeholder {
-        color: #475569;
-    }
+    .log-placeholder { color: #475569; }
+    .log-info { color: #7dd3fc; text-shadow: 0 0 6px rgba(125, 211, 252, 0.45); }
+    .log-pass { color: #00ff9c; text-shadow: 0 0 8px rgba(0, 255, 156, 0.55); }
+    .log-fail { color: #ff3860; text-shadow: 0 0 8px rgba(255, 56, 96, 0.55); }
+    .log-warn { color: #ffb020; text-shadow: 0 0 8px rgba(255, 176, 32, 0.55); }
+    .terminal-prompt { color: #06b6d4; text-shadow: 0 0 8px rgba(6, 182, 212, 0.7); }
 
-    /* EDIT: رنگ‌های نئونی لاگ — مستقیم گرفته‌شده از Finding.Status هر چک واقعی */
-    .log-info {
-        color: #7dd3fc;
-        text-shadow: 0 0 6px rgba(125, 211, 252, 0.45);
-    }
-
-    .log-pass {
-        color: #00ff9c;
-        text-shadow: 0 0 8px rgba(0, 255, 156, 0.55);
-    }
-
-    .log-fail {
-        color: #ff3860;
-        text-shadow: 0 0 8px rgba(255, 56, 96, 0.55);
-    }
-
-    .log-warn {
-        color: #ffb020;
-        text-shadow: 0 0 8px rgba(255, 176, 32, 0.55);
-    }
-
-    .terminal-prompt {
-        color: #06b6d4;
-        text-shadow: 0 0 8px rgba(6, 182, 212, 0.7);
-    }
-
-    /* EDIT: مکان‌نمای چشمک‌زن انتهای ترمینال */
     .terminal-cursor {
         display: inline-block;
         width: 8px;
@@ -251,11 +215,7 @@
         animation: blink 1s steps(1) infinite;
     }
 
-    @@keyframes blink {
-        50% {
-            opacity: 0;
-        }
-    }
+    @@keyframes blink { 50% { opacity: 0; } }
 
     .terminal-footer {
         display: flex;
@@ -273,9 +233,7 @@
         border-right: 1px solid rgba(6, 182, 212, 0.12);
     }
 
-        .summary-item:last-child {
-            border-right: none;
-        }
+    .summary-item:last-child { border-right: none; }
 
     .summary-num {
         font-size: 14px;
@@ -284,26 +242,11 @@
         color: #e2e8f0;
     }
 
-        .summary-num.pass {
-            color: #00ff9c;
-            text-shadow: 0 0 8px rgba(0, 255, 156, 0.5);
-        }
+    .summary-num.pass { color: #00ff9c; text-shadow: 0 0 8px rgba(0, 255, 156, 0.5); }
+    .summary-num.fail { color: #ff3860; text-shadow: 0 0 8px rgba(255, 56, 96, 0.5); }
+    .summary-num.warn { color: #ffb020; text-shadow: 0 0 8px rgba(255, 176, 32, 0.5); }
 
-        .summary-num.fail {
-            color: #ff3860;
-            text-shadow: 0 0 8px rgba(255, 56, 96, 0.5);
-        }
-
-        .summary-num.warn {
-            color: #ffb020;
-            text-shadow: 0 0 8px rgba(255, 176, 32, 0.5);
-        }
-
-    .summary-label {
-        font-size: 9px;
-        color: #64748b;
-        text-transform: uppercase;
-    }
+    .summary-label { font-size: 9px; color: #64748b; text-transform: uppercase; }
 
     .two-col {
         display: grid;
@@ -337,9 +280,13 @@
         cursor: pointer;
     }
 
-        .btn-edit:hover {
-            background: #475569;
-        }
+    .btn-edit:hover { background: #475569; }
+    .btn-edit:disabled {
+        background: #1e293b;
+        color: #475569;
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
 
     .score-layout {
         display: flex;
@@ -354,25 +301,10 @@
         flex-shrink: 0;
     }
 
-        .score-ring svg {
-            width: 100%;
-            height: 100%;
-            transform: rotate(-90deg);
-        }
-
-        .score-ring circle {
-            fill: none;
-            stroke-width: 8;
-        }
-
-    .ring-bg {
-        stroke: rgba(255, 255, 255, 0.1);
-    }
-
-    .ring-fill {
-        stroke-linecap: round;
-        transition: stroke-dashoffset 0.5s ease;
-    }
+    .score-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .score-ring circle { fill: none; stroke-width: 8; }
+    .ring-bg { stroke: rgba(255, 255, 255, 0.1); }
+    .ring-fill { stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
 
     .score-value {
         position: absolute;
@@ -382,18 +314,8 @@
         text-align: center;
     }
 
-    .score-percent {
-        font-size: 22px;
-        font-weight: 800;
-        line-height: 1;
-        color: #e2e8f0;
-    }
-
-    .score-grade-text {
-        font-size: 11px;
-        color: #94a3b8;
-        margin-top: 2px;
-    }
+    .score-percent { font-size: 22px; font-weight: 800; line-height: 1; color: #e2e8f0; }
+    .score-grade-text { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
     .score-stats {
         flex-grow: 1;
@@ -412,43 +334,15 @@
         padding-bottom: 6px;
     }
 
-    .stat-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-    }
+    .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .stat-dot.pass { background: #10b981; }
+    .stat-dot.fail { background: #ef4444; }
+    .stat-dot.warn { background: #f59e0b; }
 
-        .stat-dot.pass {
-            background: #10b981;
-        }
-
-        .stat-dot.fail {
-            background: #ef4444;
-        }
-
-        .stat-dot.warn {
-            background: #f59e0b;
-        }
-
-    .stat-num {
-        font-size: 15px;
-        font-weight: 700;
-        font-family: 'Consolas', monospace;
-        margin-left: auto;
-        color: #e2e8f0;
-    }
-
-        .stat-num.pass {
-            color: #10b981;
-        }
-
-        .stat-num.fail {
-            color: #ef4444;
-        }
-
-        .stat-num.warn {
-            color: #f59e0b;
-        }
+    .stat-num { font-size: 15px; font-weight: 700; font-family: 'Consolas', monospace; margin-left: auto; color: #e2e8f0; }
+    .stat-num.pass { color: #10b981; }
+    .stat-num.fail { color: #ef4444; }
+    .stat-num.warn { color: #f59e0b; }
 
     .donut-section {
         display: flex;
@@ -459,18 +353,8 @@
         border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .donut-chart {
-        position: relative;
-        width: 70px;
-        height: 70px;
-        flex-shrink: 0;
-    }
-
-        .donut-chart svg {
-            width: 100%;
-            height: 100%;
-            transform: rotate(-90deg);
-        }
+    .donut-chart { position: relative; width: 70px; height: 70px; flex-shrink: 0; }
+    .donut-chart svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 
     .donut-center {
         position: absolute;
@@ -480,57 +364,19 @@
         text-align: center;
     }
 
-    .donut-num {
-        font-size: 14px;
-        font-weight: 700;
-        color: #e2e8f0;
-    }
+    .donut-num { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .donut-label { font-size: 8px; color: #64748b; text-transform: uppercase; }
 
-    .donut-label {
-        font-size: 8px;
-        color: #64748b;
-        text-transform: uppercase;
-    }
+    .donut-legend { display: flex; flex-direction: column; gap: 5px; }
 
-    .donut-legend {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; }
 
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: #94a3b8;
-    }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-dot.pass { background: #10b981; }
+    .legend-dot.fail { background: #ef4444; }
+    .legend-dot.warn { background: #f59e0b; }
 
-    .legend-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex-shrink: 0;
-    }
-
-        .legend-dot.pass {
-            background: #10b981;
-        }
-
-        .legend-dot.fail {
-            background: #ef4444;
-        }
-
-        .legend-dot.warn {
-            background: #f59e0b;
-        }
-
-    .legend-num {
-        font-weight: bold;
-        font-family: 'Consolas', monospace;
-        margin-left: auto;
-        color: #e2e8f0;
-    }
+    .legend-num { font-weight: bold; font-family: 'Consolas', monospace; margin-left: auto; color: #e2e8f0; }
 
     .sys-row {
         display: flex;
@@ -541,17 +387,8 @@
         font-size: 13px;
     }
 
-    .sys-label {
-        color: #64748b;
-        text-transform: uppercase;
-        font-size: 11px;
-    }
-
-    .sys-value {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-    }
+    .sys-label { color: #64748b; text-transform: uppercase; font-size: 11px; }
+    .sys-value { color: #e2e8f0; font-family: 'Consolas', monospace; font-weight: bold; }
 
     .sys-input {
         background: #0f172a;
@@ -564,11 +401,7 @@
         width: 55%;
     }
 
-    .edit-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 12px;
-    }
+    .edit-actions { display: flex; gap: 8px; margin-top: 12px; }
 
     .btn-save {
         background: #10b981;
@@ -608,58 +441,23 @@
         transition: 0.3s;
     }
 
-        .category-card:hover {
-            border-color: #06b6d4;
-            transform: translateY(-2px);
-        }
+    .category-card:hover { border-color: #06b6d4; transform: translateY(-2px); }
 
-    .category-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-    }
+    .category-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .category-title { color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+    .category-pct { font-weight: 800; font-family: 'Consolas', monospace; font-size: 14px; }
 
-    .category-title {
-        color: #94a3b8;
-        font-size: 11px;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
+    .progress-track { height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+    .progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
 
-    .category-pct {
-        font-weight: 800;
-        font-family: 'Consolas', monospace;
-        font-size: 14px;
-    }
-
-    .progress-track {
-        height: 4px;
-        background: #1e293b;
-        border-radius: 2px;
-        overflow: hidden;
-        margin-bottom: 8px;
-    }
-
-    .progress-fill {
-        height: 100%;
-        border-radius: 2px;
-        transition: width 0.5s ease;
-    }
-
-    .category-sub {
-        color: #64748b;
-        font-size: 10px;
-    }
+    .category-sub { color: #64748b; font-size: 10px; }
 </style>
 
-@* ── ترمینال نئونی اسکن زنده ───────────────────────────────────── *@
 <div class="neon-terminal">
     <div class="terminal-header">
         <div class="terminal-dots">
-            <span class="t-dot-red"></span>
-            <span class="t-dot-yellow"></span>
-            <span class="t-dot-green"></span>
+            <span class="t-dot-red @(StateService.LastCheckResult == "fail" ? "pulse" : "")" @key="@($"r{_redKey}")"></span>
+            <span class="t-dot-green @(StateService.LastCheckResult == "pass" ? "pulse" : "")" @key="@($"g{_greenKey}")"></span>
         </div>
         <div class="terminal-title">DEFENDOOR.SCAN — @StateService.DisplayHostname</div>
         <div class="terminal-chip @StateService.ConsoleStatusClass">@StateService.ConsoleStatusText</div>
@@ -669,6 +467,10 @@
                 <span class="dots-wave"><span></span><span></span><span></span><span></span><span></span></span>
                 <span>Scanning...</span>
             }
+            else if (StateService.CurrentScanResult != null)
+            {
+                <span>🔄 Restart Scan</span>
+            }
             else
             {
                 <span>🔍 Start Scan</span>
@@ -677,7 +479,6 @@
     </div>
 
     <div class="terminal-body">
-        @* EDIT: اولین فرزند DOM در column-reverse پایین‌ترین جای visuals قرار می‌گیرد *@
         <div class="log-info">
             <span class="terminal-prompt">DefenDoor Scan &gt;</span><span class="terminal-cursor"></span>
         </div>
@@ -687,7 +488,7 @@
         }
         else
         {
-            @foreach (var log in StateService.ConsoleLogs.AsEnumerable().Reverse())
+            foreach (var log in StateService.ConsoleLogs.AsEnumerable().Reverse())
             {
                 <div class="@GetLogClass(log)">@log</div>
             }
@@ -703,7 +504,6 @@
     </div>
 </div>
 
-@* ── دو پنل همیشه‌نمایان: امتیاز + اطلاعات سیستم ───────────────── *@
 <div class="two-col">
     <div class="glass-panel" style="margin-bottom: 0;">
         <div class="panel-title" style="margin-bottom: 12px;">Compliance Score</div>
@@ -762,7 +562,7 @@
             <div class="panel-title">System Information</div>
             @if (!StateService.IsEditingSystemInfo)
             {
-                <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo">Edit</button>
+                <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo" disabled="@(StateService.CurrentScanResult == null)">Edit</button>
             }
         </div>
 
@@ -788,7 +588,6 @@
     </div>
 </div>
 
-@* ── کارت‌های دسته‌بندی با درصد و Progress Bar ─────────────────── *@
 <div class="category-grid" style="margin-top: 10px;">
     @foreach (var group in CategoryBreakdown)
     {
@@ -819,6 +618,10 @@
     }
 
     private List<CategoryStat> CategoryBreakdown { get; set; } = new();
+    private int _redKey = 0;
+    private int _greenKey = 0;
+    private int _lastPass = 0;
+    private int _lastFail = 0;
 
     protected override void OnInitialized()
     {
@@ -831,6 +634,18 @@
         InvokeAsync(() =>
         {
             CalculateCategoryBreakdown();
+
+            if (StateService.LivePassCount != _lastPass)
+            {
+                _lastPass = StateService.LivePassCount;
+                _greenKey++;
+            }
+            if (StateService.LiveFailCount != _lastFail)
+            {
+                _lastFail = StateService.LiveFailCount;
+                _redKey++;
+            }
+
             StateHasChanged();
         });
     }
@@ -841,12 +656,12 @@
         {
             var findings = StateService.CurrentScanResult?.Findings.Where(f => f.Category == c).ToList() ?? new List<Finding>();
             return new CategoryStat
-                {
-                    Category = c.ToString(),
-                    PassCount = findings.Count(f => f.Status == CheckStatus.Pass),
-                    FailCount = findings.Count(f => f.Status == CheckStatus.Fail),
-                    HasResult = StateService.CurrentScanResult != null
-                };
+            {
+                Category = c.ToString(),
+                PassCount = findings.Count(f => f.Status == CheckStatus.Pass),
+                FailCount = findings.Count(f => f.Status == CheckStatus.Fail),
+                HasResult = StateService.CurrentScanResult != null
+            };
         }).ToList();
     }
 
@@ -856,8 +671,26 @@
     private static string GetBarColor(int pct)
         => pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
 
-    private string PassedDisplay => StateService.CurrentScanResult?.PassCount.ToString() ?? "—";
-    private string FailedDisplay => StateService.CurrentScanResult?.FailCount.ToString() ?? "—";
+    private string PassedDisplay
+    {
+        get
+        {
+            if (StateService.IsScanning || StateService.LivePassCount > 0)
+                return StateService.LivePassCount.ToString();
+            return StateService.CurrentScanResult?.PassCount.ToString() ?? "—";
+        }
+    }
+
+    private string FailedDisplay
+    {
+        get
+        {
+            if (StateService.IsScanning || StateService.LiveFailCount > 0)
+                return StateService.LiveFailCount.ToString();
+            return StateService.CurrentScanResult?.FailCount.ToString() ?? "—";
+        }
+    }
+
     private string WarningDisplay => StateService.CurrentScanResult?.WarningCount.ToString() ?? "—";
 
     private string ChecksDisplay
@@ -869,7 +702,6 @@
         }
     }
 
-    // EDIT: رنگ هر خط از وضعیت واقعی همان چک (Finding.Status) گرفته می‌شود — نه شبیه‌سازی
     private static string GetLogClass(string log)
     {
         if (log.Contains("[PASS]")) return "log-pass";

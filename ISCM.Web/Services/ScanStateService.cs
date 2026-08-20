@@ -20,6 +20,14 @@ public class ScanStateService
     public bool IsScanning { get; set; } = false;
     public event Action? OnChange;
 
+    // EDIT (گروه C): چراغ Connected همیشه فعال (نرم‌افزار محلی)
+    public bool IsConnected { get; private set; } = true;
+
+    // EDIT (گروه C): شمارنده‌های زنده — با هر اسکن/Rescan از صفر شروع می‌کنند
+    public int LivePassCount { get; private set; } = 0;
+    public int LiveFailCount { get; private set; } = 0;
+    public string LastCheckResult { get; private set; } = ""; // "pass" / "fail" / ""
+
     public string SelectedZone { get; set; } = "ERDC";
     public string SelectedSystem { get; set; } = "Shift Expert System";
     public string HostnameContext => $"{SelectedZone} / {SelectedSystem}";
@@ -53,7 +61,6 @@ public class ScanStateService
     public string DisplayOsVersion => _overrideOsVersion ?? CurrentScanResult?.OsVersion ?? "—";
     public string DisplayOsBuild => _overrideOsBuild ?? CurrentScanResult?.OsBuild ?? "—";
 
-    // EDIT (مرحله ب): لیست سفید ابزارهای رفع مشکل — فقط این اجراها مجازند (امنیتی)
     private static readonly HashSet<string> AllowedTools = new(StringComparer.OrdinalIgnoreCase)
     {
         "secpol.msc", "regedit.exe", "powershell.exe", "net.exe",
@@ -92,7 +99,6 @@ public class ScanStateService
         OnChange?.Invoke();
     }
 
-    // EDIT (مرحله ب): اجرای امن ابزار رفع مشکل روی همین میزبان (UseShellExecute + لیست سفید)
     public void LaunchFixTool(string tool)
     {
         if (!AllowedTools.Contains(tool))
@@ -112,21 +118,73 @@ public class ScanStateService
         }
     }
 
-    // EDIT (مرحله ب): اسکن مجددِ یک چک و جایگزینی نتیجه در CurrentScanResult
+    // EDIT (گروه C): ریست شمارنده‌ها هنگام Rescan و ثبت نتیجهٔ همان یک چک
     public async Task RescanSingleCheckAsync(string checkId)
     {
         if (CurrentScanResult == null || IsScanning) return;
 
         try
         {
+            // ریست شمارنده‌های زنده قبل از Rescan
+            LivePassCount = 0;
+            LiveFailCount = 0;
+            LastCheckResult = "";
+            CompletedChecks = 0;
+            ExpectedChecks = 1; // فقط یک چک
+            IsScanning = true;
+            ConsoleStatusText = "Rescanning...";
+            ConsoleStatusClass = "scanning";
+            OnChange?.Invoke();
+
             var newFinding = await _scanService.RescanCheckAsync(checkId);
             CurrentScanResult.ReplaceFinding(newFinding);
+
+            // ثبت نتیجه در شمارندهٔ زنده
+            if (newFinding.Status == CheckStatus.Pass)
+            {
+                LivePassCount = 1;
+                LastCheckResult = "pass";
+            }
+            else if (newFinding.Status == CheckStatus.Fail)
+            {
+                LiveFailCount = 1;
+                LastCheckResult = "fail";
+            }
+            CompletedChecks = 1;
+
+            ConsoleStatusText = $"Rescan complete - {newFinding.Status}";
+            ConsoleStatusClass = "complete";
+            LastCheckResult = "";
             LogAction($"User rescanned {checkId} => {newFinding.Status}");
         }
         catch (Exception ex)
         {
             LogAction($"Rescan failed for {checkId}: {ex.Message}");
+            ConsoleStatusText = "Rescan Failed";
+            ConsoleStatusClass = "failed";
         }
+        finally
+        {
+            IsScanning = false;
+            OnChange?.Invoke();
+        }
+    }
+
+    // EDIT (گروه C): متد کمکی برای ثبت نتیجهٔ هر چک حین اسکن
+    public void RecordLiveCheckResult(string statusToken)
+    {
+        if (statusToken.Contains("[PASS]"))
+        {
+            LivePassCount++;
+            LastCheckResult = "pass";
+        }
+        else if (statusToken.Contains("[FAIL]") || statusToken.Contains("[ERROR]"))
+        {
+            LiveFailCount++;
+            LastCheckResult = "fail";
+        }
+        CompletedChecks++;
+        OnChange?.Invoke();
     }
 
     public async Task ExecuteScanAsync()
@@ -137,6 +195,11 @@ public class ScanStateService
         {
             IsScanning = true;
             ConsoleLogs.Clear();
+
+            // EDIT (گروه C): ریست شمارنده‌های زنده در شروع اسکن
+            LivePassCount = 0;
+            LiveFailCount = 0;
+            LastCheckResult = "";
 
             CompletedChecks = 0;
             ExpectedChecks = _scanService.TotalCheckCount;
@@ -155,12 +218,16 @@ public class ScanStateService
             {
                 ConsoleLogs.Add($"[{DateTime.Now:HH:mm:ss}] {status}");
 
+                // EDIT (گروه C): ثبت زنده برای هر چک کامل‌شده
                 if (status.StartsWith("[PASS]") || status.StartsWith("[FAIL]") ||
                     status.StartsWith("[WARN]") || status.StartsWith("[ERROR]"))
                 {
-                    CompletedChecks++;
+                    RecordLiveCheckResult(status);
                 }
-                OnChange?.Invoke();
+                else
+                {
+                    OnChange?.Invoke();
+                }
             });
 
             var scanResult = await _scanService.RunScanAsync(ScanMode.Full, progress);
@@ -177,6 +244,7 @@ public class ScanStateService
             ConsoleStatusClass = "complete";
 
             ScanTimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            LastCheckResult = "";
 
             LogAction($"Scan completed. Score: {scanResult.ComplianceScore}%");
         }
@@ -185,6 +253,7 @@ public class ScanStateService
             LogAction($"Error during scan: {ex.Message}");
             ConsoleStatusText = "Scan Failed";
             ConsoleStatusClass = "failed";
+            IsConnected = false;
         }
         finally
         {
