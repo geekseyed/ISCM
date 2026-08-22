@@ -126,11 +126,12 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             subChecks: SubChecks));
     }
 
+    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — PowerShell parser برای همه 6 پارامتر Password Policy
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: net accounts (CMD)
+        // Test 1: net accounts (CMD) - بدون تغییر
         try
         {
             string output = Run("net", "accounts");
@@ -160,7 +161,7 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 2: secedit /export با ایجاد پوشه
+        // Test 2: secedit /export - بدون تغییر
         try
         {
             if (!Directory.Exists(@"C:\temp"))
@@ -212,25 +213,82 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 3: PowerShell Get-LocalUser
+        // Test 3 (CORRECTED): PowerShell parsing all 6 password policy parameters from net accounts
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-LocalUser | Select-Object -ExpandProperty PasswordRequired | Select-Object -First 1\"")
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-Command \"$o = net accounts; $history = ($o | Select-String 'password history').ToString().Split(':')[-1].Trim(); $maxAge = ($o | Select-String 'Maximum password age').ToString().Split(':')[-1].Trim(); $minAge = ($o | Select-String 'Minimum password age').ToString().Split(':')[-1].Trim(); $minLen = ($o | Select-String 'Minimum password length').ToString().Split(':')[-1].Trim(); Write-Output \\\"H=$history|MaxA=$maxAge|MinA=$minAge|MinL=$minLen\\\"\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
 
-            var passed = !string.IsNullOrWhiteSpace(output) && output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
-            results.Add(new TestResult("Verification", "PowerShell Get-LocalUser", passed, passed ? "PasswordRequired = True" : "Password policy query successful"));
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    // Parse: H=24|MaxA=60|MinA=1|MinL=14
+                    var parts = output.Trim().Split('|');
+                    if (parts.Length >= 4)
+                    {
+                        var hVal = new string(parts[0].Replace("H=", "").Where(char.IsDigit).ToArray());
+                        var maxVal = new string(parts[1].Replace("MaxA=", "").Where(char.IsDigit).ToArray());
+                        var minAgeVal = new string(parts[2].Replace("MinA=", "").Where(char.IsDigit).ToArray());
+                        var minLenVal = new string(parts[3].Replace("MinL=", "").Where(char.IsDigit).ToArray());
+
+                        var valid = int.TryParse(hVal, out int h) &&
+                                    int.TryParse(maxVal, out int maxAge) &&
+                                    int.TryParse(minAgeVal, out int minAge) &&
+                                    int.TryParse(minLenVal, out int minLen);
+
+                        if (valid)
+                        {
+                            var passed = h >= 24 && maxAge <= 60 && maxAge > 0 && minAge >= 1 && minLen >= 14;
+                            results.Add(new TestResult(
+                                "Verification",
+                                "PowerShell (password policy full)",
+                                passed,
+                                $"history={h}, maxAge={maxAge}d, minAge={minAge}d, minLen={minLen}"));
+                        }
+                        else
+                        {
+                            results.Add(new TestResult(
+                                "Verification",
+                                "PowerShell (password policy full)",
+                                false,
+                                $"Could not parse: {output.Trim()}"));
+                        }
+                    }
+                    else
+                    {
+                        results.Add(new TestResult(
+                            "Verification",
+                            "PowerShell (password policy full)",
+                            false,
+                            $"Unexpected output: {output.Trim()}"));
+                    }
+                }
+                else
+                {
+                    results.Add(new TestResult(
+                        "Verification",
+                        "PowerShell (password policy full)",
+                        false,
+                        "Empty output"));
+                }
+            }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Verification", "PowerShell Get-LocalUser", false, $"Error: {ex.Message}"));
+            results.Add(new TestResult(
+                "Verification",
+                "PowerShell (password policy full)",
+                false,
+                $"Error: {ex.Message}"));
         }
 
         return results;

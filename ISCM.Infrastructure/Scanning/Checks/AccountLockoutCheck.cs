@@ -77,11 +77,12 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
     }
 
     // اجرای ۳ روش تست واقعی
+    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — PowerShell parser برای هر 3 پارامتر lockout
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: net accounts (CMD)
+        // Test 1: net accounts (CMD) - بدون تغییر
         try
         {
             string output = Run("net", "accounts");
@@ -91,7 +92,7 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
                 var num = new string(thresholdLine.Where(char.IsDigit).ToArray());
                 if (int.TryParse(num, out int threshold))
                 {
-                    var passed = threshold >= 5;
+                    var passed = threshold >= 5 && threshold > 0;
                     results.Add(new TestResult("Primary", "net accounts", passed, $"Lockout threshold = {threshold}"));
                 }
                 else
@@ -111,10 +112,9 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 2: secedit /export با ایجاد پوشه
+        // Test 2: secedit /export - بدون تغییر
         try
         {
-            // ایجاد پوشه temp اگر وجود ندارد
             if (!Directory.Exists(@"C:\temp"))
             {
                 Directory.CreateDirectory(@"C:\temp");
@@ -164,26 +164,80 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 3: PowerShell Get-LocalUser برای بررسی lockout status
+        // Test 3 (CORRECTED): PowerShell parsing full net accounts output for all 3 lockout parameters
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-LocalUser | Where-Object { $_.Name -eq 'Administrator' } | Select-Object -ExpandProperty Enabled\"")
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-Command \"$output = net accounts; $threshold = ($output | Select-String 'Lockout threshold').ToString().Split(':')[-1].Trim(); $duration = ($output | Select-String 'Lockout duration').ToString().Split(':')[-1].Trim(); $window = ($output | Select-String 'Lockout observation').ToString().Split(':')[-1].Trim(); Write-Output \\\"T=$threshold|D=$duration|W=$window\\\"\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
 
-            // اگر دستور موفق اجرا شد، test 3 موفق است
-            var passed = !string.IsNullOrWhiteSpace(output);
-            results.Add(new TestResult("Verification", "PowerShell Get-LocalUser", passed, passed ? "Account policy query successful" : "Query failed"));
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    // Parse: T=5|D=15|W=15
+                    var parts = output.Trim().Split('|');
+                    if (parts.Length >= 3)
+                    {
+                        var tVal = parts[0].Replace("T=", "").Trim();
+                        var dVal = parts[1].Replace("D=", "").Trim();
+                        var wVal = parts[2].Replace("W=", "").Trim();
+
+                        var tNum = new string(tVal.Where(char.IsDigit).ToArray());
+                        var dNum = new string(dVal.Where(char.IsDigit).ToArray());
+                        var wNum = new string(wVal.Where(char.IsDigit).ToArray());
+
+                        if (int.TryParse(tNum, out int t) && int.TryParse(dNum, out int d) && int.TryParse(wNum, out int w))
+                        {
+                            var passed = t >= 5 && t > 0 && d >= 15 && w >= 15;
+                            results.Add(new TestResult(
+                                "Verification",
+                                "PowerShell (lockout full verification)",
+                                passed,
+                                $"threshold={t}, duration={d}min, window={w}min"));
+                        }
+                        else
+                        {
+                            results.Add(new TestResult(
+                                "Verification",
+                                "PowerShell (lockout full verification)",
+                                false,
+                                $"Raw output: {output.Trim()}"));
+                        }
+                    }
+                    else
+                    {
+                        results.Add(new TestResult(
+                            "Verification",
+                            "PowerShell (lockout full verification)",
+                            false,
+                            $"Could not parse output: {output.Trim()}"));
+                    }
+                }
+                else
+                {
+                    results.Add(new TestResult(
+                        "Verification",
+                        "PowerShell (lockout full verification)",
+                        false,
+                        "Empty output from PowerShell"));
+                }
+            }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Verification", "PowerShell Get-LocalUser", false, $"Error: {ex.Message}"));
+            results.Add(new TestResult(
+                "Verification",
+                "PowerShell (lockout full verification)",
+                false,
+                $"Error: {ex.Message}"));
         }
 
         return results;

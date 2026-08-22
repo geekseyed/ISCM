@@ -202,11 +202,12 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
     }
 
     // اجرای ۳ روش تست واقعی
+    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — Registry SecurityLayer (RDP-specific) به جای Firewall
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: Registry HKLM برای UserAuthentication (NLA)
+        // Test 1: Registry HKLM برای UserAuthentication (NLA) - بدون تغییر
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
@@ -235,7 +236,7 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 2: PowerShell برای MinEncryptionLevel
+        // Test 2: PowerShell برای MinEncryptionLevel - بدون تغییر
         try
         {
             var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'MinEncryptionLevel' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MinEncryptionLevel\"")
@@ -273,32 +274,59 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 3: Get-NetFirewallRule برای بررسی RDP rules
+        // Test 3 (CORRECTED): Registry SecurityLayer در RDP-Tcp — مستقیماً RDP encryption
+        // قبلی: Get-NetFirewallRule (اشتباه - این Firewall است نه RDP!)
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' } | Measure-Object | Select-Object -ExpandProperty Count\"")
+            using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
+            if (key != null)
             {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int count))
-            {
-                var passed = count > 0;
-                results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", passed, $"{count} enabled Remote Desktop firewall rule(s)"));
+                var v = key.GetValue("SecurityLayer");
+                if (v != null && int.TryParse(v.ToString(), out int val))
+                {
+                    // 0 = RDP Security Layer (weak)
+                    // 1 = Negotiate (better)
+                    // 2 = SSL/TLS (best, NLA-compatible)
+                    var passed = val == 1 || val == 2;
+                    var desc = val switch
+                    {
+                        0 => "RDP Security Layer (weak)",
+                        1 => "Negotiate (recommended)",
+                        2 => "SSL/TLS (strongest)",
+                        _ => $"Unknown ({val})"
+                    };
+                    results.Add(new TestResult(
+                        "Verification",
+                        "Registry (RDP-Tcp SecurityLayer)",
+                        passed,
+                        $"SecurityLayer = {val} ({desc})"));
+                }
+                else
+                {
+                    // Default when not set = Negotiate (1)
+                    results.Add(new TestResult(
+                        "Verification",
+                        "Registry (RDP-Tcp SecurityLayer)",
+                        true,
+                        "SecurityLayer not set (default = Negotiate)"));
+                }
             }
             else
             {
-                results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", false, "Could not query RDP firewall rules"));
+                results.Add(new TestResult(
+                    "Verification",
+                    "Registry (RDP-Tcp SecurityLayer)",
+                    false,
+                    "RDP-Tcp registry key not found"));
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", false, $"Error: {ex.Message}"));
+            results.Add(new TestResult(
+                "Verification",
+                "Registry (RDP-Tcp SecurityLayer)",
+                false,
+                $"Error: {ex.Message}"));
         }
 
         return results;
