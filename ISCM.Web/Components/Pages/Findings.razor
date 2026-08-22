@@ -45,16 +45,16 @@
         gap: 6px;
     }
 
-    .stat-tab:hover {
-        border-color: #06b6d4;
-        transform: translateY(-2px);
-    }
+        .stat-tab:hover {
+            border-color: #06b6d4;
+            transform: translateY(-2px);
+        }
 
-    .stat-tab.active {
-        border-color: #06b6d4;
-        background: rgba(6,182,212,0.12);
-        box-shadow: 0 0 12px rgba(6,182,212,0.2);
-    }
+        .stat-tab.active {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.12);
+            box-shadow: 0 0 12px rgba(6,182,212,0.2);
+        }
 
     .stat-value {
         font-size: 28px;
@@ -71,11 +71,29 @@
         letter-spacing: 1px;
     }
 
-    .stat-tab.all { border-left: 4px solid #06b6d4; }
-    .stat-tab.fail { border-left: 4px solid #ef4444; }
-    .stat-tab.pass { border-left: 4px solid #10b981; }
-    .stat-tab.ignored { border-left: 4px solid #94a3b8; }
-    .stat-tab.mndchi { border-left: 4px solid #8b5cf6; }
+    .stat-tab.all {
+        border-left: 4px solid #06b6d4;
+    }
+
+    .stat-tab.baseline {
+        border-left: 4px solid #8b5cf6;
+    }
+
+    .stat-tab.extended {
+        border-left: 4px solid #0891b2;
+    }
+
+    .stat-tab.fail {
+        border-left: 4px solid #ef4444;
+    }
+
+    .stat-tab.pass {
+        border-left: 4px solid #10b981;
+    }
+
+    .stat-tab.unknown {
+        border-left: 4px solid #f59e0b;
+    }
 
     .search-wrap {
         position: relative;
@@ -101,9 +119,9 @@
         font-size: 13px;
     }
 
-    .search-box::placeholder {
-        color: #64748b;
-    }
+        .search-box::placeholder {
+            color: #64748b;
+        }
 
     .bulk-bar {
         display: none;
@@ -116,9 +134,9 @@
         margin-bottom: 12px;
     }
 
-    .bulk-bar.visible {
-        display: flex;
-    }
+        .bulk-bar.visible {
+            display: flex;
+        }
 
     .bulk-count {
         color: #06b6d4;
@@ -138,15 +156,15 @@
         transition: 0.2s;
     }
 
-    .bulk-btn:hover {
-        border-color: #06b6d4;
-    }
+        .bulk-btn:hover {
+            border-color: #06b6d4;
+        }
 
-    .bulk-btn.clear {
-        margin-left: auto;
-        background: transparent;
-        color: #94a3b8;
-    }
+        .bulk-btn.clear {
+            margin-left: auto;
+            background: transparent;
+            color: #94a3b8;
+        }
 
     .category-row {
         display: flex;
@@ -172,13 +190,13 @@
         transition: 0.2s;
     }
 
-    .cat-link:hover {
-        color: #94a3b8;
-    }
+        .cat-link:hover {
+            color: #94a3b8;
+        }
 
-    .cat-link.active {
-        color: #e2e8f0;
-    }
+        .cat-link.active {
+            color: #e2e8f0;
+        }
 
     .btn-back {
         background: #334155;
@@ -216,22 +234,43 @@
         flex-wrap: wrap;
     }
 
-    .finding-card:hover {
-        background: rgba(6,182,212,0.05);
-        border-color: #06b6d4;
+        .finding-card:hover {
+            background: rgba(6,182,212,0.05);
+            border-color: #06b6d4;
+        }
+
+        .finding-card.selected {
+            background: rgba(6,182,212,0.08);
+            border-color: #06b6d4;
+        }
+
+    .border-pass {
+        border-left-color: #10b981 !important;
     }
 
-    .finding-card.selected {
-        background: rgba(6,182,212,0.08);
-        border-color: #06b6d4;
+    .border-fail {
+        border-left-color: #ef4444 !important;
     }
 
-    .border-pass { border-left-color: #10b981 !important; }
-    .border-fail { border-left-color: #ef4444 !important; }
-    .border-warning { border-left-color: #f59e0b !important; }
-    .border-ignored { border-left-color: #94a3b8 !important; }
-    .border-error { border-left-color: #dc2626 !important; }
-    .border-falsepositive { border-left-color: #a78bfa !important; }
+    .border-warning {
+        border-left-color: #f59e0b !important;
+    }
+
+    .border-ignored {
+        border-left-color: #94a3b8 !important;
+    }
+
+    .border-error {
+        border-left-color: #dc2626 !important;
+    }
+
+    .border-falsepositive {
+        border-left-color: #a78bfa !important;
+    }
+
+    .border-unknown {
+        border-left-color: #f59e0b !important;
+    }
 
     .finding-checkbox {
         width: 14px;
@@ -247,20 +286,21 @@
         font-size: 10px;
     }
 
-    .finding-checkbox.checked {
-        background: #06b6d4;
-        border-color: #06b6d4;
-    }
+        .finding-checkbox.checked {
+            background: #06b6d4;
+            border-color: #06b6d4;
+        }
 
-    .finding-checkbox.checked::after {
-        content: "✓";
-        color: white;
-        font-weight: bold;
-    }
+            .finding-checkbox.checked::after {
+                content: "✓";
+                color: white;
+                font-weight: bold;
+            }
 
     .finding-main {
         flex: 1 1 260px;
         min-width: 0;
+        cursor: pointer;
     }
 
     .finding-title-row {
@@ -283,9 +323,9 @@
     }
 
     .cis-badge {
-        color: #06b6d4;
-        border: 1px solid rgba(6,182,212,0.4);
-        background: rgba(6,182,212,0.08);
+        color: #0891b2;
+        border: 1px solid rgba(8,145,178,0.4);
+        background: rgba(8,145,178,0.08);
         font-family: 'Consolas', monospace;
         font-size: 10px;
         padding: 2px 8px;
@@ -330,77 +370,6 @@
         font-size: 11px;
         margin-top: 4px;
         font-family: 'Consolas', monospace;
-    }
-
-    .finding-values {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        white-space: nowrap;
-    }
-
-    .fv-label {
-        color: #64748b;
-        font-size: 10px;
-        text-transform: uppercase;
-    }
-
-    .fv-current {
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-        font-size: 11px;
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        word-break: break-all;
-    }
-
-    .fv-pass { color: #10b981; }
-    .fv-fail { color: #ef4444; }
-    .fv-warning { color: #f59e0b; }
-    .fv-ignored { color: #94a3b8; }
-    .fv-error { color: #dc2626; }
-    .fv-falsepositive { color: #a78bfa; }
-
-    .fv-expected {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-    }
-
-    .finding-actions {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .action-btn {
-        background: transparent;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        font-size: 10px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: 'Consolas', monospace;
-        transition: 0.2s;
-        white-space: nowrap;
-    }
-
-    .action-btn:hover:not(:disabled) {
-        border-color: #06b6d4;
-        color: #06b6d4;
-    }
-
-    .action-btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-    }
-
-    .action-btn.preview {
-        cursor: default;
     }
 
     .finding-badges {
@@ -464,6 +433,15 @@
         font-size: 10px;
     }
 
+    .status-unknown {
+        color: #f59e0b;
+        font-weight: bold;
+        background: rgba(245,158,11,0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+    }
+
     .sev-badge {
         font-size: 10px;
         font-weight: bold;
@@ -472,23 +450,25 @@
         text-transform: uppercase;
     }
 
-    .sev-badge.low { color: #94a3b8; background: rgba(148,163,184,0.12); }
-    .sev-badge.medium { color: #e2e8f0; background: rgba(226,232,240,0.12); }
-    .sev-badge.high { color: #f59e0b; background: rgba(245,158,11,0.12); }
-    .sev-badge.critical { color: #ef4444; background: rgba(239,68,68,0.15); }
+        .sev-badge.low {
+            color: #94a3b8;
+            background: rgba(148,163,184,0.12);
+        }
 
-    .risk-badge {
-        font-size: 10px;
-        font-family: 'Consolas', monospace;
-        padding: 3px 8px;
-        border-radius: 4px;
-        border: 1px solid;
-        white-space: nowrap;
-    }
+        .sev-badge.medium {
+            color: #e2e8f0;
+            background: rgba(226,232,240,0.12);
+        }
 
-    .risk-low { color: #10b981; border-color: rgba(16,185,129,0.5); }
-    .risk-mid { color: #f59e0b; border-color: rgba(245,158,11,0.5); }
-    .risk-high { color: #ef4444; border-color: rgba(239,68,68,0.5); }
+        .sev-badge.high {
+            color: #f59e0b;
+            background: rgba(245,158,11,0.12);
+        }
+
+        .sev-badge.critical {
+            color: #ef4444;
+            background: rgba(239,68,68,0.15);
+        }
 
     .empty-state {
         color: #64748b;
@@ -534,10 +514,10 @@
         transition: 0.2s;
     }
 
-    .sub-row:hover {
-        border-color: #06b6d4;
-        background: rgba(6,182,212,0.06);
-    }
+        .sub-row:hover {
+            border-color: #06b6d4;
+            background: rgba(6,182,212,0.06);
+        }
 
     .subcheck-id {
         color: #06b6d4;
@@ -573,10 +553,21 @@
 </style>
 
 <div class="glass-panel">
+    @* ═══════════════════════════════════════════════════════════════
+       EDIT (فاز 1): حذف تکرار stats-tabs — فقط یک بلوک با ۶ تب
+       ═══════════════════════════════════════════════════════════════ *@
     <div class="stats-tabs">
         <div class="stat-tab all @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">
             <div class="stat-value">@CountAll</div>
-            <div class="stat-label">All</div>
+            <div class="stat-label">All Controls</div>
+        </div>
+        <div class="stat-tab baseline @(SelectedFilter == "Baseline" ? "active" : "")" @onclick="SetFilterBaseline">
+            <div class="stat-value">@CountBaseline</div>
+            <div class="stat-label">Baseline</div>
+        </div>
+        <div class="stat-tab extended @(SelectedFilter == "Extended" ? "active" : "")" @onclick="SetFilterExtended">
+            <div class="stat-value">@CountExtended</div>
+            <div class="stat-label">Extended</div>
         </div>
         <div class="stat-tab fail @(SelectedFilter == "Fail" ? "active" : "")" @onclick="SetFilterFail">
             <div class="stat-value">@CountFail</div>
@@ -586,13 +577,9 @@
             <div class="stat-value">@CountPass</div>
             <div class="stat-label">Pass</div>
         </div>
-        <div class="stat-tab ignored @(SelectedFilter == "Ignored" ? "active" : "")" @onclick="SetFilterIgnored">
-            <div class="stat-value">@CountIgnored</div>
-            <div class="stat-label">Ignored</div>
-        </div>
-        <div class="stat-tab mndchi @(SelectedFilter == "MNDCHI" ? "active" : "")" @onclick="SetFilterMndchi">
-            <div class="stat-value">@CountMndchi</div>
-            <div class="stat-label">MNDCHI</div>
+        <div class="stat-tab unknown @(SelectedFilter == "Unknown" ? "active" : "")" @onclick="SetFilterUnknown">
+            <div class="stat-value">@CountUnknown</div>
+            <div class="stat-label">Unknown</div>
         </div>
     </div>
 
@@ -631,90 +618,60 @@
     {
         <p class="empty-state">Run a scan from the Dashboard to see findings.</p>
     }
-    else if (!FinalFindings.Any())
+    else if (!FilteredParents.Any())
     {
-        <p class="empty-state">No findings match the current filters.</p>
+        <p class="empty-state">No controls match the current filters.</p>
     }
     else
     {
         <div class="findings-list">
-            @foreach (var finding in FinalFindings)
+            @foreach (var parent in FilteredParents)
             {
-                if (finding is null) continue;
-                var f = finding;
-                var subs = f.SubChecks.Count > 0 ? f.SubChecks : GuidanceCatalog.Get(f.CheckId);
-                var hasSubs = subs.Count > 0;
-                var isExpanded = ExpandedIds.Contains(f.CheckId);
-                var isMndchi = IsMndchiFinding(f);
+                var isExpanded = ExpandedIds.Contains(parent.Definition.ControlId);
                 <div class="finding-wrap">
-                    <div class="finding-card border-@f.Status.ToString().ToLower() @(IsSelected(f) ? "selected" : "")" @onclick="() => OpenDrawer(f)">
-                        <div class="finding-checkbox @(IsSelected(f) ? "checked" : "")"
-                             @onclick="() => ToggleSelect(f)"
+                    <div class="finding-card border-@parent.CalculatedStatus.ToString().ToLower() @(IsSelected(parent) ? "selected" : "")">
+                        <div class="finding-checkbox @(IsSelected(parent) ? "checked" : "")"
+                             @onclick="() => ToggleSelect(parent)"
                              @onclick:stopPropagation="true"></div>
-                        <div class="finding-main">
+                        <div class="finding-main" @onclick="() => ToggleExpanded(parent.Definition.ControlId)">
                             <div class="finding-title-row">
-                                <span class="finding-name">@f.Name</span>
-                                <span class="finding-id">@f.CheckId</span>
-                                @if (isMndchi)
+                                <span class="finding-name">@parent.Definition.ControlId. @parent.Definition.Title</span>
+                                @if (parent.Definition.IsBaseline)
                                 {
-                                    <span class="mndchi-badge">MNDCHI</span>
+                                    <span class="mndchi-badge">@parent.Definition.BaselineId</span>
                                 }
-                                @if (!string.IsNullOrEmpty(f.CisReference))
+                                else
                                 {
-                                    <span class="cis-badge">@f.CisReference</span>
-                                }
-                                @if (f.Status == CheckStatus.FalsePositive)
-                                {
-                                    <span class="fp-tag">FP</span>
-                                }
-                                else if (f.Status == CheckStatus.Ignored)
-                                {
-                                    <span class="ignored-badge">IGNORED</span>
+                                    <span class="cis-badge">Extended</span>
                                 }
                             </div>
-                            <div class="finding-source">Source: @GetSourceType(f) · @f.Category</div>
-                        </div>
-                        <div class="finding-values">
-                            <span class="fv-label">Current</span>
-                            <span class="fv-current fv-@f.Status.ToString().ToLower()">@f.CurrentValue</span>
-                            <span class="fv-label">Expected</span>
-                            <span class="fv-expected">@f.ExpectedValue</span>
-                        </div>
-                        <div class="finding-actions">
-                            @foreach (var tool in GetTools(f))
-                            {
-                                <button class="action-btn preview" disabled>🔧 @tool</button>
-                            }
-                            <button class="action-btn preview" disabled>↶ Undo</button>
-                            <button class="action-btn preview" disabled>🔄 Rescan</button>
-                            <button class="action-btn preview" disabled>@(f.IsSuppressed ? "Unignore" : "Ignore")</button>
+                            <div class="finding-source">@parent.Definition.Description</div>
                         </div>
                         <div class="finding-badges">
-                            <span class="status-@f.Status.ToString().ToLower()">@f.Status</span>
-                            <span class="sev-badge @f.Severity.ToString().ToLower()">@f.Severity</span>
-                            <span class="risk-badge @GetRiskClass(f.RiskScore)">Risk @f.RiskScore</span>
+                            <span class="status-@parent.CalculatedStatus.ToString().ToLower()">@parent.CalculatedStatus</span>
+                            <span class="sev-badge @parent.Definition.Severity.ToString().ToLower()">@parent.Definition.Severity</span>
                         </div>
-                        @if (hasSubs)
+                        @if (parent.AllSubChecks.Any())
                         {
-                            <button class="sub-toggle" @onclick="() => ToggleExpanded(f.CheckId)" @onclick:stopPropagation="true">
-                                @(isExpanded ? "▾" : "▸") @subs.Count sub
+                            <button class="sub-toggle" @onclick="() => ToggleExpanded(parent.Definition.ControlId)" @onclick:stopPropagation="true">
+                                @(isExpanded ? "▾" : "▸") @parent.AllSubChecks.Count sub
                             </button>
                         }
                     </div>
 
-                    @if (hasSubs && isExpanded)
+                    @if (isExpanded && parent.Findings.Any())
                     {
                         <div class="sub-grid">
-                            @foreach (var sc in subs)
+                            @foreach (var finding in parent.Findings)
                             {
-                                var capturedSc = sc;
-                                <div class="sub-row" @onclick="() => OpenSubDrawer(f, capturedSc)">
-                                    <div class="subcheck-id">@sc.Id</div>
+                                var f = finding;
+                                <div class="sub-row" @onclick="() => OpenDrawer(f)">
+                                    <div class="subcheck-id">@f.CheckId</div>
                                     <div class="subcheck-main">
-                                        <div class="subcheck-title">@sc.Title</div>
-                                        <div class="subcheck-dest">🧭 @sc.DestinationLabel</div>
+                                        <div class="subcheck-title">@f.Name</div>
+                                        <div class="subcheck-dest">@f.CurrentValue</div>
                                     </div>
-                                    <div class="subcheck-expected">Expected: @sc.Expected</div>
+                                    <div class="subcheck-expected">Expected: @f.ExpectedValue</div>
                                 </div>
                             }
                         </div>
@@ -739,83 +696,111 @@
     private static readonly List<string> AllCategories =
         Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c => c.ToString()).ToList();
 
-    private IEnumerable<Finding> BaseFilteredFindings
+    private class ParentControlView
     {
-        get
-        {
-            if (StateService.CurrentScanResult == null) return Enumerable.Empty<Finding>();
-            var findings = StateService.CurrentScanResult.Findings.AsEnumerable();
-            if (!string.IsNullOrEmpty(SelectedCategory))
-                findings = findings.Where(f => f.Category.ToString() == SelectedCategory);
-            if (!string.IsNullOrWhiteSpace(SearchTerm))
-                findings = findings.Where(f => f.Name.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)
-                                            || f.CheckId.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase));
-            return findings;
-        }
+        public ControlDefinition Definition { get; set; } = null!;
+        public List<Finding> Findings { get; set; } = new();
+        public CheckStatus CalculatedStatus { get; set; }
+        public List<SubCheck> AllSubChecks { get; set; } = new();
     }
 
-    private int CountAll => BaseFilteredFindings.Count();
-    private int CountFail => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
-    private int CountPass => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Pass);
-    private int CountIgnored => BaseFilteredFindings.Count(f => f.Status == CheckStatus.Ignored);
-    private int CountMndchi => BaseFilteredFindings.Count(f => IsMndchiFinding(f));
+    private List<ParentControlView> GetParentControls()
+    {
+        if (StateService.CurrentScanResult == null) return new();
 
-    private IEnumerable<Finding> FinalFindings
+        var allFindings = StateService.CurrentScanResult.Findings.ToList();
+        var parents = new List<ParentControlView>();
+
+        foreach (var control in ControlCatalog.GetAll())
+        {
+            var findings = ControlCatalog.GetFindingsForControl(control, allFindings).ToList();
+
+            // Only include if we have findings (or if it's baseline and should always show)
+            if (!findings.Any() && !control.IsBaseline) continue;
+
+            var parent = new ParentControlView
+                {
+                    Definition = control,
+                    Findings = findings,
+                    CalculatedStatus = control.CalculateParentStatus(findings),
+                    AllSubChecks = findings.SelectMany(f => f.SubChecks).ToList()
+                };
+
+            parents.Add(parent);
+        }
+
+        return parents;
+    }
+
+    private List<ParentControlView> FilteredParents
     {
         get
         {
-            var findings = BaseFilteredFindings;
-            if (SelectedFilter == "Fail")
-                findings = findings.Where(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+            var parents = GetParentControls();
+
+            // Filter by baseline/extended
+            if (SelectedFilter == "Baseline")
+            {
+                parents = parents.Where(p => p.Definition.IsBaseline).ToList();
+            }
+            else if (SelectedFilter == "Extended")
+            {
+                parents = parents.Where(p => !p.Definition.IsBaseline).ToList();
+            }
+            else if (SelectedFilter == "Fail")
+            {
+                parents = parents.Where(p => p.CalculatedStatus == CheckStatus.Fail).ToList();
+            }
             else if (SelectedFilter == "Pass")
-                findings = findings.Where(f => f.Status == CheckStatus.Pass);
-            else if (SelectedFilter == "Ignored")
-                findings = findings.Where(f => f.Status == CheckStatus.Ignored);
+            {
+                parents = parents.Where(p => p.CalculatedStatus == CheckStatus.Pass).ToList();
+            }
+            else if (SelectedFilter == "Unknown")
+            {
+                parents = parents.Where(p => p.CalculatedStatus == CheckStatus.Unknown).ToList();
+            }
             else if (SelectedFilter == "MNDCHI")
-                findings = findings.Where(f => IsMndchiFinding(f));
-            
-            return findings.OrderBy(f => f.Status == CheckStatus.Pass ? 1 : (f.Status == CheckStatus.Ignored ? 2 : 0))
-                           .ThenBy(f => f.CheckId)
-                           .ToList();
+            {
+                parents = parents.Where(p => p.Definition.IsBaseline).ToList();
+            }
+
+            // Filter by search term
+            if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                parents = parents.Where(p =>
+                    p.Definition.Title.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    p.Definition.Description.Contains(SearchTerm, StringComparison.OrdinalIgnoreCase)
+                ).ToList();
+            }
+
+            // Sort: Fail first, then Unknown, then Pass
+            return parents
+                .OrderBy(p => p.CalculatedStatus == CheckStatus.Fail ? 0 :
+                              p.CalculatedStatus == CheckStatus.Unknown ? 1 : 2)
+                .ThenBy(p => p.Definition.ControlId)
+                .ToList();
         }
     }
 
-    private bool IsMndchiFinding(Finding f)
+    // Counts for tabs
+    private int CountAll => GetParentControls().Count;
+    private int CountBaseline => GetParentControls().Count(p => p.Definition.IsBaseline);
+    private int CountExtended => GetParentControls().Count(p => !p.Definition.IsBaseline);
+    private int CountFail => GetParentControls().Count(p => p.CalculatedStatus == CheckStatus.Fail);
+    private int CountPass => GetParentControls().Count(p => p.CalculatedStatus == CheckStatus.Pass);
+    private int CountUnknown => GetParentControls().Count(p => p.CalculatedStatus == CheckStatus.Unknown);
+    private int CountMndchi => CountBaseline;
+
+    private bool IsSelected(ParentControlView parent) =>
+        parent.Findings.Any(f => SelectedFindingIds.Contains(f.CheckId));
+
+    private void ToggleSelect(ParentControlView parent)
     {
-        return f.CheckId.StartsWith("MNDCHI-", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string GetSourceType(Finding f)
-    {
-        if (!string.IsNullOrEmpty(f.SourceType)) return f.SourceType;
-        if (f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) return "secedit";
-        if (f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM")) return "net.exe";
-        return "RegistryReader";
-    }
-
-    private static string GetRiskClass(int score)
-        => score >= 80 ? "risk-high" : score >= 50 ? "risk-mid" : "risk-low";
-
-    private IEnumerable<string> GetTools(Finding? finding)
-    {
-        if (finding is null) return Array.Empty<string>();
-        return finding.FixTools.Count > 0 ? finding.FixTools : new[] { GetFixMethod(finding.CheckId) };
-    }
-
-    private string GetFixMethod(string checkId)
-    {
-        if (checkId.StartsWith("FW") || checkId.StartsWith("SMB")) return "powershell.exe";
-        if (checkId.StartsWith("GUEST") || checkId.StartsWith("ADM")) return "net.exe";
-        if (checkId.StartsWith("PWD") || checkId.StartsWith("AUD")) return "secpol.msc";
-        return "regedit.exe";
-    }
-
-    private bool IsSelected(Finding finding) => SelectedFindingIds.Contains(finding.CheckId);
-
-    private void ToggleSelect(Finding finding)
-    {
-        if (!SelectedFindingIds.Add(finding.CheckId))
-            SelectedFindingIds.Remove(finding.CheckId);
+        foreach (var finding in parent.Findings)
+        {
+            if (!SelectedFindingIds.Add(finding.CheckId))
+                SelectedFindingIds.Remove(finding.CheckId);
+        }
     }
 
     private void ClearSelection() => SelectedFindingIds.Clear();
@@ -861,9 +846,11 @@
     }
 
     private void SetFilterAll() => SelectedFilter = "All";
+    private void SetFilterBaseline() => SelectedFilter = "Baseline";
+    private void SetFilterExtended() => SelectedFilter = "Extended";
     private void SetFilterPass() => SelectedFilter = "Pass";
     private void SetFilterFail() => SelectedFilter = "Fail";
-    private void SetFilterIgnored() => SelectedFilter = "Ignored";
+    private void SetFilterUnknown() => SelectedFilter = "Unknown";
     private void SetFilterMndchi() => SelectedFilter = "MNDCHI";
     private void SetCategory(string? c) => SelectedCategory = c;
     private void ClearCategory() => SelectedCategory = null;
