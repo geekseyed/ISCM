@@ -1,6 +1,9 @@
 ﻿namespace ISCM.Domain.Entities;
 
-// EDIT (گروه C - C6): نتیجهٔ یک روش تست برای یک چک امنیتی
+/// <summary>
+/// Represents the result of a single verification test method for a security check.
+/// Used for multi-path testing where each check runs 3 independent verification methods.
+/// </summary>
 public class TestResult
 {
     public string TestName { get; set; } = string.Empty;
