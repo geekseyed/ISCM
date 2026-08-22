@@ -2,10 +2,12 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class SmbV1ProtocolCheck : IHardeningCheck
+// EDIT (گروه D - اولویت ۱): پیاده‌سازی IMultiPathCheck برای تست‌های واقعی چندمسیره
+public class SmbV1ProtocolCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegistryPath = @"SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters";
     private const string ValueName = "SMB1";
@@ -81,5 +83,79 @@ public class SmbV1ProtocolCheck : IHardeningCheck
             sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
             fixTools: new List<string> { "powershell.exe", "OptionalFeatures.exe" },
             subChecks: SubChecks));
+    }
+
+    // EDIT (گروه D - اولویت ۱): اجرای ۳ روش تست واقعی برای SMBv1
+    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    {
+        var results = new List<TestResult>();
+
+        // Test 1: Registry (HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters\SMB1)
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
+            if (key != null)
+            {
+                var v = key.GetValue(ValueName);
+                var passed = v != null && v.ToString() == "0";
+                results.Add(new TestResult("Primary", "Registry (HKLM\\...\\LanmanServer\\Parameters\\SMB1)", passed, passed ? "SMB1 = 0 (Disabled)" : $"SMB1 = {v} (Enabled)"));
+            }
+            else
+            {
+                results.Add(new TestResult("Primary", "Registry", false, "Registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Primary", "Registry", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 2: PowerShell Get-SmbServerConfiguration
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-SmbServerConfiguration | Select-Object -ExpandProperty EnableSMB1Protocol\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            var passed = output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase);
+            results.Add(new TestResult("Cross-check", "Get-SmbServerConfiguration", passed, passed ? "EnableSMB1Protocol = False" : $"EnableSMB1Protocol = {output.Trim()}"));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Cross-check", "Get-SmbServerConfiguration", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 3: Get-WindowsOptionalFeature برای SMB1Protocol
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol | Select-Object -ExpandProperty State\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            var passed = output.Trim().Equals("Disabled", StringComparison.OrdinalIgnoreCase);
+            results.Add(new TestResult("Verification", "Get-WindowsOptionalFeature", passed, passed ? "State = Disabled" : $"State = {output.Trim()}"));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Verification", "Get-WindowsOptionalFeature", false, $"Error: {ex.Message}"));
+        }
+
+        return results;
     }
 }

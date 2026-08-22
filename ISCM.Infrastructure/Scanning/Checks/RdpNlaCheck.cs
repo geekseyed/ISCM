@@ -2,58 +2,305 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class RdpNlaCheck : IHardeningCheck
+public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
 {
-    private const string RegistryPath = @"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp";
-    private const string ValueName = "UserAuthentication";
+    private const string RdpTcpPath = @"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp";
+    private const string TsPath = @"SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services";
 
     public string CheckId => "RDP-001";
-    public string Name => "RDP Network Level Authentication";
+    public string Name => "Secure RDP (Network Level Authentication)";
     public CheckCategory Category => CheckCategory.Network;
     public CheckSeverity Severity => CheckSeverity.High;
 
+    private static readonly List<SubCheck> SubChecks = new()
+    {
+        new SubCheck { Id = "RDP-001.1", Title = "Require user authentication for remote connections by using Network Level Authentication",
+            Expected = "Enabled",
+            WhatItDoes = "Requires authentication before a full RDP session is created.",
+            Recommendation = "Enable the NLA policy under Remote Desktop Session Host > Security.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication",
+            Verification = "UserAuthentication = 1.",
+            ValueMap = "1 = Enabled, 0 = Disabled.",
+            CliTokens = "-Name UserAuthentication: master switch for NLA.",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Security → Require user authentication (NLA)",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Require user authentication for remote connections by using Network Level Authentication",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security",
+            YouAreHere = "gpedit.msc > RD Session Host > Security",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Require user authentication for remote connections by using Network Level Authentication > Enabled",
+            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security.\n3) Double-click 'Require user authentication for remote connections by using Network Level Authentication'.\n4) Set to Enabled.\n5) Click OK.",
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' -Name UserAuthentication -Value 0",
+            IgnoreConsequence = "RDP sessions can be established before authentication, exposing the login screen to unauthenticated attackers.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp\UserAuthentication",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Security over manual registry editing." },
+        new SubCheck { Id = "RDP-001.2", Title = "Set client connection encryption level",
+            Expected = "Enabled — High Level",
+            WhatItDoes = "Enforces stronger RDP session encryption.",
+            Recommendation = "Set MinEncryptionLevel = 3 (High).",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MinEncryptionLevel",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MinEncryptionLevel -Value 3 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MinEncryptionLevel",
+            Verification = "MinEncryptionLevel = 3 (High).",
+            ValueMap = "1 = Low, 2 = Client Compatible, 3 = High, 4 = FIPS.",
+            CliTokens = "-Name MinEncryptionLevel: RDP encryption strength.",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Security → Set client connection encryption level",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Set client connection encryption level",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security",
+            YouAreHere = "gpedit.msc > RD Session Host > Security",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Set client connection encryption level > Enabled > High Level",
+            GraphicalSteps = "1) Open the same Security node.\n2) Double-click 'Set client connection encryption level'.\n3) Set to Enabled.\n4) Select 'High Level'.\n5) OK.",
+            UndoCli = "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MinEncryptionLevel",
+            IgnoreConsequence = "RDP sessions may use weaker encryption levels.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\MinEncryptionLevel",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Security." },
+        new SubCheck { Id = "RDP-001.3", Title = "Require secure RPC communication",
+            Expected = "Enabled",
+            WhatItDoes = "Requires authenticated and encrypted RPC communication.",
+            Recommendation = "Enable fEncryptRPCTraffic.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fEncryptRPCTraffic",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fEncryptRPCTraffic -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fEncryptRPCTraffic",
+            Verification = "fEncryptRPCTraffic = 1.",
+            ValueMap = "1 = Enabled, 0 = Disabled.",
+            CliTokens = "-Name fEncryptRPCTraffic: secure RPC for RDP.",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Security → Require secure RPC",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Require secure RPC communication",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security",
+            YouAreHere = "gpedit.msc > RD Session Host > Security",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Require secure RPC communication > Enabled",
+            GraphicalSteps = "1) Open the same Security node.\n2) Double-click 'Require secure RPC communication'.\n3) Set to Enabled.\n4) OK.",
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fEncryptRPCTraffic -Value 0",
+            IgnoreConsequence = "RPC traffic between RDP client and server is not encrypted.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\fEncryptRPCTraffic",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Security." },
+        new SubCheck { Id = "RDP-001.4", Title = "Always prompt for password upon connection",
+            Expected = "Enabled",
+            WhatItDoes = "Forces password entry on each connection.",
+            Recommendation = "Enable fPromptForPassword.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fPromptForPassword",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fPromptForPassword -Value 1 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fPromptForPassword",
+            Verification = "fPromptForPassword = 1.",
+            ValueMap = "1 = Enabled.",
+            CliTokens = "-Name fPromptForPassword: always prompt for password.",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Security → Always prompt for password",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Always prompt for password upon connection",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security",
+            YouAreHere = "gpedit.msc > RD Session Host > Security",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Security > Always prompt for password upon connection > Enabled",
+            GraphicalSteps = "1) Same Security node.\n2) Double-click 'Always prompt for password upon connection'.\n3) Set to Enabled.\n4) OK.",
+            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name fPromptForPassword -Value 0",
+            IgnoreConsequence = "Saved credentials may be silently used without user confirmation.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\fPromptForPassword",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Security." },
+        new SubCheck { Id = "RDP-001.5", Title = "Limit number of connections",
+            Expected = "Configured (e.g. 2)",
+            WhatItDoes = "Restricts concurrent RDP sessions.",
+            Recommendation = "Set MaxInstanceCount to a small number.",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxInstanceCount",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxInstanceCount -Value 2 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxInstanceCount",
+            Verification = "MaxInstanceCount = 2 (or configured value).",
+            ValueMap = "MaxInstanceCount = concurrent session limit.",
+            CliTokens = "-Name MaxInstanceCount: max concurrent sessions.",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Connections → Limit number of connections",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Connections > Limit number of connections",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Connections",
+            YouAreHere = "gpedit.msc > RD Session Host > Connections",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Connections > Limit number of connections > Enabled > 2",
+            GraphicalSteps = "1) Navigate to RD Session Host > Connections.\n2) Double-click 'Limit number of connections'.\n3) Set to Enabled.\n4) Enter 2 (or other value).\n5) OK.",
+            UndoCli = "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxInstanceCount",
+            IgnoreConsequence = "Unlimited concurrent RDP sessions allowed.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\MaxInstanceCount",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Connections." },
+        new SubCheck { Id = "RDP-001.6", Title = "Set time limit for active but idle RDS sessions",
+            Expected = "15 minutes",
+            WhatItDoes = "Disconnects idle RDP sessions.",
+            Recommendation = "Set MaxIdleTime = 900000 (15 minutes in ms).",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxIdleTime",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxIdleTime -Value 900000 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxIdleTime",
+            Verification = "MaxIdleTime = 900000 (ms).",
+            ValueMap = "900000 ms = 15 minutes.",
+            CliTokens = "-Name MaxIdleTime: idle disconnect time (ms).",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Session Time Limits → Active but idle sessions",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits > Set time limit for active but idle Remote Desktop Services sessions",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits",
+            YouAreHere = "gpedit.msc > RD Session Host > Session Time Limits",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits > Set time limit for active but idle Remote Desktop Services sessions > Enabled > 15 minutes",
+            GraphicalSteps = "1) Navigate to RD Session Host > Session Time Limits.\n2) Double-click 'Set time limit for active but idle Remote Desktop Services sessions'.\n3) Set to Enabled.\n4) Select 15 minutes.\n5) OK.",
+            UndoCli = "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxIdleTime",
+            IgnoreConsequence = "Idle RDP sessions remain active indefinitely.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\MaxIdleTime",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Session Time Limits." },
+        new SubCheck { Id = "RDP-001.7", Title = "Set time limit for disconnected sessions",
+            Expected = "1 minute or End immediately",
+            WhatItDoes = "Ends disconnected sessions quickly.",
+            Recommendation = "Set MaxDisconnectionTime = 60000 (1 minute in ms).",
+            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxDisconnectionTime",
+            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxDisconnectionTime -Value 60000 -Type DWord",
+            VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxDisconnectionTime",
+            Verification = "MaxDisconnectionTime = 60000 (ms) or 0 (End immediately).",
+            ValueMap = "60000 ms = 1 minute; 0 = End immediately.",
+            CliTokens = "-Name MaxDisconnectionTime: disconnected session timeout (ms).",
+            ConsoleTool = "gpedit.msc",
+            DestinationLabel = "RD Session Host → Session Time Limits → Disconnected sessions",
+            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits > Set time limit for disconnected sessions",
+            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits",
+            YouAreHere = "gpedit.msc > RD Session Host > Session Time Limits",
+            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Remote Desktop Services > Remote Desktop Session Host > Session Time Limits > Set time limit for disconnected sessions > Enabled > 1 minute",
+            GraphicalSteps = "1) Same Session Time Limits node.\n2) Double-click 'Set time limit for disconnected sessions'.\n3) Set to Enabled.\n4) Select 1 minute (or End immediately).\n5) OK.",
+            UndoCli = "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name MaxDisconnectionTime",
+            IgnoreConsequence = "Disconnected RDP sessions linger, keeping user context active.",
+            HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\MaxDisconnectionTime",
+            AlternativeToRegistry = "Prefer gpedit.msc > RD Session Host > Session Time Limits." }
+    };
+
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
-
+        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
-            if (key != null)
-            {
-                var val = key.GetValue(ValueName);
-                if (val != null && val.ToString() == "1")
-                {
-                    currentValue = "Enabled";
-                    status = CheckStatus.Pass;
-                }
-                else
-                {
-                    currentValue = "Disabled";
-                    status = CheckStatus.Fail;
-                }
-            }
-            else { currentValue = "Registry Key Missing"; status = CheckStatus.Warning; }
+            using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
+            var v = key?.GetValue("UserAuthentication");
+            if (v != null && v.ToString() == "1") { currentValue = "NLA Enabled"; status = CheckStatus.Pass; }
+            else { currentValue = "NLA Disabled"; status = CheckStatus.Fail; }
         }
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
-            expectedValue: "Enabled",
-            recommendation: "Enable NLA for RDP to prevent MitM attacks.",
+            "Enabled",
+            "Harden RDP with NLA, encryption, and session limits to prevent unauthorized remote access.",
             errorMessage: errorMessage,
-            description: "Network Level Authentication for RDP requires authentication before establishing a full session, preventing Man-in-the-Middle attacks.",
-            registryPath: $@"HKLM\{RegistryPath}\{ValueName}",
-            cisReference: "CIS 18.10.10.1",
-            riskScore: 85,
+            description: "Configures Remote Desktop with Network Level Authentication, strong encryption, and session management controls.",
+            registryPath: $@"HKLM\{RdpTcpPath}\UserAuthentication",
+            cisReference: "CIS 18.10.9.1",
+            riskScore: 80,
             sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
-            fixTools: new List<string> { "SystemPropertiesRemote.exe", "powershell.exe" }
-        ));
+            sourceCommand: $@"reg query ""HKLM\{RdpTcpPath}"" /v UserAuthentication",
+            fixTools: new List<string> { "gpedit.msc" },
+            subChecks: SubChecks));
+    }
+
+    // اجرای ۳ روش تست واقعی
+    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    {
+        var results = new List<TestResult>();
+
+        // Test 1: Registry HKLM برای UserAuthentication (NLA)
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
+            if (key != null)
+            {
+                var v = key.GetValue("UserAuthentication");
+                if (v != null && int.TryParse(v.ToString(), out int val))
+                {
+                    var passed = val == 1;
+                    results.Add(new TestResult("Primary", "Registry (NLA UserAuthentication)", passed, $"UserAuthentication = {val}"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Primary", "Registry (NLA UserAuthentication)", false, "UserAuthentication value not found"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult("Primary", "Registry (NLA UserAuthentication)", false, "RDP-Tcp registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Primary", "Registry (NLA UserAuthentication)", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 2: PowerShell برای MinEncryptionLevel
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'MinEncryptionLevel' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MinEncryptionLevel\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int level))
+            {
+                var passed = level == 3; // 3 = High
+                var desc = level switch
+                {
+                    1 => "Low",
+                    2 => "Client Compatible",
+                    3 => "High",
+                    4 => "FIPS",
+                    _ => $"Unknown ({level})"
+                };
+                results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", passed, $"MinEncryptionLevel = {level} ({desc})"));
+            }
+            else
+            {
+                results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", false, "MinEncryptionLevel not configured"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 3: Get-NetFirewallRule برای بررسی RDP rules
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' } | Measure-Object | Select-Object -ExpandProperty Count\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int count))
+            {
+                var passed = count > 0;
+                results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", passed, $"{count} enabled Remote Desktop firewall rule(s)"));
+            }
+            else
+            {
+                results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", false, "Could not query RDP firewall rules"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Verification", "Get-NetFirewallRule (RDP)", false, $"Error: {ex.Message}"));
+        }
+
+        return results;
     }
 }

@@ -2,10 +2,11 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class PowerShellLoggingCheck : IHardeningCheck
+public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPath = @"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging";
     private const string ValueName = "EnableScriptBlockLogging";
@@ -15,7 +16,6 @@ public class PowerShellLoggingCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.Audit;
     public CheckSeverity Severity => CheckSeverity.Medium;
 
-    // Revised PDF item 6: third setting is NESTED inside the Script Block Logging dialog.
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck { Id = "PSH-001.1", Title = "Turn on PowerShell Script Block Logging", Expected = "Enabled (Event 4104)",
@@ -28,7 +28,7 @@ public class PowerShellLoggingCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "Windows PowerShell → Script Block Logging",
             GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell",
-            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > 'Turn on PowerShell Script Block Logging' > Enabled",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging > Enabled",
             GraphicalSteps = "1) gpedit.msc → Computer Configuration → Administrative Templates → Windows Components → Windows PowerShell. 2) 'Turn on PowerShell Script Block Logging' = Enabled.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging' -Name EnableScriptBlockLogging -Value 0",
             IgnoreConsequence = "Malicious PowerShell runs without script-content logging.", HasRegistryPath = true,
@@ -44,7 +44,7 @@ public class PowerShellLoggingCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "Windows PowerShell → Module Logging",
             GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on Module Logging",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell",
-            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > 'Turn on Module Logging' > Enabled",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on Module Logging > Enabled",
             GraphicalSteps = "1) Windows PowerShell node. 2) 'Turn on Module Logging' = Enabled.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging' -Name EnableModuleLogging -Value 0",
             IgnoreConsequence = "Module activity not logged.", HasRegistryPath = true,
@@ -60,7 +60,7 @@ public class PowerShellLoggingCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "Script Block Logging dialog → invocation start/stop option",
             GraphicalPathFull = "Same policy dialog as 'Turn on PowerShell Script Block Logging' — it is an option INSIDE that policy, not a separate GPO node",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging (options)",
-            YouAreHere = "gpedit.msc → Windows PowerShell → Script Block Logging dialog", GoTo = "Same Policy dialog as 'Turn on Powershell Script Block Logging' -- it is an option unside that policy, not a separate standalone GPO node",
+            YouAreHere = "gpedit.msc → Windows PowerShell → Script Block Logging dialog", GoTo = "Inside the Script Block Logging dialog → check 'Log script block invocation start/stop events'",
             GraphicalSteps = "1) Open 'Turn on PowerShell Script Block Logging'. 2) Inside its options, enable 'Log script block invocation start/stop events'.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging' -Name EnableScriptBlockInvocationLogging -Value 0",
             IgnoreConsequence = "No invocation boundaries in logs (optional feature).", HasRegistryPath = true,
@@ -90,5 +90,91 @@ public class PowerShellLoggingCheck : IHardeningCheck
             sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
             fixTools: new List<string> { "gpedit.msc" },
             subChecks: SubChecks));
+    }
+
+    // اجرای ۳ روش تست واقعی
+    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    {
+        var results = new List<TestResult>();
+
+        // Test 1: Registry برای EnableScriptBlockLogging
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
+            if (key != null)
+            {
+                var v = key.GetValue(ValueName);
+                if (v != null && v.ToString() == "1")
+                {
+                    results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", true, "EnableScriptBlockLogging = 1"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", false, $"Value = {v ?? "not set"}"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", false, "Registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 2: Registry برای EnableModuleLogging
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging");
+            if (key != null)
+            {
+                var v = key.GetValue("EnableModuleLogging");
+                if (v != null && v.ToString() == "1")
+                {
+                    results.Add(new TestResult("Cross-check", "Registry (ModuleLogging)", true, "EnableModuleLogging = 1"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Cross-check", "Registry (ModuleLogging)", false, $"Value = {v ?? "not set"}"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult("Cross-check", "Registry (ModuleLogging)", false, "Registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Cross-check", "Registry (ModuleLogging)", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 3: PowerShell Get-WinEvent برای بررسی event 4104
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-PowerShell/Operational'; ID=4104} -MaxEvents 1 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TimeCreated\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            var passed = !string.IsNullOrWhiteSpace(output);
+            var details = passed ? $"Last ScriptBlock event: {output.Trim()}" : "No recent ScriptBlock events (logging may not be active)";
+            results.Add(new TestResult("Verification", "Get-WinEvent (4104)", passed, details));
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Verification", "Get-WinEvent (4104)", false, $"Error: {ex.Message}"));
+        }
+
+        return results;
     }
 }
