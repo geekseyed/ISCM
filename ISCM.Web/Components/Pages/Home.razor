@@ -490,7 +490,15 @@
         {
             foreach (var log in StateService.ConsoleLogs.AsEnumerable().Reverse())
             {
-                <div class="@GetLogClass(log)">@log</div>
+                @* EDIT (گروه C - C6): شناسایی خطوط تست و indent آن‌ها *@
+                @if (log.TrimStart().StartsWith("├─") || log.TrimStart().StartsWith("└─"))
+                {
+                    <div class="@GetLogClass(log)" style="margin-left: 24px; font-size: 11px;">@log</div>
+                }
+                else
+                {
+                    <div class="@GetLogClass(log)">@log</div>
+                }
             }
         }
     </div>
@@ -725,5 +733,12 @@
     public void Dispose()
     {
         StateService.OnChange -= HandleStateChanged;
+    }
+    // EDIT (گروه C - C6): تشخیص رنگ برای خطوط تست
+    private static string GetTestClass(string log)
+    {
+        if (log.Contains("Pass ✓")) return "log-pass";
+        if (log.Contains("Fail ✗")) return "log-fail";
+        return "log-info";
     }
 }

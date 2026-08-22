@@ -1,7 +1,9 @@
 ﻿@inherits LayoutComponentBase
 @using ISCM.Web.Services
+@using Microsoft.AspNetCore.Components.Routing
 @inject ScanStateService StateService
 @inject ThemeService ThemeService
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <style>
@@ -18,17 +20,49 @@
         font-family: 'Segoe UI', Tahoma, sans-serif;
     }
 
-    .app-container {
+       .app-container {
         display: flex;
         flex-direction: column;
         height: 100vh;
         overflow: hidden;
         background-color: #0f172a;
-        background-image: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
         background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        transition: background-image 0.4s ease;
         color: #e2e8f0;
         font-family: 'Segoe UI', Tahoma, sans-serif;
     }
+
+        /* Dashboard (مسیر /) — cyber/technology */
+        .app-container.page-dashboard {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
+
+        /* Findings (مسیر /findings) — search/scanning */
+        .app-container.page-findings {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)), url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
+
+        /* Reports (مسیر /reports) — charts/analytics */
+        .app-container.page-reports {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)), url('https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
+
+        /* Settings (مسیر /settings) — gears/configuration */
+        .app-container.page-settings {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)), url('https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
+
+        /* Activity (مسیر /activity) — logs/events */
+        .app-container.page-activity {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.94)), url('https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
+
+        /* Fallback default */
+        .app-container.page-default {
+            background-image: linear-gradient(rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.95)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
     .app-header {
         display: flex;
@@ -48,7 +82,7 @@
         gap: 10px;
     }
 
-    /* ── EDIT (گروه C): چراغ Connected حرفه‌ای و بزرگ‌تر ── */
+    /* ── EDIT (گروه C - مرحله قبل): چراغ Connected حرفه‌ای و بزرگ‌تر ── */
     .host-pill {
         display: flex;
         align-items: center;
@@ -65,22 +99,27 @@
         letter-spacing: 0.5px;
     }
 
-    .host-pill.online {
-        border-color: rgba(16, 185, 129, 0.4);
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
-    }
+        .host-pill.online {
+            border-color: rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+        }
 
-    .host-pill.offline {
-        background: rgba(239, 68, 68, 0.15);
-        border-color: rgba(239, 68, 68, 0.5);
-        color: #ef4444;
-        box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
-        animation: offlinePillPulse 1.2s ease-in-out infinite;
-    }
+        .host-pill.offline {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+            animation: offlinePillPulse 1.2s ease-in-out infinite;
+        }
 
     @@keyframes offlinePillPulse {
-        0%, 100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.3); }
-        50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); }
+        0%, 100% {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        }
+
+        50% {
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+        }
     }
 
     .host-pill .dot {
@@ -91,27 +130,27 @@
         flex-shrink: 0;
     }
 
-    /* EDIT: چراغ online با ضربان آرام */
     .host-pill.online .dot {
         background: #10b981;
         box-shadow: 0 0 10px #10b981, 0 0 20px rgba(16, 185, 129, 0.4);
         animation: onlinePulse 2.5s ease-in-out infinite;
     }
 
-    .host-pill.online .dot::after {
-        content: '';
-        position: absolute;
-        inset: -4px;
-        border-radius: 50%;
-        border: 2px solid rgba(16, 185, 129, 0.4);
-        animation: onlineRing 2.5s ease-out infinite;
-    }
+        .host-pill.online .dot::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid rgba(16, 185, 129, 0.4);
+            animation: onlineRing 2.5s ease-out infinite;
+        }
 
     @@keyframes onlinePulse {
         0%, 100% {
             background: #10b981;
             box-shadow: 0 0 10px #10b981, 0 0 20px rgba(16, 185, 129, 0.4);
         }
+
         50% {
             background: #34d399;
             box-shadow: 0 0 16px #34d399, 0 0 28px rgba(16, 185, 129, 0.6);
@@ -119,11 +158,17 @@
     }
 
     @@keyframes onlineRing {
-        0% { transform: scale(0.8); opacity: 0.8; }
-        100% { transform: scale(1.8); opacity: 0; }
+        0% {
+            transform: scale(0.8);
+            opacity: 0.8;
+        }
+
+        100% {
+            transform: scale(1.8);
+            opacity: 0;
+        }
     }
 
-    /* EDIT: چراغ offline با چشمک سریع */
     .host-pill.offline .dot {
         background: #ef4444;
         box-shadow: 0 0 12px #ef4444, 0 0 24px rgba(239, 68, 68, 0.6);
@@ -136,6 +181,7 @@
             box-shadow: 0 0 12px #ef4444, 0 0 24px rgba(239, 68, 68, 0.6);
             opacity: 1;
         }
+
         50% {
             background: #7f1d1d;
             box-shadow: 0 0 4px #ef4444;
@@ -207,7 +253,9 @@
         transition: 0.2s;
     }
 
-    .theme-btn:hover { border-color: #06b6d4; }
+        .theme-btn:hover {
+            border-color: #06b6d4;
+        }
 
     .top-nav {
         background: rgba(15, 23, 42, 0.6);
@@ -227,17 +275,17 @@
         transition: 0.2s;
     }
 
-    .nav-link:hover {
-        color: #e2e8f0;
-        background: rgba(51, 65, 85, 0.5);
-    }
+        .nav-link:hover {
+            color: #e2e8f0;
+            background: rgba(51, 65, 85, 0.5);
+        }
 
-    .nav-link.active {
-        color: #06b6d4;
-        background: rgba(6, 182, 212, 0.1);
-        border-bottom: 2px solid #06b6d4;
-        border-radius: 0;
-    }
+        .nav-link.active {
+            color: #06b6d4;
+            background: rgba(6, 182, 212, 0.1);
+            border-bottom: 2px solid #06b6d4;
+            border-radius: 0;
+        }
 
     .nav-badge {
         background: rgba(6, 182, 212, 0.15);
@@ -249,7 +297,9 @@
         margin-left: 6px;
     }
 
-    .nav-right { margin-left: auto; }
+    .nav-right {
+        margin-left: auto;
+    }
 
     .nav-locked {
         pointer-events: none;
@@ -271,7 +321,9 @@
         flex-direction: column;
     }
 
-    .main-content::-webkit-scrollbar { display: none; }
+        .main-content::-webkit-scrollbar {
+            display: none;
+        }
 
     .reconnect-modal {
         display: none;
@@ -286,9 +338,9 @@
         align-items: center;
     }
 
-    .reconnect-modal.components-reconnect-show, .reconnect-modal.components-reconnect-failed {
-        display: flex;
-    }
+        .reconnect-modal.components-reconnect-show, .reconnect-modal.components-reconnect-failed {
+            display: flex;
+        }
 
     .reconnect-box {
         background: #1e293b;
@@ -304,130 +356,877 @@
         margin-top: 10px;
     }
 
-    /* تم روشن */
+    /* ════════════════════════════════════════════════════════════════
+           تم روشن — Override سراسری برای همهٔ صفحات (حفظ همهٔ تغییرات قبلی)
+           ════════════════════════════════════════════════════════════════ */
     .app-container.light {
-        background: #f1f5f9;
+        background-color: #f1f5f9;
         color: #0f172a;
     }
 
-    .app-container.light h1, .app-container.light h2, .app-container.light h3 { color: #0f172a !important; }
-    .app-container.light p { color: #475569 !important; }
-    .app-container.light strong, .app-container.light b { color: #0f172a !important; }
+        /* EDIT (گروه C - C7): پس‌زمینهٔ تم روشن با gradient سبک‌تر */
+        .app-container.light.page-dashboard {
+            background-image: linear-gradient(rgba(241, 245, 249, 0.92), rgba(241, 245, 249, 0.96)), url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
-    .app-container.light .app-header {
-        background: rgba(255, 255, 255, 0.9);
-        border-bottom: 1px solid #e2e8f0;
-    }
+        .app-container.light.page-findings {
+            background-image: linear-gradient(rgba(241, 245, 249, 0.92), rgba(241, 245, 249, 0.96)), url('https://images.unsplash.com/photo-1550751827-4bd374c3f58b?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
-    .app-container.light .host-pill {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        color: #334155;
-    }
+        .app-container.light.page-reports {
+            background-image: linear-gradient(rgba(241, 245, 249, 0.92), rgba(241, 245, 249, 0.96)), url('https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
-    .app-container.light .host-pill.online {
-        border-color: rgba(16, 185, 129, 0.4);
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
-    }
+        .app-container.light.page-settings {
+            background-image: linear-gradient(rgba(241, 245, 249, 0.92), rgba(241, 245, 249, 0.96)), url('https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
-    .app-container.light .host-pill.offline {
-        background: rgba(239, 68, 68, 0.08);
-        border-color: rgba(239, 68, 68, 0.5);
-        color: #dc2626;
-    }
+        .app-container.light.page-activity {
+            background-image: linear-gradient(rgba(241, 245, 249, 0.92), rgba(241, 245, 249, 0.96)), url('https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80');
+        }
 
-    .app-container.light .path-pill {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        color: #64748b;
-    }
+        .app-container.light h1, .app-container.light h2, .app-container.light h3 {
+            color: #0f172a !important;
+        }
 
-    .app-container.light .brand-name {
-        color: #0f172a;
-        text-shadow: none;
-    }
+        .app-container.light p {
+            color: #475569 !important;
+        }
 
-    .app-container.light .brand-sub { color: #64748b; }
+        .app-container.light strong, .app-container.light b {
+            color: #0f172a !important;
+        }
 
-    .app-container.light .theme-btn {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        color: #334155;
-    }
+        .app-container.light .app-header {
+            background: rgba(255, 255, 255, 0.95);
+            border-bottom: 1px solid #e2e8f0;
+        }
 
-    .app-container.light .theme-btn:hover { border-color: #0891b2; }
+        .app-container.light .host-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
 
-    .app-container.light .top-nav {
-        background: rgba(255, 255, 255, 0.7);
-        border-bottom: 1px solid #e2e8f0;
-    }
+            .app-container.light .host-pill.online {
+                border-color: rgba(16, 185, 129, 0.4);
+                box-shadow: 0 0 12px rgba(16, 185, 129, 0.15);
+            }
 
-    .app-container.light .nav-link { color: #475569; }
-    .app-container.light .nav-link:hover {
-        color: #0f172a;
-        background: rgba(226, 232, 240, 0.6);
-    }
-    .app-container.light .nav-link.active {
-        color: #0891b2;
-        background: rgba(6, 182, 212, 0.08);
-    }
+            .app-container.light .host-pill.offline {
+                background: rgba(239, 68, 68, 0.08);
+                border-color: rgba(239, 68, 68, 0.5);
+                color: #dc2626;
+            }
 
-    .app-container.light .nav-badge {
-        background: rgba(6, 182, 212, 0.15);
-        color: #0891b2;
-    }
+        .app-container.light .path-pill {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
+        }
 
-    .app-container.light .glass-panel {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-    }
+        .app-container.light .brand-name {
+            color: #0f172a;
+            text-shadow: none;
+        }
 
-    .app-container.light .panel-title { color: #475569; }
-    .app-container.light .btn-edit {
-        background: #e2e8f0;
-        color: #0f172a;
-    }
-    .app-container.light .btn-edit:hover { background: #cbd5e1; }
-    .app-container.light .stat-row {
-        color: #475569;
-        border-bottom-color: #e2e8f0;
-    }
-    .app-container.light .stat-num { color: #0f172a; }
-    .app-container.light .score-percent { color: #0f172a; }
-    .app-container.light .score-grade-text { color: #64748b; }
-    .app-container.light .ring-bg { stroke: rgba(15, 23, 42, 0.1); }
-    .app-container.light .donut-num { color: #0f172a; }
-    .app-container.light .donut-label { color: #64748b; }
-    .app-container.light .legend-item { color: #475569; }
-    .app-container.light .legend-num { color: #0f172a; }
-    .app-container.light .sys-row { border-bottom-color: #e2e8f0; }
-    .app-container.light .sys-label { color: #64748b; }
-    .app-container.light .sys-value { color: #0f172a; }
-    .app-container.light .sys-input {
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        color: #0f172a;
-    }
-    .app-container.light .btn-cancel { background: #94a3b8; }
-    .app-container.light .category-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-    }
-    .app-container.light .category-card:hover { border-color: #0891b2; }
-    .app-container.light .category-title { color: #475569; }
-    .app-container.light .category-sub { color: #64748b; }
-    .app-container.light .progress-track { background: #e2e8f0; }
-    .app-container.light .btn-back {
-        background: #e2e8f0;
-        color: #0891b2;
-    }
+        .app-container.light .brand-sub {
+            color: #64748b;
+        }
+
+        .app-container.light .theme-btn {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+        }
+
+            .app-container.light .theme-btn:hover {
+                border-color: #0891b2;
+            }
+
+        .app-container.light .top-nav {
+            background: rgba(255, 255, 255, 0.85);
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .nav-link {
+            color: #475569;
+        }
+
+            .app-container.light .nav-link:hover {
+                color: #0f172a;
+                background: rgba(226, 232, 240, 0.6);
+            }
+
+            .app-container.light .nav-link.active {
+                color: #0891b2;
+                background: rgba(6, 182, 212, 0.08);
+            }
+
+        .app-container.light .nav-badge {
+            background: rgba(6, 182, 212, 0.15);
+            color: #0891b2;
+        }
+
+        /* ── EDIT (گروه C - C4): overrideهای تم روشن برای Dashboard ── */
+        .app-container.light .neon-terminal {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+        }
+
+            .app-container.light .neon-terminal::after {
+                display: none;
+            }
+
+        .app-container.light .terminal-header {
+            background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .terminal-title {
+            color: #0891b2;
+            text-shadow: none;
+        }
+
+        .app-container.light .terminal-chip {
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+            .app-container.light .terminal-chip.scanning {
+                color: #d97706;
+                border-color: #fbbf24;
+                text-shadow: none;
+            }
+
+            .app-container.light .terminal-chip.complete {
+                color: #059669;
+                border-color: #34d399;
+                text-shadow: none;
+            }
+
+            .app-container.light .terminal-chip.failed {
+                color: #dc2626;
+                border-color: #fca5a5;
+                text-shadow: none;
+            }
+
+        .app-container.light .terminal-body {
+            background: #ffffff;
+            color: #334155;
+            scrollbar-color: #cbd5e1 #ffffff;
+        }
+
+        .app-container.light .terminal-prompt {
+            color: #0891b2;
+            text-shadow: none;
+        }
+
+        .app-container.light .terminal-cursor {
+            background: #059669;
+            box-shadow: none;
+        }
+
+        .app-container.light .log-placeholder {
+            color: #94a3b8;
+        }
+
+        .app-container.light .log-info {
+            color: #0369a1;
+            text-shadow: none;
+        }
+
+        .app-container.light .log-pass {
+            color: #059669;
+            text-shadow: none;
+        }
+
+        .app-container.light .log-fail {
+            color: #dc2626;
+            text-shadow: none;
+        }
+
+        .app-container.light .log-warn {
+            color: #d97706;
+            text-shadow: none;
+        }
+
+        .app-container.light .terminal-footer {
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .summary-item {
+            border-right-color: #e2e8f0;
+        }
+
+        .app-container.light .summary-num {
+            color: #0f172a;
+        }
+
+            .app-container.light .summary-num.pass {
+                color: #059669;
+                text-shadow: none;
+            }
+
+            .app-container.light .summary-num.fail {
+                color: #dc2626;
+                text-shadow: none;
+            }
+
+            .app-container.light .summary-num.warn {
+                color: #d97706;
+                text-shadow: none;
+            }
+
+        .app-container.light .summary-label {
+            color: #64748b;
+        }
+
+        .app-container.light .btn-scan {
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.25);
+        }
+
+        .app-container.light .glass-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+        }
+
+        .app-container.light .panel-title {
+            color: #475569;
+        }
+
+        .app-container.light .btn-edit {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+            .app-container.light .btn-edit:hover {
+                background: #cbd5e1;
+            }
+
+            .app-container.light .btn-edit:disabled {
+                background: #f1f5f9;
+                color: #cbd5e1;
+            }
+
+        .app-container.light .stat-row {
+            color: #475569;
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .stat-num {
+            color: #0f172a;
+        }
+
+            .app-container.light .stat-num.pass {
+                color: #059669;
+            }
+
+            .app-container.light .stat-num.fail {
+                color: #dc2626;
+            }
+
+            .app-container.light .stat-num.warn {
+                color: #d97706;
+            }
+
+        .app-container.light .score-percent {
+            color: #0f172a;
+        }
+
+        .app-container.light .score-grade-text {
+            color: #64748b;
+        }
+
+        .app-container.light .ring-bg {
+            stroke: #e2e8f0;
+        }
+
+        .app-container.light .donut-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .donut-label {
+            color: #64748b;
+        }
+
+        .app-container.light .legend-item {
+            color: #475569;
+        }
+
+        .app-container.light .legend-num {
+            color: #0f172a;
+        }
+
+        .app-container.light .sys-row {
+            border-bottom-color: #e2e8f0;
+        }
+
+        .app-container.light .sys-label {
+            color: #64748b;
+        }
+
+        .app-container.light .sys-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .sys-input {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+        }
+
+        .app-container.light .btn-cancel {
+            background: #94a3b8;
+        }
+
+        .app-container.light .btn-save {
+            background: #059669;
+        }
+
+        .app-container.light .category-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .category-card:hover {
+                border-color: #0891b2;
+            }
+
+        .app-container.light .category-title {
+            color: #475569;
+        }
+
+        .app-container.light .category-sub {
+            color: #64748b;
+        }
+
+        .app-container.light .progress-track {
+            background: #e2e8f0;
+        }
+
+        .app-container.light .btn-back {
+            background: #e2e8f0;
+            color: #0891b2;
+        }
+
+        /* ── EDIT (گروه C - C4): overrideهای تم روشن برای Findings ── */
+        .app-container.light .stats-tabs {
+            gap: 12px;
+        }
+
+        .app-container.light .stat-tab {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .stat-tab:hover {
+                border-color: #0891b2;
+            }
+
+            .app-container.light .stat-tab.active {
+                border-color: #0891b2;
+                background: rgba(6, 182, 212, 0.08);
+            }
+
+        .app-container.light .stat-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .stat-label {
+            color: #64748b;
+        }
+
+        .app-container.light .search-box {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+        }
+
+            .app-container.light .search-box::placeholder {
+                color: #94a3b8;
+            }
+
+        .app-container.light .bulk-bar {
+            background: rgba(6, 182, 212, 0.08);
+            border: 1px solid #06b6d4;
+        }
+
+        .app-container.light .bulk-count {
+            color: #0891b2;
+        }
+
+        .app-container.light .bulk-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #0f172a;
+        }
+
+            .app-container.light .bulk-btn:hover {
+                border-color: #0891b2;
+            }
+
+            .app-container.light .bulk-btn.clear {
+                background: transparent;
+                color: #64748b;
+            }
+
+        .app-container.light .cat-link {
+            color: #64748b;
+        }
+
+            .app-container.light .cat-link:hover {
+                color: #0f172a;
+            }
+
+            .app-container.light .cat-link.active {
+                color: #0891b2;
+            }
+
+        .app-container.light .finding-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-left-width: 3px;
+        }
+
+            .app-container.light .finding-card:hover {
+                background: #f8fafc;
+                border-color: #0891b2;
+            }
+
+            .app-container.light .finding-card.selected {
+                background: rgba(6, 182, 212, 0.08);
+                border-color: #0891b2;
+            }
+
+        .app-container.light .finding-checkbox {
+            border-color: #cbd5e1;
+        }
+
+        .app-container.light .finding-name {
+            color: #0f172a;
+        }
+
+        .app-container.light .finding-id {
+            color: #64748b;
+        }
+
+        .app-container.light .finding-source {
+            color: #64748b;
+        }
+
+        .app-container.light .cis-badge {
+            color: #0891b2;
+            border-color: rgba(6, 182, 212, 0.4);
+            background: rgba(6, 182, 212, 0.1);
+        }
+
+        .app-container.light .fv-label {
+            color: #64748b;
+        }
+
+        .app-container.light .fv-current {
+            color: #0f172a;
+        }
+
+        .app-container.light .fv-pass {
+            color: #059669;
+        }
+
+        .app-container.light .fv-fail {
+            color: #dc2626;
+        }
+
+        .app-container.light .fv-warning {
+            color: #d97706;
+        }
+
+        .app-container.light .fv-expected {
+            color: #475569;
+        }
+
+        .app-container.light .action-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+        }
+
+            .app-container.light .action-btn:hover:not(:disabled) {
+                border-color: #0891b2;
+                color: #0891b2;
+            }
+
+        .app-container.light .status-pass {
+            color: #059669;
+            background: rgba(5, 150, 105, 0.1);
+        }
+
+        .app-container.light .status-fail {
+            color: #dc2626;
+            background: rgba(220, 38, 38, 0.1);
+        }
+
+        .app-container.light .status-warning {
+            color: #d97706;
+            background: rgba(217, 119, 6, 0.1);
+        }
+
+        .app-container.light .status-ignored {
+            color: #64748b;
+            background: rgba(100, 116, 139, 0.1);
+        }
+
+        .app-container.light .sev-badge.low {
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+        .app-container.light .sev-badge.medium {
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        .app-container.light .sev-badge.high {
+            color: #d97706;
+            background: #fef3c7;
+        }
+
+        .app-container.light .sev-badge.critical {
+            color: #dc2626;
+            background: #fee2e2;
+        }
+
+        .app-container.light .sub-toggle {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid #06b6d4;
+            color: #0891b2;
+        }
+
+        .app-container.light .sub-row {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .sub-row:hover {
+                border-color: #0891b2;
+                background: rgba(6, 182, 212, 0.05);
+            }
+
+        .app-container.light .subcheck-id {
+            color: #0891b2;
+        }
+
+        .app-container.light .subcheck-title {
+            color: #0f172a;
+        }
+
+        .app-container.light .subcheck-dest {
+            color: #64748b;
+        }
+
+        .app-container.light .subcheck-expected {
+            color: #475569;
+        }
+
+        .app-container.light .empty-state {
+            color: #64748b;
+        }
+
+        .app-container.light .fp-tag {
+            color: #7c3aed;
+            border-color: rgba(124, 58, 237, 0.4);
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        .app-container.light .ignored-badge {
+            color: #64748b;
+            border-color: rgba(100, 116, 139, 0.4);
+            background: rgba(100, 116, 139, 0.1);
+        }
+
+        .app-container.light .mndchi-badge {
+            color: #7c3aed;
+            border-color: rgba(124, 58, 237, 0.4);
+            background: rgba(124, 58, 237, 0.1);
+        }
+
+        .app-container.light .risk-low {
+            color: #059669;
+            border-color: #059669;
+        }
+
+        .app-container.light .risk-mid {
+            color: #d97706;
+            border-color: #d97706;
+        }
+
+        .app-container.light .risk-high {
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
+        /* ── EDIT (گروه C - C4): overrideهای تم روشن برای FindingDrawer Modal ── */
+        .app-container.light .fd-overlay {
+            background: rgba(241, 245, 249, 0.7);
+            backdrop-filter: blur(8px);
+        }
+
+        .app-container.light .fd-modal {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.15);
+        }
+
+        .app-container.light .fd-header {
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .fd-title {
+            color: #0891b2;
+        }
+
+        .app-container.light .fd-id {
+            color: #64748b;
+        }
+
+        .app-container.light .fd-close {
+            background: #ef4444;
+            color: #ffffff;
+        }
+
+        .app-container.light .fd-badge.st-pass {
+            color: #059669;
+            border-color: #059669;
+        }
+
+        .app-container.light .fd-badge.st-fail {
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
+        .app-container.light .fd-badge.st-warning {
+            color: #d97706;
+            border-color: #d97706;
+        }
+
+        .app-container.light .fd-badge.st-ignored,
+        .app-container.light .fd-badge.st-falsepositive {
+            color: #64748b;
+            border-color: #cbd5e1;
+        }
+
+        .app-container.light .fd-badge.sev-critical {
+            color: #dc2626;
+            border-color: #dc2626;
+            background: #fee2e2;
+        }
+
+        .app-container.light .fd-badge.sev-high {
+            color: #d97706;
+            border-color: #d97706;
+            background: #fef3c7;
+        }
+
+        .app-container.light .fd-badge.sev-medium {
+            color: #0f172a;
+            border-color: #cbd5e1;
+            background: #f1f5f9;
+        }
+
+        .app-container.light .fd-badge.sev-low {
+            color: #64748b;
+            border-color: #cbd5e1;
+            background: #f1f5f9;
+        }
+
+        .app-container.light .fd-badge.risk {
+            color: #475569;
+            border-color: #cbd5e1;
+        }
+
+        .app-container.light .fd-badge.risk-high {
+            color: #dc2626;
+            border-color: #dc2626;
+        }
+
+        .app-container.light .fd-badge.risk-mid {
+            color: #d97706;
+            border-color: #d97706;
+        }
+
+        .app-container.light .fd-badge.cis {
+            color: #0891b2;
+            border-color: #06b6d4;
+            background: rgba(6, 182, 212, 0.1);
+        }
+
+        .app-container.light .fd-badge.cat {
+            color: #64748b;
+            border-color: #cbd5e1;
+        }
+
+        .app-container.light .fd-actionbar {
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .app-container.light .fd-action {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+        }
+
+            .app-container.light .fd-action:hover {
+                border-color: #0891b2;
+                color: #0891b2;
+            }
+
+            .app-container.light .fd-action.active {
+                border-color: #0891b2;
+                color: #0891b2;
+                background: rgba(6, 182, 212, 0.08);
+            }
+
+        .app-container.light .fd-tabs {
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .app-container.light .fd-tab {
+            color: #475569;
+        }
+
+            .app-container.light .fd-tab:hover {
+                color: #0f172a;
+            }
+
+            .app-container.light .fd-tab.active {
+                color: #0891b2;
+                border-color: rgba(6, 182, 212, 0.4);
+                border-bottom-color: #0891b2;
+                background: rgba(6, 182, 212, 0.08);
+            }
+
+        .app-container.light .fd-body {
+            background: #ffffff;
+            color: #0f172a;
+            scrollbar-color: #cbd5e1 #ffffff;
+        }
+
+        .app-container.light .fd-label {
+            color: #64748b;
+        }
+
+        .app-container.light .fd-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .fd-subtitle {
+            color: #0891b2;
+        }
+
+        .app-container.light .fd-panel {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .fd-panel.default {
+                background: rgba(6, 182, 212, 0.05);
+                border-color: #06b6d4;
+            }
+
+            .app-container.light .fd-panel.reg-alt {
+                border-color: #ef4444;
+                background: #fef2f2;
+            }
+
+        .app-container.light .fd-panel-header {
+            color: #0891b2;
+        }
+
+        .app-container.light .fd-row-label {
+            color: #64748b;
+        }
+
+        .app-container.light .fd-row-value {
+            color: #0f172a;
+        }
+
+        .app-container.light .fd-note {
+            border: 1px dashed #cbd5e1;
+            color: #475569;
+        }
+
+        .app-container.light .fd-code {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            color: #0369a1;
+        }
+
+        .app-container.light .fd-copy {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            color: #0891b2;
+        }
+
+        .app-container.light .fd-link {
+            color: #0891b2;
+        }
+
+        .app-container.light .glow-target {
+            color: #0891b2;
+            border: 1px dashed #06b6d4;
+            animation: none;
+            box-shadow: none;
+        }
+
+        .app-container.light .fd-subrow {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+            .app-container.light .fd-subrow:hover {
+                border-color: #0891b2;
+                background: rgba(6, 182, 212, 0.05);
+            }
+
+        .app-container.light .fd-subid {
+            color: #0891b2;
+        }
+
+        .app-container.light .fd-subtitle2 {
+            color: #0f172a;
+        }
+
+        .app-container.light .fd-subdest {
+            color: #64748b;
+        }
+
+        .app-container.light .fd-subexp {
+            color: #475569;
+        }
+
+        .app-container.light .fd-empty {
+            color: #64748b;
+        }
+
+        .app-container.light .fd-footer {
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .app-container.light .fd-rescan-note {
+            border: 1px solid #06b6d4;
+            background: rgba(6, 182, 212, 0.08);
+            color: #0891b2;
+        }
 </style>
 
-<div class="app-container @(ThemeService.IsDark ? "" : "light")">
+<div class="app-container @(ThemeService.IsDark ? "" : "light") @GetCurrentPageClass()">
     <div class="app-header">
         <div class="header-left">
-            @* EDIT (گروه C): چراغ Connected حرفه‌ای با حالت online/offline *@
             <div class="host-pill @(StateService.IsConnected ? "online" : "offline")">
                 <span class="dot"></span>
                 <span class="status-text">@(StateService.IsConnected ? "CONNECTED" : "DISCONNECTED")</span>
@@ -478,11 +1277,38 @@
     {
         StateService.OnChange += HandleStateChanged;
         ThemeService.OnChange += HandleStateChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    // EDIT (گروه C - C7): وقتی مسیر عوض شد، صفحه را re-render کن تا کلاس پس‌زمینه عوض شود
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
     }
 
     private void HandleStateChanged()
     {
         InvokeAsync(StateHasChanged);
+    }
+
+    // EDIT (گروه C - C7): تشخیص کلاس CSS بر اساس مسیر فعلی
+    private string GetCurrentPageClass()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.TrimEnd('/').ToLower();
+
+        return path switch
+        {
+            "" or "/" => "page-dashboard",
+            "/findings" => "page-findings",
+            "/reports" => "page-reports",
+            "/settings" => "page-settings",
+            "/activity" => "page-activity",
+            _ when path.StartsWith("/findings") => "page-findings",
+            _ when path.StartsWith("/reports") => "page-reports",
+            _ when path.StartsWith("/settings") => "page-settings",
+            _ => "page-default"
+        };
     }
 
     private string GetNavClass()
@@ -503,5 +1329,6 @@
     {
         StateService.OnChange -= HandleStateChanged;
         ThemeService.OnChange -= HandleStateChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 }
