@@ -2,10 +2,11 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class WindowsDefenderCheck : IHardeningCheck
+public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegistryPath = @"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection";
     private const string ValueName = "DisableRealtimeMonitoring";
@@ -59,5 +60,152 @@ public class WindowsDefenderCheck : IHardeningCheck
             sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
             fixTools: new List<string> { "powershell.exe" }
         ));
+    }
+
+    // EDIT (فاز 1 - پیام 2): سه تست واقعی برای Windows Defender
+    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    {
+        var results = new List<TestResult>();
+
+        // Test 1: Registry HKLM - DisableRealtimeMonitoring
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
+            if (key != null)
+            {
+                var v = key.GetValue(ValueName);
+                if (v != null && int.TryParse(v.ToString(), out int val))
+                {
+                    // 0 = Enabled (good), 1 = Disabled (bad)
+                    var passed = val == 0;
+                    results.Add(new TestResult(
+                        "Primary",
+                        "Registry (DisableRealtimeMonitoring)",
+                        passed,
+                        $"DisableRealtimeMonitoring = {val} ({(passed ? "Enabled" : "Disabled")})"));
+                }
+                else
+                {
+                    // Value missing = Enabled by default (Windows Defender default state)
+                    results.Add(new TestResult(
+                        "Primary",
+                        "Registry (DisableRealtimeMonitoring)",
+                        true,
+                        "Value not set (default = Enabled)"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult(
+                    "Primary",
+                    "Registry (DisableRealtimeMonitoring)",
+                    true,
+                    "Registry key not found (default = Enabled)"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult(
+                "Primary",
+                "Registry (DisableRealtimeMonitoring)",
+                false,
+                $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 2: PowerShell Get-MpComputerStatus - RealTimeProtectionEnabled
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RealTimeProtectionEnabled\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    var passed = output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+                    results.Add(new TestResult(
+                        "Cross-check",
+                        "Get-MpComputerStatus (RealTimeProtection)",
+                        passed,
+                        $"RealTimeProtectionEnabled = {output.Trim()}"));
+                }
+                else
+                {
+                    results.Add(new TestResult(
+                        "Cross-check",
+                        "Get-MpComputerStatus (RealTimeProtection)",
+                        false,
+                        "Could not query RealTimeProtectionEnabled"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult(
+                "Cross-check",
+                "Get-MpComputerStatus (RealTimeProtection)",
+                false,
+                $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 3: PowerShell Get-MpComputerStatus - AMRunningMode
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AMRunningMode\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    // AMRunningMode: "Normal" = active, "Passive" = not enforcing, "EDR Blocked" = disabled
+                    var mode = output.Trim();
+                    var passed = mode.Equals("Normal", StringComparison.OrdinalIgnoreCase);
+                    results.Add(new TestResult(
+                        "Verification",
+                        "Get-MpComputerStatus (AMRunningMode)",
+                        passed,
+                        $"AMRunningMode = {mode}"));
+                }
+                else
+                {
+                    results.Add(new TestResult(
+                        "Verification",
+                        "Get-MpComputerStatus (AMRunningMode)",
+                        false,
+                        "Could not query AMRunningMode"));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult(
+                "Verification",
+                "Get-MpComputerStatus (AMRunningMode)",
+                false,
+                $"Error: {ex.Message}"));
+        }
+
+        return results;
     }
 }

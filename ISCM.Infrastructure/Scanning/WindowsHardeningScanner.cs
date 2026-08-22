@@ -41,7 +41,8 @@ public class WindowsHardeningScanner : IScanService
             {
                 var finding = await check.EvaluateAsync();
 
-                // اگر چک IMultiPathCheck را پیاده‌سازی کرده، تست‌های واقعی اجرا شود
+                // EDIT (فاز 1 - پیام 2): فقط اگر IMultiPathCheck پیاده‌سازی شده، تست‌های واقعی اجرا شود.
+                // دیگر Fallback شبیه‌سازی‌شده وجود ندارد.
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
@@ -61,11 +62,7 @@ public class WindowsHardeningScanner : IScanService
                         await Task.Delay(30);
                     }
                 }
-                else
-                {
-                    // Fallback: تست‌های شبیه‌سازی شده برای چک‌هایی که هنوز IMultiPathCheck را پیاده‌سازی نکرده‌اند
-                    await RunSimulatedTests(check, finding, progress);
-                }
+                // حذف کامل: else { await RunSimulatedTests(...) }
 
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
@@ -94,24 +91,7 @@ public class WindowsHardeningScanner : IScanService
         return scanResult;
     }
 
-    // Fallback برای چک‌هایی که هنوز تست واقعی ندارند
-    private async Task RunSimulatedTests(IHardeningCheck check, Finding finding, IProgress<string>? progress)
-    {
-        var test1 = new TestResult("Primary", finding.SourceType, finding.Status == CheckStatus.Pass, finding.CurrentValue);
-        finding.AddTestResult(test1);
-        progress?.Report($"  ├─ Test 1 ({finding.SourceType}): {(test1.Passed ? "Pass ✓" : "Fail ✗")}");
-        await Task.Delay(30);
-
-        var test2 = new TestResult("Cross-check", "Simulated", finding.Status == CheckStatus.Pass, "Simulated cross-check");
-        finding.AddTestResult(test2);
-        progress?.Report($"  ├─ Test 2 (Cross-check): {(test2.Passed ? "Pass ✓" : "Fail ✗")}");
-        await Task.Delay(30);
-
-        var test3 = new TestResult("Verification", "Simulated", finding.Status == CheckStatus.Pass, "Simulated verification");
-        finding.AddTestResult(test3);
-        progress?.Report($"  └─ Test 3 (Verification): {(test3.Passed ? "Pass ✓" : "Fail ✗")}");
-        await Task.Delay(30);
-    }
+    // حذف کامل: متد RunSimulatedTests دیگر وجود ندارد
 
     public async Task<Finding> RescanCheckAsync(string checkId)
     {
