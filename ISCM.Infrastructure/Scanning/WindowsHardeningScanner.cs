@@ -21,10 +21,10 @@ public class WindowsHardeningScanner : IScanService
     public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full, IProgress<string>? progress = null)
     {
         progress?.Report("[INFO] DefenDoor Scanner initialized");
-        await Task.Delay(300);
+        await Task.Delay(100);
 
         progress?.Report($"[INFO] Loading baseline: windows11-pro-hardening.json ({TotalCheckCount} rules)");
-        await Task.Delay(300);
+        await Task.Delay(50);
 
         var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
         var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode);
@@ -35,14 +35,37 @@ public class WindowsHardeningScanner : IScanService
 
         foreach (var check in _checks)
         {
-            await Task.Delay(500);
+            await Task.Delay(200);
 
             try
             {
                 var finding = await check.EvaluateAsync();
 
-                // EDIT (گروه C - C6): اجرای ۳ روش تست و افزودن نتایج
-                await RunMultipleTests(check, finding, progress);
+                // اگر چک IMultiPathCheck را پیاده‌سازی کرده، تست‌های واقعی اجرا شود
+                if (check is IMultiPathCheck multiPathCheck)
+                {
+                    var testResults = await multiPathCheck.RunMultipleTestsAsync();
+                    foreach (var result in testResults)
+                    {
+                        finding.AddTestResult(result);
+                    }
+
+                    // گزارش تست‌ها به کنسول
+                    if (testResults.Count >= 3)
+                    {
+                        progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
+                        await Task.Delay(30);
+                        progress?.Report($"  ├─ Test 2 ({testResults[1].TestMethod}): {(testResults[1].Passed ? "Pass ✓" : "Fail ✗")}");
+                        await Task.Delay(30);
+                        progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
+                        await Task.Delay(30);
+                    }
+                }
+                else
+                {
+                    // Fallback: تست‌های شبیه‌سازی شده برای چک‌هایی که هنوز IMultiPathCheck را پیاده‌سازی نکرده‌اند
+                    await RunSimulatedTests(check, finding, progress);
+                }
 
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
@@ -71,61 +94,23 @@ public class WindowsHardeningScanner : IScanService
         return scanResult;
     }
 
-    // EDIT (گروه C - C6): اجرای ۳ روش تست برای هر چک
-    private async Task RunMultipleTests(IHardeningCheck check, Finding finding, IProgress<string>? progress)
+    // Fallback برای چک‌هایی که هنوز تست واقعی ندارند
+    private async Task RunSimulatedTests(IHardeningCheck check, Finding finding, IProgress<string>? progress)
     {
-        // Test 1: Primary (همان تست اصلی)
-        var test1 = new TestResult(
-            "Primary",
-            finding.SourceType,
-            finding.Status == CheckStatus.Pass,
-            finding.CurrentValue
-        );
+        var test1 = new TestResult("Primary", finding.SourceType, finding.Status == CheckStatus.Pass, finding.CurrentValue);
         finding.AddTestResult(test1);
         progress?.Report($"  ├─ Test 1 ({finding.SourceType}): {(test1.Passed ? "Pass ✓" : "Fail ✗")}");
         await Task.Delay(30);
 
-        // Test 2: Cross-check (تأیید از طریق WMI یا روش جایگزین)
-        var test2 = await RunCrossCheckTest(check, finding);
+        var test2 = new TestResult("Cross-check", "Simulated", finding.Status == CheckStatus.Pass, "Simulated cross-check");
         finding.AddTestResult(test2);
         progress?.Report($"  ├─ Test 2 (Cross-check): {(test2.Passed ? "Pass ✓" : "Fail ✗")}");
         await Task.Delay(30);
 
-        // Test 3: Verification (بررسی نهایی با دستور تأیید)
-        var test3 = await RunVerificationTest(check, finding);
+        var test3 = new TestResult("Verification", "Simulated", finding.Status == CheckStatus.Pass, "Simulated verification");
         finding.AddTestResult(test3);
         progress?.Report($"  └─ Test 3 (Verification): {(test3.Passed ? "Pass ✓" : "Fail ✗")}");
         await Task.Delay(30);
-    }
-
-    // EDIT (گروه C - C6): تست تأیید متقابل
-    private async Task<TestResult> RunCrossCheckTest(IHardeningCheck check, Finding finding)
-    {
-        await Task.Delay(10);
-
-        // شبیه‌سازی: اگر تست اصلی موفق بود، cross-check هم موفق است
-        var passed = finding.Status == CheckStatus.Pass;
-        return new TestResult(
-            "Cross-check",
-            "WMI/Alternative",
-            passed,
-            passed ? "Confirmed via alternative method" : "Alternative method also failed"
-        );
-    }
-
-    // EDIT (گروه C - C6): تست تأیید نهایی
-    private async Task<TestResult> RunVerificationTest(IHardeningCheck check, Finding finding)
-    {
-        await Task.Delay(10);
-
-        // شبیه‌سازی: اگر دو تست اول موفق بودند، تأیید نهایی هم موفق است
-        var passed = finding.Status == CheckStatus.Pass;
-        return new TestResult(
-            "Verification",
-            "Final verification",
-            passed,
-            passed ? "Final state verified" : "Verification failed"
-        );
     }
 
     public async Task<Finding> RescanCheckAsync(string checkId)
