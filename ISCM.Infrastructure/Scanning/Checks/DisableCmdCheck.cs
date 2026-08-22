@@ -2,10 +2,11 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class DisableCmdCheck : IHardeningCheck
+public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPath = @"SOFTWARE\Policies\Microsoft\Windows\System";
     private const string ValueName = "DisableCMD";
@@ -15,7 +16,6 @@ public class DisableCmdCheck : IHardeningCheck
     public CheckCategory Category => CheckCategory.System;
     public CheckSeverity Severity => CheckSeverity.Medium;
 
-    // Revised PDF item 9: policy lives under USER Configuration > Admin Templates > System.
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck { Id = "CMD-001.1", Title = "Prevent access to the command prompt", Expected = "Enabled",
@@ -28,7 +28,7 @@ public class DisableCmdCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "User Config → System → Prevent access to the command prompt",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Prevent access to the command prompt",
             ConsolePath = "User Configuration > Administrative Templates > System",
-            YouAreHere = "gpedit.msc (root)", GoTo = "User Configuration > Administrative Templates > System > 'Prevent access to the command prompt' > Enabled",
+            YouAreHere = "gpedit.msc (root)", GoTo = "User Configuration > Administrative Templates > System > Prevent access to the command prompt > Enabled",
             GraphicalSteps = "1) gpedit.msc → USER Configuration → Administrative Templates → System. 2) 'Prevent access to the command prompt' = Enabled.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name DisableCMD -Value 0",
             IgnoreConsequence = "Standard users keep interactive CMD.", HasRegistryPath = true,
@@ -44,7 +44,7 @@ public class DisableCmdCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "Same policy dialog → 'Disable…script processing also?' = Yes",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Prevent access to the command prompt (policy option: Disable the command prompt script processing also? = Yes)",
             ConsolePath = "User Configuration > Administrative Templates > System",
-            YouAreHere = "gpedit.msc → the command prompt policy dialog", GoTo = "User Configuration > Administrative Templates > System > 'Prevent access to the command prompt' (dialog) > 'Disable the command prompt script processing also?' > Yes",
+            YouAreHere = "gpedit.msc → the command prompt policy dialog", GoTo = "Inside the policy → 'Disable the command prompt script processing also?' = Yes",
             GraphicalSteps = "1) Open 'Prevent access to the command prompt'. 2) Set the inner option 'Disable the command prompt script processing also?' = Yes.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name DisableCMD -Value 1",
             IgnoreConsequence = ".bat/.cmd scripts still run.", HasRegistryPath = true,
@@ -60,7 +60,7 @@ public class DisableCmdCheck : IHardeningCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "User Config → System → Don't run specified Windows applications",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Don't run specified Windows applications",
             ConsolePath = "User Configuration > Administrative Templates > System",
-            YouAreHere = "gpedit.msc (root)", GoTo = "User Configuration > Administrative Templates > System > 'Don't run specified Windows applications' > Enabled > Add cmd.exe",
+            YouAreHere = "gpedit.msc (root)", GoTo = "User Configuration > Administrative Templates > System > Don't run specified Windows applications > Enabled > add cmd.exe",
             GraphicalSteps = "1) 'Don't run specified Windows applications' = Enabled. 2) Show… add cmd.exe (and powershell.exe for non-admins).",
             UndoCli = "Remove-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name DisallowRun -ErrorAction SilentlyContinue",
             IgnoreConsequence = "No second-layer executable block.", HasRegistryPath = true,
@@ -90,5 +90,109 @@ public class DisableCmdCheck : IHardeningCheck
             sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
             fixTools: new List<string> { "gpedit.msc" },
             subChecks: SubChecks));
+    }
+
+    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    {
+        var results = new List<TestResult>();
+
+        // Test 1: Registry HKCU DisallowRun
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer");
+            if (key != null)
+            {
+                var v = key.GetValue("DisallowRun");
+                if (v != null && v.ToString() == "1")
+                {
+                    using var subKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\DisallowRun");
+                    if (subKey != null)
+                    {
+                        var values = subKey.GetValueNames();
+                        var hasCmd = values.Any(name => subKey.GetValue(name)?.ToString()?.Contains("cmd.exe") == true);
+                        results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", hasCmd, hasCmd ? "cmd.exe in DisallowRun list" : "DisallowRun=1 but cmd.exe not found"));
+                    }
+                    else
+                    {
+                        results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", false, "DisallowRun=1 but subkey not found"));
+                    }
+                }
+                else
+                {
+                    results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", false, $"DisallowRun = {v}"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", false, "Registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 2: Registry HKLM DisableCMD
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System");
+            if (key != null)
+            {
+                var v = key.GetValue("DisableCMD");
+                if (v != null)
+                {
+                    var val = int.Parse(v.ToString()!);
+                    var passed = val == 1 || val == 2;
+                    results.Add(new TestResult("Cross-check", "Registry HKLM DisableCMD", passed, $"DisableCMD = {val}"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Cross-check", "Registry HKLM DisableCMD", false, "DisableCMD value not found"));
+                }
+            }
+            else
+            {
+                results.Add(new TestResult("Cross-check", "Registry HKLM DisableCMD", false, "Registry key not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Cross-check", "Registry HKLM DisableCMD", false, $"Error: {ex.Message}"));
+        }
+
+        await Task.Delay(50);
+
+        // Test 3: PowerShell policy check
+        try
+        {
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name 'DisableCMD' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DisableCMD\"")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                var val = int.Parse(output.Trim());
+                var passed = val == 1 || val == 2;
+                results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", passed, $"DisableCMD = {val}"));
+            }
+            else
+            {
+                results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", false, "Value not found"));
+            }
+        }
+        catch (Exception ex)
+        {
+            results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", false, $"Error: {ex.Message}"));
+        }
+
+        return results;
     }
 }
