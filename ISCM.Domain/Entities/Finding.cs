@@ -23,8 +23,10 @@ public class Finding : BaseEntity
     public string SourceCommand { get; private set; } = "";
     public IReadOnlyList<string> FixTools { get; private set; } = new List<string>();
 
-    // EDIT (گام ۲۶): زیرمجموعه‌های راهنما
     public IReadOnlyList<SubCheck> SubChecks { get; private set; } = new List<SubCheck>();
+
+    // EDIT (گروه C - C6): نتایج تست‌های چندگانه
+    public List<TestResult> TestResults { get; private set; } = new List<TestResult>();
 
     private CheckStatus? _previousStatus;
 
@@ -47,7 +49,7 @@ public class Finding : BaseEntity
         string sourceType = "",
         string sourceCommand = "",
         IReadOnlyList<string>? fixTools = null,
-        IReadOnlyList<SubCheck>? subChecks = null)   // EDIT (گام ۲۶)
+        IReadOnlyList<SubCheck>? subChecks = null)
     {
         if (string.IsNullOrWhiteSpace(checkId))
             throw new ArgumentException("CheckId cannot be empty.", nameof(checkId));
@@ -70,7 +72,7 @@ public class Finding : BaseEntity
         SourceType = sourceType;
         SourceCommand = sourceCommand;
         FixTools = fixTools ?? new List<string>();
-        SubChecks = subChecks ?? new List<SubCheck>();   // EDIT (گام ۲۶)
+        SubChecks = subChecks ?? new List<SubCheck>();
     }
 
     public void Ignore()
@@ -114,4 +116,17 @@ public class Finding : BaseEntity
         _previousStatus = null;
         MarkModified();
     }
+
+    // EDIT (گروه C - C6): افزودن نتیجهٔ یک تست
+    public void AddTestResult(TestResult result)
+    {
+        TestResults.Add(result);
+        MarkModified();
+    }
+
+    // EDIT (گروه C - C6): بررسی آیا همهٔ تست‌ها موفق بوده‌اند
+    public bool AllTestsPassed => TestResults.Count > 0 && TestResults.All(t => t.Passed);
+
+    // EDIT (گروه C - C6): تعداد تست‌های موفق
+    public int PassedTestCount => TestResults.Count(t => t.Passed);
 }
