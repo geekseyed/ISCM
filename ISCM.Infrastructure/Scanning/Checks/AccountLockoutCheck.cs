@@ -51,7 +51,10 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        string currentValue = "Unknown";
+        CheckStatus status = CheckStatus.Error;
+        string? errorMessage = null;
+
         try
         {
             string output = Run("net", "accounts");
@@ -59,12 +62,28 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
             if (line != null)
             {
                 var num = new string(line.Where(char.IsDigit).ToArray());
-                if (int.TryParse(num, out int t)) { currentValue = t == 0 ? "Never" : t.ToString(); status = t >= 5 ? CheckStatus.Pass : CheckStatus.Fail; }
-                else { currentValue = "Never"; status = CheckStatus.Fail; }
+                if (int.TryParse(num, out int t))
+                {
+                    currentValue = t == 0 ? "Never" : t.ToString();
+                    status = t >= 5 ? CheckStatus.Pass : CheckStatus.Fail;
+                }
+                else
+                {
+                    currentValue = "Never";
+                    status = CheckStatus.Fail;
+                }
             }
-            else { currentValue = "Not available"; status = CheckStatus.Warning; }
+            else
+            {
+                currentValue = "Not available";
+                status = CheckStatus.Unknown; // اصلاح شد: Warning به Unknown تغییر کرد
+            }
         }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            status = CheckStatus.Error;
+        }
 
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
@@ -76,13 +95,10 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
             subChecks: SubChecks));
     }
 
-    // اجرای ۳ روش تست واقعی
-    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — PowerShell parser برای هر 3 پارامتر lockout
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: net accounts (CMD) - بدون تغییر
         try
         {
             string output = Run("net", "accounts");
@@ -112,13 +128,9 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 2: secedit /export - بدون تغییر
         try
         {
-            if (!Directory.Exists(@"C:\temp"))
-            {
-                Directory.CreateDirectory(@"C:\temp");
-            }
+            if (!Directory.Exists(@"C:\temp")) Directory.CreateDirectory(@"C:\temp");
 
             var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lockout.inf\" /areas SECURITYPOLICY")
             {
@@ -164,7 +176,6 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 3 (CORRECTED): PowerShell parsing full net accounts output for all 3 lockout parameters
         try
         {
             var psi = new ProcessStartInfo("powershell.exe",
@@ -179,10 +190,8 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
             {
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
-
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    // Parse: T=5|D=15|W=15
                     var parts = output.Trim().Split('|');
                     if (parts.Length >= 3)
                     {
@@ -197,47 +206,27 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
                         if (int.TryParse(tNum, out int t) && int.TryParse(dNum, out int d) && int.TryParse(wNum, out int w))
                         {
                             var passed = t >= 5 && t > 0 && d >= 15 && w >= 15;
-                            results.Add(new TestResult(
-                                "Verification",
-                                "PowerShell (lockout full verification)",
-                                passed,
-                                $"threshold={t}, duration={d}min, window={w}min"));
+                            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", passed, $"threshold={t}, duration={d}min, window={w}min"));
                         }
                         else
                         {
-                            results.Add(new TestResult(
-                                "Verification",
-                                "PowerShell (lockout full verification)",
-                                false,
-                                $"Raw output: {output.Trim()}"));
+                            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Raw output: {output.Trim()}"));
                         }
                     }
                     else
                     {
-                        results.Add(new TestResult(
-                            "Verification",
-                            "PowerShell (lockout full verification)",
-                            false,
-                            $"Could not parse output: {output.Trim()}"));
+                        results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Could not parse output: {output.Trim()}"));
                     }
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Verification",
-                        "PowerShell (lockout full verification)",
-                        false,
-                        "Empty output from PowerShell"));
+                    results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, "Empty output from PowerShell"));
                 }
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Verification",
-                "PowerShell (lockout full verification)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Error: {ex.Message}"));
         }
 
         return results;

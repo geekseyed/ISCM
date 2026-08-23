@@ -553,9 +553,6 @@
 </style>
 
 <div class="glass-panel">
-    @* ═══════════════════════════════════════════════════════════════
-       EDIT (فاز 1): حذف تکرار stats-tabs — فقط یک بلوک با ۶ تب
-       ═══════════════════════════════════════════════════════════════ *@
     <div class="stats-tabs">
         <div class="stat-tab all @(SelectedFilter == "All" ? "active" : "")" @onclick="SetFilterAll">
             <div class="stat-value">@CountAll</div>
@@ -704,6 +701,20 @@
         public List<SubCheck> AllSubChecks { get; set; } = new();
     }
 
+    // ✅ FIX: محاسبه وضعیت والد به‌عنوان یک متد کمکی جداگانه (جداسازی مسئولیت‌ها)
+    private CheckStatus CalculateParentStatus(List<Finding> findings)
+    {
+        if (!findings.Any()) return CheckStatus.Unknown;
+
+        // اولویت‌بندی وضعیت‌ها برای جلوگیری از False PASS
+        if (findings.Any(f => f.Status == CheckStatus.Error)) return CheckStatus.Error;
+        if (findings.Any(f => f.Status == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (findings.Any(f => f.Status == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        if (findings.All(f => f.Status == CheckStatus.Pass)) return CheckStatus.Pass;
+
+        return CheckStatus.Unknown; // Fallback
+    }
+
     private List<ParentControlView> GetParentControls()
     {
         if (StateService.CurrentScanResult == null) return new();
@@ -715,14 +726,14 @@
         {
             var findings = ControlCatalog.GetFindingsForControl(control, allFindings).ToList();
 
-            // Only include if we have findings (or if it's baseline and should always show)
             if (!findings.Any() && !control.IsBaseline) continue;
 
             var parent = new ParentControlView
                 {
                     Definition = control,
                     Findings = findings,
-                    CalculatedStatus = control.CalculateParentStatus(findings),
+                // ✅ FIX: فراخوانی متد کمکی به جای متد حذف‌شده از ControlDefinition
+                    CalculatedStatus = CalculateParentStatus(findings),
                     AllSubChecks = findings.SelectMany(f => f.SubChecks).ToList()
                 };
 
@@ -738,7 +749,6 @@
         {
             var parents = GetParentControls();
 
-            // Filter by baseline/extended
             if (SelectedFilter == "Baseline")
             {
                 parents = parents.Where(p => p.Definition.IsBaseline).ToList();
@@ -764,7 +774,6 @@
                 parents = parents.Where(p => p.Definition.IsBaseline).ToList();
             }
 
-            // Filter by search term
             if (!string.IsNullOrWhiteSpace(SearchTerm))
             {
                 parents = parents.Where(p =>
@@ -773,7 +782,6 @@
                 ).ToList();
             }
 
-            // Sort: Fail first, then Unknown, then Pass
             return parents
                 .OrderBy(p => p.CalculatedStatus == CheckStatus.Fail ? 0 :
                               p.CalculatedStatus == CheckStatus.Unknown ? 1 : 2)
@@ -782,7 +790,6 @@
         }
     }
 
-    // Counts for tabs
     private int CountAll => GetParentControls().Count;
     private int CountBaseline => GetParentControls().Count(p => p.Definition.IsBaseline);
     private int CountExtended => GetParentControls().Count(p => !p.Definition.IsBaseline);

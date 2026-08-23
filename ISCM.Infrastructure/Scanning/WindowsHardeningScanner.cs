@@ -107,7 +107,7 @@ public class WindowsHardeningScanner : IScanService
         {
             CheckStatus.Pass => "[PASS]",
             CheckStatus.Fail => "[FAIL]",
-            CheckStatus.Warning => "[WARN]",
+            CheckStatus.Unknown => "[WARN]",
             _ => "[INFO]"
         };
 

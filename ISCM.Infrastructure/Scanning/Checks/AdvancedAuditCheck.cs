@@ -27,6 +27,8 @@ public class AdvancedAuditCheck : IHardeningCheck, IMultiPathCheck
         new SubCheck { Id = "AUD-001.11", Title = "Audit Security System Extension", Expected = "Success and Failure", WhatItDoes = "Logs security-extension loads.", Recommendation = "Enable S+F.", CheckCurrentCli = "auditpol /get /subcategory:\"Security System Extension\"", CliCommand = "auditpol /set /subcategory:\"Security System Extension\" /success:enable /failure:enable", VerifyCli = "auditpol /get /subcategory:\"Security System Extension\"", Verification = "S+F enabled.", ConsoleTool = "secpol.msc", DestinationLabel = "Advanced Audit → System → Security System Extension", GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > System > Audit Security System Extension", ConsolePath = "… > System Audit Policies > System", YouAreHere = "secpol.msc → Advanced Audit → System Audit Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > System > Audit Security System Extension > Success and Failure", GraphicalSteps = "1) System. 2) 'Audit Security System Extension' → S+F.", UndoCli = "auditpol /set /subcategory:\"Security System Extension\" /success:disable /failure:disable", IgnoreConsequence = "Extension loads untracked.", HasRegistryPath = false }
     };
 
+
+
     public Task<Finding> EvaluateAsync()
     {
         string currentValue = "Unknown";
@@ -46,8 +48,12 @@ public class AdvancedAuditCheck : IHardeningCheck, IMultiPathCheck
                 status = CheckStatus.Fail;
             }
         }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Warning; currentValue = "Manual review required"; }
-
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            status = CheckStatus.Unknown; // اصلاح شد
+            currentValue = "Manual review required";
+        }
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
             "Success and Failure",
@@ -62,7 +68,6 @@ public class AdvancedAuditCheck : IHardeningCheck, IMultiPathCheck
             fixTools: new List<string> { "secpol.msc" },
             subChecks: SubChecks));
     }
-
     // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {

@@ -42,7 +42,7 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Registry Key Missing";
-                status = CheckStatus.Warning;
+                status = CheckStatus.Unknown; // اصلاح شد
             }
         }
         catch (Exception ex)
@@ -51,7 +51,6 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
             status = CheckStatus.Error;
         }
 
-        // EDIT (مرحله د): تغذیه متادیتای واقعی
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
             expectedValue: "Disabled",

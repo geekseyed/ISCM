@@ -21,7 +21,6 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
         string currentValue = "Unknown";
         CheckStatus status = CheckStatus.Error;
         string? errorMessage = null;
-
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
@@ -42,7 +41,7 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Registry Key Missing";
-                status = CheckStatus.Warning;
+                status = CheckStatus.Unknown; // اصلاح شد
             }
         }
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }

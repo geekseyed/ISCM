@@ -88,7 +88,9 @@ public class WindowsUpdateCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        string currentValue = "Unknown";
+        CheckStatus status = CheckStatus.Error;
+        string? errorMessage = null;
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(AuPath);
@@ -96,12 +98,12 @@ public class WindowsUpdateCheck : IHardeningCheck, IMultiPathCheck
             if (v != null)
             {
                 currentValue = $"AUOptions = {v}";
-                status = CheckStatus.Pass; // Any configured value is acceptable; model-aware
+                status = CheckStatus.Pass;
             }
             else
             {
                 currentValue = "Not configured";
-                status = CheckStatus.Warning;
+                status = CheckStatus.Unknown; // اصلاح شد
             }
         }
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }

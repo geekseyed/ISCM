@@ -69,7 +69,7 @@ public class SmbV1ProtocolCheck : IHardeningCheck, IMultiPathCheck
                 if (v != null && v.ToString() == "0") { currentValue = "Disabled"; status = CheckStatus.Pass; }
                 else { currentValue = "Enabled"; status = CheckStatus.Fail; }
             }
-            else { currentValue = "Registry Key Missing (Might be Enabled)"; status = CheckStatus.Warning; }
+            else { currentValue = "Registry Key Missing (Might be Enabled)"; status = CheckStatus.Unknown; }
         }
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 

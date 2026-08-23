@@ -60,7 +60,7 @@ public class ScanResult : BaseEntity
 
     public int PassCount => _findings.Count(f => f.Status == CheckStatus.Pass);
     public int FailCount => _findings.Count(f => f.Status == CheckStatus.Fail);
-    public int WarningCount => _findings.Count(f => f.Status == CheckStatus.Warning);
+    public int WarningCount => _findings.Count(f => f.Status == CheckStatus.Unknown);
 
     // EDIT (گام ۲۴): یافته‌های سرکوب‌شده (Ignored + FP) برای کارت KPI
     public int SuppressedCount => _findings.Count(f => f.IsSuppressed);
@@ -69,7 +69,7 @@ public class ScanResult : BaseEntity
     public int CriticalOpenCount => _findings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
 
     // EDIT (گام ۲۴): ریسک باز (Fail + Warn) برای کارت KPI
-    public int OpenRiskCount => _findings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Warning);
+    public int OpenRiskCount => _findings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Unknown);
 
     public int ComplianceScore
     {

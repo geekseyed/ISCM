@@ -22,6 +22,7 @@ public class UsbStorageCheck : IHardeningCheck, IMultiPathCheck
         CheckStatus status = CheckStatus.Error;
         string? errorMessage = null;
 
+        // ... (بخش EvaluateAsync) ...
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
@@ -39,8 +40,9 @@ public class UsbStorageCheck : IHardeningCheck, IMultiPathCheck
                     status = CheckStatus.Fail;
                 }
             }
-            else { currentValue = "Registry Key Missing"; status = CheckStatus.Warning; }
+            else { currentValue = "Registry Key Missing"; status = CheckStatus.Unknown; } // <-- اصلاح شد
         }
+        // ...
         catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 
         return Task.FromResult(new Finding(

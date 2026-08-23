@@ -107,7 +107,7 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Not available";
-                status = CheckStatus.Warning;
+                status = CheckStatus.Unknown;
             }
         }
         catch (Exception ex)
@@ -228,7 +228,6 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             {
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
-
                 if (!string.IsNullOrWhiteSpace(output))
                 {
                     // Parse: H=24|MaxA=60|MinA=1|MinL=14
@@ -240,10 +239,16 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
                         var minAgeVal = new string(parts[2].Replace("MinA=", "").Where(char.IsDigit).ToArray());
                         var minLenVal = new string(parts[3].Replace("MinL=", "").Where(char.IsDigit).ToArray());
 
-                        var valid = int.TryParse(hVal, out int h) &&
-                                    int.TryParse(maxVal, out int maxAge) &&
-                                    int.TryParse(minAgeVal, out int minAge) &&
-                                    int.TryParse(minLenVal, out int minLen);
+                        // ✅ FIX: Initialize with default values before TryParse
+                        int h = 0;
+                        int maxAge = 0;
+                        int minAge = 0;
+                        int minLen = 0;
+
+                        var valid = int.TryParse(hVal, out h) &&
+                                    int.TryParse(maxVal, out maxAge) &&
+                                    int.TryParse(minAgeVal, out minAge) &&
+                                    int.TryParse(minLenVal, out minLen);
 
                         if (valid)
                         {

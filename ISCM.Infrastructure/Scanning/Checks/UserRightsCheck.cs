@@ -76,7 +76,7 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
     public Task<Finding> EvaluateAsync()
     {
         return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, CheckStatus.Warning,
+            CheckId, Name, Category, Severity, CheckStatus.Unknown,
             "Manual review required", "Per PDF baseline",
             "Review User Rights Assignment against the baseline (secpol.msc).",
             errorMessage: null,
