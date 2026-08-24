@@ -1,5 +1,6 @@
 ﻿using ISCM.Application.Evaluators;
 using ISCM.Application.Interfaces;
+using ISCM.Application.Validators;
 using ISCM.Infrastructure.Reporting;
 using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
@@ -36,8 +37,11 @@ builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
 builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
-// Register ControlEvaluator
+
 builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
+
+// ✅ ثبت سرویس اعتبارسنجی کاتالوگ
+builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
@@ -47,6 +51,18 @@ builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<ReportGateService>();
 
 var app = builder.Build();
+
+// =====================================================================
+// ✅ PHASE 1.6: Validate Catalog Integrity at Startup
+// This ensures the application fails fast if the catalog is corrupted.
+// =====================================================================
+using (var scope = app.Services.CreateScope())
+{
+    var validator = scope.ServiceProvider.GetRequiredService<ICatalogValidator>();
+    validator.Validate();
+    Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
+}
+// =====================================================================
 
 if (!app.Environment.IsDevelopment())
 {
