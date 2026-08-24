@@ -2,9 +2,11 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
 {
     public string CheckId => "URA-001";
@@ -22,8 +24,8 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
             YouAreHere = "secpol.msc → Security Settings → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Access this computer from the network > Administrators, Remote Desktop Users",
             GraphicalSteps = "1) secpol.msc → Local Policies → User Rights Assignment. 2) Double-click 'Access this computer from the network'. 3) Keep only Administrators + Remote Desktop Users.",
             UndoCli = "# restore prior groups", IgnoreConsequence = "Excess accounts can log on over the network.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.2", Title = "Deny access to this computer from the network", Expected = "Guests, Local account, Everyone (where appropriate)", WhatItDoes = "Blocks risky accounts from network access.", Recommendation = "Add Guests + Local account.",
-            CheckCurrentCli = "# secpol.msc → Deny access to this computer from the network", CliCommand = "# secpol.msc → add Guests, Local account", VerifyCli = "# secpol.msc → verify", Verification = "Guests + Local account present.",
+        new SubCheck { Id = "URA-001.2", Title = "Deny access to this computer from the network", Expected = "Guests, Local account", WhatItDoes = "Blocks risky accounts from network access.", Recommendation = "Add Guests + Local account.",
+            CheckCurrentCli = "# secpol.msc → Deny access to this computer from the network", CliCommand = "# secpol.msc → add Guests, Local account", VerifyCli = "# verify", Verification = "Guests + Local account present.",
             ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny network access",
             GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny access to this computer from the network",
             ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny access to this computer from the network > Guests, Local account",
@@ -75,22 +77,59 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, CheckStatus.Unknown,
-            "Manual review required", "Per PDF baseline",
-            "Review User Rights Assignment against the baseline (secpol.msc).",
-            errorMessage: null,
-            description: "Controls which groups may perform sensitive system operations.",
-            registryPath: null, cisReference: "CIS 2.2", riskScore: 55, sourceType: "secpol.msc",
-            sourceCommand: "secpol.msc → User Rights Assignment", fixTools: new List<string> { "secpol.msc" },
-            subChecks: SubChecks));
+        var statuses = new List<CheckStatus>();
+
+        try
+        {
+            // 1. Export secedit USER_RIGHTS و بررسی SeDenyNetworkLogonRight
+            string seceditOutput = RunSeceditExport();
+            bool hasDenyNetwork = seceditOutput.Contains("SeDenyNetworkLogonRight", StringComparison.OrdinalIgnoreCase);
+            statuses.Add(hasDenyNetwork ? CheckStatus.Pass : CheckStatus.Fail);
+
+            // 2. بررسی SeDebugPrivilege از whoami /priv
+            string whoamiOutput = Run("whoami.exe", "/priv");
+            bool hasDebugPriv = whoamiOutput.Contains("SeDebugPrivilege", StringComparison.OrdinalIgnoreCase);
+            bool debugDisabled = whoamiOutput.Contains("SeDebugPrivilege") && whoamiOutput.Contains("Disabled");
+            statuses.Add((!hasDebugPriv || debugDisabled) ? CheckStatus.Pass : CheckStatus.Fail);
+
+            // 3. بررسی RDP Users group membership
+            string rdpOutput = Run("net", "localgroup \"Remote Desktop Users\"");
+            bool hasRdpGroup = rdpOutput.Contains("Remote Desktop Users", StringComparison.OrdinalIgnoreCase);
+            statuses.Add(hasRdpGroup ? CheckStatus.Pass : CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} User Rights settings verified";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "User Rights Assignment verified",
+                "Review User Rights Assignment against the baseline (secpol.msc).",
+                errorMessage: string.Empty,
+                description: "Controls which groups may perform sensitive system operations.",
+                registryPath: string.Empty,
+                cisReference: "CIS 2.2", riskScore: 55, sourceType: "secedit + whoami",
+                sourceCommand: "secedit /export /areas USER_RIGHTS",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Controls which groups may perform sensitive system operations.",
+                registryPath: string.Empty,
+                cisReference: "CIS 2.2", riskScore: 55, sourceType: "secedit + whoami",
+                sourceCommand: "secedit /export /areas USER_RIGHTS",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: whoami /priv برای بررسی privilege های کاربر فعلی
         try
         {
@@ -101,19 +140,20 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var hasDebug = output.Contains("SeDebugPrivilege", StringComparison.OrdinalIgnoreCase);
-            var passed = !hasDebug || output.Contains("SeDebugPrivilege") && output.Contains("Disabled");
-            var details = hasDebug ? "SeDebugPrivilege found (check if disabled)" : "SeDebugPrivilege not assigned to current user";
-            results.Add(new TestResult("Primary", "whoami /priv", passed, details));
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var hasDebug = output.Contains("SeDebugPrivilege", StringComparison.OrdinalIgnoreCase);
+                var passed = !hasDebug || (output.Contains("SeDebugPrivilege") && output.Contains("Disabled"));
+                var details = hasDebug ? "SeDebugPrivilege found (check if disabled)" : "SeDebugPrivilege not assigned to current user";
+                results.Add(new TestResult("Primary", "whoami /priv", passed, details));
+            }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Primary", "whoami /priv", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: secedit /export با ایجاد پوشه
@@ -123,7 +163,6 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
             {
                 Directory.CreateDirectory(@"C:\temp");
             }
-
             var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\userrights.inf\" /areas USER_RIGHTS")
             {
                 RedirectStandardOutput = true,
@@ -131,10 +170,12 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (File.Exists(@"C:\temp\\userrights.inf"))
+            if (process != null)
+            {
+                await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+            }
+            if (File.Exists(@"C:\temp\userrights.inf"))
             {
                 var content = await File.ReadAllTextAsync(@"C:\temp\userrights.inf");
                 var hasDenyNetwork = content.Contains("SeDenyNetworkLogonRight", StringComparison.OrdinalIgnoreCase);
@@ -151,7 +192,6 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "secedit (USER_RIGHTS)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: PowerShell برای بررسی group membership
@@ -164,18 +204,70 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var passed = !string.IsNullOrWhiteSpace(output);
-            var details = passed ? $"Remote Desktop Users group has {output.Trim()} members" : "Could not query RDP Users group";
-            results.Add(new TestResult("Verification", "PowerShell (RDP Users)", passed, details));
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var passed = !string.IsNullOrWhiteSpace(output);
+                var details = passed ? $"Remote Desktop Users group has {output.Trim()} members" : "Could not query RDP Users group";
+                results.Add(new TestResult("Verification", "PowerShell (RDP Users)", passed, details));
+            }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Verification", "PowerShell (RDP Users)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
+    }
+
+    private static string Run(string cmd, string args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+            using var p = Process.Start(psi);
+            if (p == null) return string.Empty;
+            string o = p.StandardOutput.ReadToEnd();
+            p.WaitForExit(3000);
+            return o;
+        }
+        catch { return string.Empty; }
+    }
+
+    private static string RunSeceditExport()
+    {
+        try
+        {
+            if (!Directory.Exists(@"C:\temp"))
+            {
+                Directory.CreateDirectory(@"C:\temp");
+            }
+            var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\userrights.inf\" /areas USER_RIGHTS")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var p = Process.Start(psi);
+            if (p != null)
+            {
+                p.StandardOutput.ReadToEnd();
+                p.WaitForExit(5000);
+            }
+            if (File.Exists(@"C:\temp\userrights.inf"))
+            {
+                return File.ReadAllText(@"C:\temp\userrights.inf");
+            }
+        }
+        catch { }
+        return string.Empty;
     }
 }

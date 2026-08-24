@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPath = @"SOFTWARE\Policies\Microsoft\Windows\System";
@@ -23,7 +25,8 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
             CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' | Select DisableCMD",
             CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name DisableCMD -Value 2 -Type DWord",
             VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' | Select DisableCMD",
-            Verification = "DisableCMD = 1 or 2.", ValueMap = "1 = disable CMD only, 2 = disable CMD + scripts.",
+            Verification = "DisableCMD = 1 or 2.",
+            ValueMap = "1 = disable CMD only, 2 = disable CMD + scripts.",
             CliTokens = "-Name DisableCMD: blocks cmd.exe; value 2 also blocks script processing.",
             ConsoleTool = "gpedit.msc", DestinationLabel = "User Config → System → Prevent access to the command prompt",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Prevent access to the command prompt",
@@ -39,7 +42,8 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
             CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' | Select DisableCMD",
             CliCommand = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' -Name DisableCMD -Value 2 -Type DWord",
             VerifyCli = "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System' | Select DisableCMD",
-            Verification = "DisableCMD = 2 means scripts are also blocked.", ValueMap = "2 = Yes.",
+            Verification = "DisableCMD = 2 means scripts are also blocked.",
+            ValueMap = "2 = Yes.",
             CliTokens = "Value 2 answers 'Yes' to the script-processing option.",
             ConsoleTool = "gpedit.msc", DestinationLabel = "Same policy dialog → 'Disable…script processing also?' = Yes",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Prevent access to the command prompt (policy option: Disable the command prompt script processing also? = Yes)",
@@ -55,7 +59,8 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
             CheckCurrentCli = "Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' | Select DisallowRun",
             CliCommand = "New-Item -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun' -Force | Out-Null; Set-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name DisallowRun -Value 1; New-ItemProperty -Path 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\DisallowRun' -Name '1' -Value 'cmd.exe' -Force | Out-Null",
             VerifyCli = "Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' | Select DisallowRun",
-            Verification = "DisallowRun = 1 and cmd.exe listed.", ValueMap = "1 = Enabled.",
+            Verification = "DisallowRun = 1 and cmd.exe listed.",
+            ValueMap = "1 = Enabled.",
             CliTokens = "DisallowRun: list-based executable deny for the user.",
             ConsoleTool = "gpedit.msc", DestinationLabel = "User Config → System → Don't run specified Windows applications",
             GraphicalPathFull = "User Configuration > Administrative Templates > System > Don't run specified Windows applications",
@@ -70,32 +75,75 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+
         try
         {
+            // 1. DisableCMD = 1 or 2
             using var key = Registry.LocalMachine.OpenSubKey(RegPath);
             var v = key?.GetValue(ValueName);
-            if (v != null && (v.ToString() == "1" || v.ToString() == "2")) { currentValue = "Disabled"; status = CheckStatus.Pass; }
-            else { currentValue = "Enabled"; status = CheckStatus.Fail; }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+            if (v != null && (v.ToString() == "1" || v.ToString() == "2")) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Disabled", "Block cmd.exe and batch scripts for standard users to reduce attack surface.",
-            errorMessage: errorMessage,
-            description: "Blocks standard users from running cmd.exe and batch scripts.",
-            registryPath: $@"HKLM\{RegPath}\{ValueName}",
-            cisReference: "CIS 2.9", riskScore: 50, sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc" },
-            subChecks: SubChecks));
+            // 2. Check if value is 2 (scripts also blocked)
+            if (v != null && v.ToString() == "2") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. DisallowRun for cmd.exe
+            using var explorerKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer");
+            var disallowRunVal = explorerKey?.GetValue("DisallowRun");
+            if (disallowRunVal != null && disallowRunVal.ToString() == "1")
+            {
+                using var disallowRunKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\DisallowRun");
+                if (disallowRunKey != null)
+                {
+                    var values = disallowRunKey.GetValueNames();
+                    var hasCmd = values.Any(name => disallowRunKey.GetValue(name)?.ToString()?.Contains("cmd.exe") == true);
+                    statuses.Add(hasCmd ? CheckStatus.Pass : CheckStatus.Fail);
+                }
+                else
+                {
+                    statuses.Add(CheckStatus.Fail);
+                }
+            }
+            else
+            {
+                statuses.Add(CheckStatus.Fail);
+            }
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} CMD/Script settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "CMD & Script execution disabled",
+                "Block cmd.exe and batch scripts for standard users to reduce attack surface.",
+                errorMessage: string.Empty,
+                description: "Blocks standard users from running cmd.exe and batch scripts.",
+                registryPath: $@"HKLM\{RegPath}\{ValueName}",
+                cisReference: "CIS 2.9", riskScore: 50, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Blocks standard users from running cmd.exe and batch scripts.",
+                registryPath: $@"HKLM\{RegPath}\{ValueName}",
+                cisReference: "CIS 2.9", riskScore: 50, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
     }
 
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry HKCU DisallowRun
         try
         {
@@ -131,16 +179,15 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry HKCU DisallowRun", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: Registry HKLM DisableCMD
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\System");
+            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
             if (key != null)
             {
-                var v = key.GetValue("DisableCMD");
+                var v = key.GetValue(ValueName);
                 if (v != null)
                 {
                     var val = int.Parse(v.ToString()!);
@@ -161,7 +208,6 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "Registry HKLM DisableCMD", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: PowerShell policy check
@@ -174,25 +220,34 @@ public class DisableCmdCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (!string.IsNullOrWhiteSpace(output))
+            if (process != null)
             {
-                var val = int.Parse(output.Trim());
-                var passed = val == 1 || val == 2;
-                results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", passed, $"DisableCMD = {val}"));
-            }
-            else
-            {
-                results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", false, "Value not found"));
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    var val = int.Parse(output.Trim());
+                    var passed = val == 1 || val == 2;
+                    results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", passed, $"DisableCMD = {val}"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", false, "Value not found"));
+                }
             }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Verification", "PowerShell Get-ItemProperty", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

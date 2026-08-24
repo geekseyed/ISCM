@@ -2,6 +2,10 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
@@ -15,68 +19,66 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck { Id = "PWD-001.1", Title = "Enforce password history", Expected = "24 passwords remembered",
-            WhatItDoes = "Prevents users from reusing recent passwords.",
-            Recommendation = "Keep history at 24.",
-            CheckCurrentCli = "net accounts",
-            CliCommand = "# secpol.msc → Account Policies → Password Policy → Enforce password history = 24",
-            VerifyCli = "net accounts", Verification = "secpol → Password Policy → 'Enforce password history' shows 24.",
+            WhatItDoes = "Prevents users from reusing recent passwords.", Recommendation = "Keep history at 24.",
+            CheckCurrentCli = "net accounts", CliCommand = "# secpol.msc -> Account Policies -> Password Policy -> Enforce password history = 24",
+            VerifyCli = "net accounts", Verification = "secpol -> Password Policy -> 'Enforce password history' shows 24.",
             ValueMap = "", CliTokens = "",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Enforce password history",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Enforce password history",
             GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Enforce password history",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies",
             GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Enforce password history > 24",
             GraphicalSteps = "1) Open secpol.msc. 2) Expand Account Policies. 3) Click Password Policy. 4) Right pane: double-click 'Enforce password history'. 5) Set 24.",
             UndoCli = "# set back to previous value", IgnoreConsequence = "Weak reuse of old passwords becomes possible.", HasRegistryPath = false },
         new SubCheck { Id = "PWD-001.2", Title = "Maximum password age", Expected = "60 days",
             WhatItDoes = "Forces periodic password changes.", Recommendation = "Set 60 days.",
-            CheckCurrentCli = "net accounts", CliCommand = "# secpol.msc → Password Policy → Maximum password age = 60",
+            CheckCurrentCli = "net accounts", CliCommand = "# secpol.msc -> Password Policy -> Maximum password age = 60",
             VerifyCli = "net accounts", Verification = "'Maximum password age' shows 60.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Maximum password age",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Maximum password age",
             GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Maximum password age",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Maximum password age > 60",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Password Policy. 2) Double-click 'Maximum password age'. 3) Set 60.",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Maximum password age > 60",
+            GraphicalSteps = "1) secpol.msc -> Account Policies -> Password Policy. 2) Double-click 'Maximum password age'. 3) Set 60.",
             UndoCli = "# revert", IgnoreConsequence = "Stale passwords remain valid indefinitely.", HasRegistryPath = false },
         new SubCheck { Id = "PWD-001.3", Title = "Minimum password age", Expected = "1 day",
             WhatItDoes = "Stops rapid password cycling to bypass history.", Recommendation = "Set 1 day.",
-            CheckCurrentCli = "net accounts", CliCommand = "# secpol.msc → Password Policy → Minimum password age = 1",
+            CheckCurrentCli = "net accounts", CliCommand = "# secpol.msc -> Password Policy -> Minimum password age = 1",
             VerifyCli = "net accounts", Verification = "'Minimum password age' shows 1.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Minimum password age",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Minimum password age",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Minimum password age",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Minimum password age",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Minimum password age > 1",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Password Policy. 2) Double-click 'Minimum password age'. 3) Set 1.",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Minimum password age > 1",
+            GraphicalSteps = "1) secpol.msc -> Account Policies -> Password Policy. 2) Double-click 'Minimum password age'. 3) Set 1.",
             UndoCli = "# revert", IgnoreConsequence = "Users can cycle passwords instantly to defeat history.", HasRegistryPath = false },
         new SubCheck { Id = "PWD-001.4", Title = "Minimum password length", Expected = "14 characters",
             WhatItDoes = "Raises resistance to brute-force.", Recommendation = "Enforce 14.",
             CheckCurrentCli = "net accounts", CliCommand = "net accounts /minpwlen:14",
             VerifyCli = "net accounts", Verification = "'Minimum password length' shows 14.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Minimum password length",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Minimum password length",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Minimum password length",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Minimum password length",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Minimum password length > 14",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Password Policy. 2) Double-click 'Minimum password length'. 3) Set 14.",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Minimum password length > 14",
+            GraphicalSteps = "1) secpol.msc -> Account Policies -> Password Policy. 2) Double-click 'Minimum password length'. 3) Set 14.",
             UndoCli = "net accounts /minpwlen:0", IgnoreConsequence = "Short passwords stay brute-forceable.", HasRegistryPath = false },
         new SubCheck { Id = "PWD-001.5", Title = "Password must meet complexity requirements", Expected = "Enabled",
             WhatItDoes = "Requires mixed character classes.", Recommendation = "Enabled.",
-            CheckCurrentCli = "# secpol.msc", CliCommand = "# secpol.msc → Password Policy → Complexity = Enabled",
+            CheckCurrentCli = "# secpol.msc", CliCommand = "# secpol.msc -> Password Policy -> Complexity = Enabled",
             VerifyCli = "# secpol.msc", Verification = "'Password must meet complexity requirements' shows Enabled.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Complexity requirements",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Password must meet complexity requirements",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Complexity requirements",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Password must meet complexity requirements",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Password must meet complexity requirements > Enabled",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Password Policy. 2) Double-click complexity setting. 3) Enable.",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Password must meet complexity requirements > Enabled",
+            GraphicalSteps = "1) secpol.msc -> Account Policies -> Password Policy. 2) Double-click complexity setting. 3) Enable.",
             UndoCli = "# revert", IgnoreConsequence = "Simple passwords allowed.", HasRegistryPath = false },
         new SubCheck { Id = "PWD-001.6", Title = "Store passwords using reversible encryption", Expected = "Disabled",
             WhatItDoes = "Prevents weak recoverable storage.", Recommendation = "Disabled.",
-            CheckCurrentCli = "# secpol.msc", CliCommand = "# secpol.msc → Password Policy → Reversible encryption = Disabled",
+            CheckCurrentCli = "# secpol.msc", CliCommand = "# secpol.msc -> Password Policy -> Reversible encryption = Disabled",
             VerifyCli = "# secpol.msc", Verification = "'Store passwords using reversible encryption' shows Disabled.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy → Reversible encryption",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Store passwords using reversible encryption",
+            ConsoleTool = "secpol.msc", DestinationLabel = "Password Policy -> Reversible encryption",
+            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Store passwords using reversible encryption",
             ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy > Store passwords using reversible encryption > Disabled",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Password Policy. 2) Double-click reversible encryption. 3) Disable.",
+            YouAreHere = "secpol.msc -> Security Settings -> Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy -> Store passwords using reversible encryption > Disabled",
+            GraphicalSteps = "1) secpol.msc -> Account Policies -> Password Policy. 2) Double-click reversible encryption. 3) Disable.",
             UndoCli = "# revert", IgnoreConsequence = "Passwords stored in a recoverable form.", HasRegistryPath = false }
     };
 
@@ -85,10 +87,10 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
         string currentValue = "Unknown";
         CheckStatus status = CheckStatus.Error;
         string? errorMessage = null;
-
         try
         {
             string output = Run("net", "accounts");
+            // FIX: Ensure '\n' is on the same line to avoid syntax errors
             var line = output.Split('\n').FirstOrDefault(l => l.Contains("Minimum password length", StringComparison.OrdinalIgnoreCase));
             if (line != null)
             {
@@ -107,6 +109,7 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Not available";
+                // FIX: Changed Warning to Unknown
                 status = CheckStatus.Unknown;
             }
         }
@@ -115,7 +118,6 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             errorMessage = ex.Message;
             status = CheckStatus.Error;
         }
-
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
             "14 characters", "Enforce strong password policies to prevent weak credentials.",
@@ -126,12 +128,10 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
             subChecks: SubChecks));
     }
 
-    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — PowerShell parser برای همه 6 پارامتر Password Policy
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
-        // Test 1: net accounts (CMD) - بدون تغییر
+        // Test 1: net accounts (CMD)
         try
         {
             string output = Run("net", "accounts");
@@ -161,14 +161,13 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 2: secedit /export - بدون تغییر
+        // Test 2: secedit /export
         try
         {
             if (!Directory.Exists(@"C:\temp"))
             {
                 Directory.CreateDirectory(@"C:\temp");
             }
-
             var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\password.inf\" /areas SECURITYPOLICY")
             {
                 RedirectStandardOutput = true,
@@ -176,9 +175,11 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
+            if (process != null)
+            {
+                await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+            }
             if (File.Exists(@"C:\temp\password.inf"))
             {
                 var content = await File.ReadAllTextAsync(@"C:\temp\password.inf");
@@ -213,7 +214,7 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
 
         await Task.Delay(50);
 
-        // Test 3 (CORRECTED): PowerShell parsing all 6 password policy parameters from net accounts
+        // Test 3: PowerShell parsing all 4 password policy parameters
         try
         {
             var psi = new ProcessStartInfo("powershell.exe",
@@ -230,7 +231,6 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
                 await process.WaitForExitAsync();
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    // Parse: H=24|MaxA=60|MinA=1|MinL=14
                     var parts = output.Trim().Split('|');
                     if (parts.Length >= 4)
                     {
@@ -239,61 +239,40 @@ public class PasswordLengthCheck : IHardeningCheck, IMultiPathCheck
                         var minAgeVal = new string(parts[2].Replace("MinA=", "").Where(char.IsDigit).ToArray());
                         var minLenVal = new string(parts[3].Replace("MinL=", "").Where(char.IsDigit).ToArray());
 
-                        // ✅ FIX: Initialize with default values before TryParse
                         int h = 0;
                         int maxAge = 0;
                         int minAge = 0;
                         int minLen = 0;
 
-                        var valid = int.TryParse(hVal, out h) &&
-                                    int.TryParse(maxVal, out maxAge) &&
-                                    int.TryParse(minAgeVal, out minAge) &&
-                                    int.TryParse(minLenVal, out minLen);
+                        bool hParsed = int.TryParse(hVal, out h);
+                        bool maxParsed = int.TryParse(maxVal, out maxAge);
+                        bool minAgeParsed = int.TryParse(minAgeVal, out minAge);
+                        bool minLenParsed = int.TryParse(minLenVal, out minLen);
 
-                        if (valid)
+                        if (hParsed && maxParsed && minAgeParsed && minLenParsed)
                         {
                             var passed = h >= 24 && maxAge <= 60 && maxAge > 0 && minAge >= 1 && minLen >= 14;
-                            results.Add(new TestResult(
-                                "Verification",
-                                "PowerShell (password policy full)",
-                                passed,
-                                $"history={h}, maxAge={maxAge}d, minAge={minAge}d, minLen={minLen}"));
+                            results.Add(new TestResult("Verification", "PowerShell (password policy full)", passed, $"history={h}, maxAge={maxAge}d, minAge={minAge}d, minLen={minLen}"));
                         }
                         else
                         {
-                            results.Add(new TestResult(
-                                "Verification",
-                                "PowerShell (password policy full)",
-                                false,
-                                $"Could not parse: {output.Trim()}"));
+                            results.Add(new TestResult("Verification", "PowerShell (password policy full)", false, $"Could not parse: {output.Trim()}"));
                         }
                     }
                     else
                     {
-                        results.Add(new TestResult(
-                            "Verification",
-                            "PowerShell (password policy full)",
-                            false,
-                            $"Unexpected output: {output.Trim()}"));
+                        results.Add(new TestResult("Verification", "PowerShell (password policy full)", false, $"Unexpected output: {output.Trim()}"));
                     }
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Verification",
-                        "PowerShell (password policy full)",
-                        false,
-                        "Empty output"));
+                    results.Add(new TestResult("Verification", "PowerShell (password policy full)", false, "Empty output"));
                 }
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Verification",
-                "PowerShell (password policy full)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Verification", "PowerShell (password policy full)", false, $"Error: {ex.Message}"));
         }
 
         return results;

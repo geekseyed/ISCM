@@ -4,9 +4,11 @@ using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
 {
     public string CheckId => "GUEST-001";
@@ -69,57 +71,69 @@ public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
 
         try
         {
+            // 1. Guest account status via NetUserGetInfo
             IntPtr bufPtr;
             uint result = NetUserGetInfo(null, "Guest", 1, out bufPtr);
-
             if (result == NERR_Success)
             {
                 USER_INFO_1 userInfo = Marshal.PtrToStructure<USER_INFO_1>(bufPtr);
                 bool isDisabled = (userInfo.usri1_flags & UF_ACCOUNTDISABLE) != 0;
-                currentValue = isDisabled ? "Disabled" : "Enabled";
-                status = isDisabled ? CheckStatus.Pass : CheckStatus.Fail;
+                statuses.Add(isDisabled ? CheckStatus.Pass : CheckStatus.Fail);
                 NetApiBufferFree(bufPtr);
             }
             else
             {
-                currentValue = "Requires Admin Rights";
-                status = CheckStatus.Ignored;
-                errorMessage = "NetUserGetInfo failed with code: " + result;
+                statuses.Add(CheckStatus.Fail);
             }
+
+            // 2. Guest account rename (check if name is still "Guest")
+            string nameOutput = Run("powershell.exe", "-Command \"Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Name\"");
+            if (!string.IsNullOrWhiteSpace(nameOutput) && !nameOutput.Trim().Equals("Guest", StringComparison.OrdinalIgnoreCase))
+            {
+                statuses.Add(CheckStatus.Pass);
+            }
+            else
+            {
+                statuses.Add(CheckStatus.Fail);
+            }
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} Guest account settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "Guest disabled + renamed",
+                "Disable and rename the built-in Guest account to prevent anonymous access.",
+                errorMessage: string.Empty,
+                description: "The built-in Guest account provides anonymous access and must be disabled and renamed.",
+                registryPath: string.Empty,
+                cisReference: "CIS 2.3.1.1", riskScore: 95, sourceType: "NetUserGetInfo + PowerShell",
+                sourceCommand: "net user Guest",
+                fixTools: new List<string> { "net.exe", "lusrmgr.msc", "secpol.msc" },
+                subChecks: SubChecks));
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-            currentValue = $"Exception: {ex.GetType().Name}";
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "The built-in Guest account provides anonymous access and must be disabled and renamed.",
+                registryPath: string.Empty,
+                cisReference: "CIS 2.3.1.1", riskScore: 95, sourceType: "NetUserGetInfo + PowerShell",
+                sourceCommand: "net user Guest",
+                fixTools: new List<string> { "net.exe", "lusrmgr.msc", "secpol.msc" },
+                subChecks: SubChecks));
         }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Disabled",
-            "Disable the built-in Guest account via Local Security Policy or net command.",
-            errorMessage: errorMessage,
-            description: "The built-in Guest account provides anonymous access and must be disabled.",
-            registryPath: null,
-            cisReference: "CIS 2.3.1.1",
-            riskScore: 95,
-            sourceType: "NetUserGetInfo (Netapi32)",
-            sourceCommand: "net user Guest",
-            fixTools: new List<string> { "net.exe", "lusrmgr.msc" },
-            subChecks: SubChecks));
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: net user Guest (CMD)
         try
         {
@@ -139,7 +153,6 @@ public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "net user", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: PowerShell Get-LocalUser
@@ -152,25 +165,25 @@ public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var passed = output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase);
-            results.Add(new TestResult("Cross-check", "Get-LocalUser", passed, $"Enabled = {output.Trim()}"));
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var passed = output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase);
+                results.Add(new TestResult("Cross-check", "Get-LocalUser", passed, $"Enabled = {output.Trim()}"));
+            }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Cross-check", "Get-LocalUser", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 3: NetUserGetInfo (Win32 API) - همان روش اصلی EvaluateAsync
+        // Test 3: NetUserGetInfo (Win32 API)
         try
         {
             IntPtr bufPtr;
             uint result = NetUserGetInfo(null, "Guest", 1, out bufPtr);
-
             if (result == NERR_Success)
             {
                 USER_INFO_1 userInfo = Marshal.PtrToStructure<USER_INFO_1>(bufPtr);
@@ -187,8 +200,15 @@ public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "NetUserGetInfo API", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 
     private static string Run(string cmd, string args)
@@ -197,11 +217,11 @@ public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
         {
             var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
             using var p = Process.Start(psi);
-            if (p == null) return "";
+            if (p == null) return string.Empty;
             string o = p.StandardOutput.ReadToEnd();
             p.WaitForExit(3000);
             return o;
         }
-        catch { return ""; }
+        catch { return string.Empty; }
     }
 }

@@ -3,14 +3,15 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPathHKLM = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer";
     private const string RegPathHKCU = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer";
-    private const string ValueName = "NoDriveTypeAutoRun";
 
     public string CheckId => "ARD-001";
     public string Name => "Disable Autorun/Autoplay";
@@ -30,12 +31,11 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "AutoPlay Policies → Turn off AutoPlay",
             GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Turn off AutoPlay",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies",
-            YouAreHere = "gpedit.msc (root)",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Turn off AutoPlay > Enabled > All drives",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Turn off AutoPlay > Enabled > All drives",
             GraphicalSteps = "1) gpedit.msc → Windows Components → AutoPlay Policies. 2) Turn off AutoPlay. 3) Enabled, option All drives.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoDriveTypeAutoRun -Value 0",
-            IgnoreConsequence = "USB malware can auto-execute.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoDriveTypeAutoRun",
+            IgnoreConsequence = "USB malware can auto-execute.", HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoDriveTypeAutoRun",
             AlternativeToRegistry = "Prefer gpedit.msc → AutoPlay Policies." },
         new SubCheck { Id = "ARD-001.2", Title = "Set the default behavior for AutoRun", Expected = "Enabled — Do not execute any autorun commands",
             WhatItDoes = "Prevents autorun.inf auto-execution.", Recommendation = "NoAutorun = 1.",
@@ -48,12 +48,11 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "AutoPlay Policies → Default behavior for AutoRun",
             GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Set the default behavior for AutoRun",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies",
-            YouAreHere = "gpedit.msc (root)",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Set the default behavior for AutoRun > Enabled > Do not execute any autorun commands",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Set the default behavior for AutoRun > Enabled > Do not execute any autorun commands",
             GraphicalSteps = "1) AutoPlay Policies. 2) 'Set the default behavior for AutoRun'. 3) Enabled — Do not execute any autorun commands.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoAutorun -Value 0",
-            IgnoreConsequence = "autorun.inf still runs.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoAutorun",
+            IgnoreConsequence = "autorun.inf still runs.", HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoAutorun",
             AlternativeToRegistry = "Prefer gpedit.msc → AutoPlay Policies." },
         new SubCheck { Id = "ARD-001.3", Title = "Disallow Autoplay for non-volume devices", Expected = "Enabled",
             WhatItDoes = "Blocks AutoPlay for MTP phones/cameras.", Recommendation = "NoAutoplayfornonVolume = 1.",
@@ -66,64 +65,70 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
             ConsoleTool = "gpedit.msc", DestinationLabel = "AutoPlay Policies → Disallow Autoplay for non-volume devices",
             GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Disallow Autoplay for non-volume devices",
             ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies",
-            YouAreHere = "gpedit.msc (root)",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Disallow Autoplay for non-volume devices > Enabled",
+            YouAreHere = "gpedit.msc (root)", GoTo = "Computer Configuration > Administrative Templates > Windows Components > AutoPlay Policies > Disallow Autoplay for non-volume devices > Enabled",
             GraphicalSteps = "1) AutoPlay Policies. 2) 'Disallow Autoplay for non-volume devices'. 3) Enabled.",
             UndoCli = "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' -Name NoAutoplayfornonVolume -Value 0",
-            IgnoreConsequence = "MTP devices can trigger AutoPlay.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoAutoplayfornonVolume",
+            IgnoreConsequence = "MTP devices can trigger AutoPlay.", HasRegistryPath = true,
+            RegistryPath = @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\NoAutoplayfornonVolume",
             AlternativeToRegistry = "Prefer gpedit.msc → AutoPlay Policies." }
     };
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
 
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegPathHKLM);
-            var v = key?.GetValue(ValueName);
 
-            if (v != null && int.TryParse(v.ToString(), out int val) && val == 255)
-            {
-                currentValue = "AutoPlay Disabled (255)";
-                status = CheckStatus.Pass;
-            }
-            else
-            {
-                currentValue = v?.ToString() ?? "Not configured";
-                status = CheckStatus.Fail;
-            }
+            // 1. NoDriveTypeAutoRun = 255
+            var autoRunVal = key?.GetValue("NoDriveTypeAutoRun");
+            if (autoRunVal != null && int.TryParse(autoRunVal.ToString(), out int autoRun) && autoRun == 255) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 2. NoAutorun = 1
+            var noAutorunVal = key?.GetValue("NoAutorun");
+            if (noAutorunVal != null && noAutorunVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. NoAutoplayfornonVolume = 1
+            var nonVolumeVal = key?.GetValue("NoAutoplayfornonVolume");
+            if (nonVolumeVal != null && nonVolumeVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} Autorun/Autoplay settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "Autorun/Autoplay disabled",
+                "Disable AutoPlay/AutoRun to prevent USB malware auto-execution.",
+                errorMessage: string.Empty,
+                description: "Prevents automatic execution of code on USB drives, CDs, and other removable media.",
+                registryPath: $@"HKLM\{RegPathHKLM}\NoDriveTypeAutoRun",
+                cisReference: "CIS 18.8.3.1", riskScore: 55, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPathHKLM}"" /v NoDriveTypeAutoRun",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-            currentValue = $"Error: {ex.GetType().Name}";
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Prevents automatic execution of code on USB drives, CDs, and other removable media.",
+                registryPath: $@"HKLM\{RegPathHKLM}\NoDriveTypeAutoRun",
+                cisReference: "CIS 18.8.3.1", riskScore: 55, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPathHKLM}"" /v NoDriveTypeAutoRun",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
         }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "255",
-            "Disable AutoPlay/AutoRun to prevent USB malware auto-execution.",
-            errorMessage: errorMessage,
-            description: "Prevents automatic execution of code on USB drives, CDs, and other removable media.",
-            registryPath: $@"HKLM\{RegPathHKLM}\{ValueName}",
-            cisReference: "CIS 18.8.3.1",
-            riskScore: 55,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPathHKLM}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc" },
-            subChecks: SubChecks));
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry HKLM برای NoDriveTypeAutoRun
         try
         {
@@ -150,10 +155,9 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry HKLM (NoDriveTypeAutoRun)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 2: Registry HKCU برای NoDriveTypeAutoRun (user-level policy)
+        // Test 2: Registry HKCU برای NoDriveTypeAutoRun
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RegPathHKCU);
@@ -167,7 +171,6 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
                 }
                 else
                 {
-                    // HKCU policy not set = machine policy still applies
                     results.Add(new TestResult("Cross-check", "Registry HKCU (NoDriveTypeAutoRun)", true, "HKCU policy not set (machine policy applies)"));
                 }
             }
@@ -180,10 +183,9 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "Registry HKCU (NoDriveTypeAutoRun)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 3: Registry HKLM برای NoAutoplayfornonVolume (MTP devices)
+        // Test 3: Registry HKLM برای NoAutoplayfornonVolume
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegPathHKLM);
@@ -209,7 +211,14 @@ public class AutoRunDisabledCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "Registry (NoAutoplayfornonVolume)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

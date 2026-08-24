@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RdpTcpPath = @"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp";
@@ -176,38 +178,75 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+        string details = string.Empty;
+
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
-            var v = key?.GetValue("UserAuthentication");
-            if (v != null && v.ToString() == "1") { currentValue = "NLA Enabled"; status = CheckStatus.Pass; }
-            else { currentValue = "NLA Disabled"; status = CheckStatus.Fail; }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+            using var rdpKey = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
+            var nlaVal = rdpKey?.GetValue("UserAuthentication");
+            if (nlaVal != null && nlaVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled",
-            "Harden RDP with NLA, encryption, and session limits to prevent unauthorized remote access.",
-            errorMessage: errorMessage,
-            description: "Configures Remote Desktop with Network Level Authentication, strong encryption, and session management controls.",
-            registryPath: $@"HKLM\{RdpTcpPath}\UserAuthentication",
-            cisReference: "CIS 18.10.9.1",
-            riskScore: 80,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RdpTcpPath}"" /v UserAuthentication",
-            fixTools: new List<string> { "gpedit.msc" },
-            subChecks: SubChecks));
+            using var tsKey = Registry.LocalMachine.OpenSubKey(TsPath);
+            var encVal = tsKey?.GetValue("MinEncryptionLevel");
+            if (encVal != null && int.TryParse(encVal.ToString(), out int enc) && enc >= 3) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var rpcVal = tsKey?.GetValue("fEncryptRPCTraffic");
+            if (rpcVal != null && rpcVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var promptVal = tsKey?.GetValue("fPromptForPassword");
+            if (promptVal != null && promptVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var maxConnVal = tsKey?.GetValue("MaxInstanceCount");
+            if (maxConnVal != null && int.TryParse(maxConnVal.ToString(), out int maxConn) && maxConn > 0 && maxConn <= 5) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var idleVal = tsKey?.GetValue("MaxIdleTime");
+            if (idleVal != null && int.TryParse(idleVal.ToString(), out int idle) && idle == 900000) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var discVal = tsKey?.GetValue("MaxDisconnectionTime");
+            if (discVal != null && int.TryParse(discVal.ToString(), out int disc) && (disc == 60000 || disc == 0)) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            details = $"{passCount}/{statuses.Count} RDP settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "All 7 RDP settings configured",
+                "Harden RDP with NLA, encryption, and session limits to prevent unauthorized remote access.",
+                errorMessage: string.Empty,
+                description: "Configures Remote Desktop with Network Level Authentication, strong encryption, and session management controls.",
+                registryPath: $@"HKLM\{RdpTcpPath}\UserAuthentication",
+                cisReference: "CIS 18.10.9.1", riskScore: 80, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RdpTcpPath}"" /v UserAuthentication",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Configures Remote Desktop with Network Level Authentication, strong encryption, and session management controls.",
+                registryPath: $@"HKLM\{RdpTcpPath}\UserAuthentication",
+                cisReference: "CIS 18.10.9.1", riskScore: 80, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RdpTcpPath}"" /v UserAuthentication",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
-    // EDIT (فاز 1 - پیام 3): Test 3 اصلاح شد — Registry SecurityLayer (RDP-specific) به جای Firewall
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: Registry HKLM برای UserAuthentication (NLA) - بدون تغییر
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
@@ -233,10 +272,8 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (NLA UserAuthentication)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 2: PowerShell برای MinEncryptionLevel - بدون تغییر
         try
         {
             var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -Name 'MinEncryptionLevel' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MinEncryptionLevel\"")
@@ -246,36 +283,28 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int level))
+            if (process != null)
             {
-                var passed = level == 3; // 3 = High
-                var desc = level switch
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int level))
                 {
-                    1 => "Low",
-                    2 => "Client Compatible",
-                    3 => "High",
-                    4 => "FIPS",
-                    _ => $"Unknown ({level})"
-                };
-                results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", passed, $"MinEncryptionLevel = {level} ({desc})"));
-            }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", false, "MinEncryptionLevel not configured"));
+                    var passed = level == 3;
+                    var desc = level switch { 1 => "Low", 2 => "Client Compatible", 3 => "High", 4 => "FIPS", _ => $"Unknown ({level})" };
+                    results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", passed, $"MinEncryptionLevel = {level} ({desc})"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", false, "MinEncryptionLevel not configured"));
+                }
             }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Cross-check", "PowerShell (MinEncryptionLevel)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 3 (CORRECTED): Registry SecurityLayer در RDP-Tcp — مستقیماً RDP encryption
-        // قبلی: Get-NetFirewallRule (اشتباه - این Firewall است نه RDP!)
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RdpTcpPath);
@@ -284,51 +313,32 @@ public class RdpNlaCheck : IHardeningCheck, IMultiPathCheck
                 var v = key.GetValue("SecurityLayer");
                 if (v != null && int.TryParse(v.ToString(), out int val))
                 {
-                    // 0 = RDP Security Layer (weak)
-                    // 1 = Negotiate (better)
-                    // 2 = SSL/TLS (best, NLA-compatible)
                     var passed = val == 1 || val == 2;
-                    var desc = val switch
-                    {
-                        0 => "RDP Security Layer (weak)",
-                        1 => "Negotiate (recommended)",
-                        2 => "SSL/TLS (strongest)",
-                        _ => $"Unknown ({val})"
-                    };
-                    results.Add(new TestResult(
-                        "Verification",
-                        "Registry (RDP-Tcp SecurityLayer)",
-                        passed,
-                        $"SecurityLayer = {val} ({desc})"));
+                    var desc = val switch { 0 => "RDP Security Layer (weak)", 1 => "Negotiate (recommended)", 2 => "SSL/TLS (strongest)", _ => $"Unknown ({val})" };
+                    results.Add(new TestResult("Verification", "Registry (RDP-Tcp SecurityLayer)", passed, $"SecurityLayer = {val} ({desc})"));
                 }
                 else
                 {
-                    // Default when not set = Negotiate (1)
-                    results.Add(new TestResult(
-                        "Verification",
-                        "Registry (RDP-Tcp SecurityLayer)",
-                        true,
-                        "SecurityLayer not set (default = Negotiate)"));
+                    results.Add(new TestResult("Verification", "Registry (RDP-Tcp SecurityLayer)", true, "SecurityLayer not set (default = Negotiate)"));
                 }
             }
             else
             {
-                results.Add(new TestResult(
-                    "Verification",
-                    "Registry (RDP-Tcp SecurityLayer)",
-                    false,
-                    "RDP-Tcp registry key not found"));
+                results.Add(new TestResult("Verification", "Registry (RDP-Tcp SecurityLayer)", false, "RDP-Tcp registry key not found"));
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Verification",
-                "Registry (RDP-Tcp SecurityLayer)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Verification", "Registry (RDP-Tcp SecurityLayer)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

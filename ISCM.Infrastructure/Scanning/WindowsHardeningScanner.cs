@@ -39,10 +39,9 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
+                // ✅ استاندارد: فراخوانی یکسان EvaluateAsync برای تمام چک‌ها
                 var finding = await check.EvaluateAsync();
 
-                // EDIT (فاز 1 - پیام 2): فقط اگر IMultiPathCheck پیاده‌سازی شده، تست‌های واقعی اجرا شود.
-                // دیگر Fallback شبیه‌سازی‌شده وجود ندارد.
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
@@ -51,7 +50,6 @@ public class WindowsHardeningScanner : IScanService
                         finding.AddTestResult(result);
                     }
 
-                    // گزارش تست‌ها به کنسول
                     if (testResults.Count >= 3)
                     {
                         progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
@@ -62,7 +60,6 @@ public class WindowsHardeningScanner : IScanService
                         await Task.Delay(30);
                     }
                 }
-                // حذف کامل: else { await RunSimulatedTests(...) }
 
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
@@ -91,8 +88,6 @@ public class WindowsHardeningScanner : IScanService
         return scanResult;
     }
 
-    // حذف کامل: متد RunSimulatedTests دیگر وجود ندارد
-
     public async Task<Finding> RescanCheckAsync(string checkId)
     {
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
@@ -107,14 +102,16 @@ public class WindowsHardeningScanner : IScanService
         {
             CheckStatus.Pass => "[PASS]",
             CheckStatus.Fail => "[FAIL]",
-            CheckStatus.Unknown => "[WARN]",
+            CheckStatus.Unknown => "[UNKNOWN]", // ✅ اصلاح: به جای WARN از UNKNOWN استفاده شود
+            CheckStatus.Error => "[ERROR]",
             _ => "[INFO]"
         };
 
+        string subControlInfo = finding.SubControlId != null ? $" [{finding.SubControlId}]" : "";
         string suffix = finding.Status == CheckStatus.Pass
             ? "(PASS)"
             : $"({finding.Status.ToString().ToUpper()} - expected {finding.ExpectedValue})";
 
-        return $"{tag} {finding.CheckId}: {finding.Name} = {finding.CurrentValue} {suffix}";
+        return $"{tag} {finding.CheckId}{subControlInfo}: {finding.Name} = {finding.CurrentValue} {suffix}";
     }
 }

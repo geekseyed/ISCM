@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegistryPath = @"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection";
@@ -18,9 +20,10 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
+        string currentValue = string.Empty;
         CheckStatus status = CheckStatus.Error;
         string? errorMessage = null;
+
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
@@ -41,10 +44,14 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Registry Key Missing";
-                status = CheckStatus.Unknown; // اصلاح شد
+                status = CheckStatus.Unknown; // ✅ اصلاح: Warning → Unknown
             }
         }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            status = CheckStatus.Error;
+        }
 
         return Task.FromResult(new Finding(
             CheckId, Name, Category, Severity, status, currentValue,
@@ -61,7 +68,6 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
         ));
     }
 
-    // EDIT (فاز 1 - پیام 2): سه تست واقعی برای Windows Defender
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
@@ -75,49 +81,29 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
                 var v = key.GetValue(ValueName);
                 if (v != null && int.TryParse(v.ToString(), out int val))
                 {
-                    // 0 = Enabled (good), 1 = Disabled (bad)
                     var passed = val == 0;
-                    results.Add(new TestResult(
-                        "Primary",
-                        "Registry (DisableRealtimeMonitoring)",
-                        passed,
-                        $"DisableRealtimeMonitoring = {val} ({(passed ? "Enabled" : "Disabled")})"));
+                    results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", passed, $"DisableRealtimeMonitoring = {val} ({(passed ? "Enabled" : "Disabled")})"));
                 }
                 else
                 {
-                    // Value missing = Enabled by default (Windows Defender default state)
-                    results.Add(new TestResult(
-                        "Primary",
-                        "Registry (DisableRealtimeMonitoring)",
-                        true,
-                        "Value not set (default = Enabled)"));
+                    results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", true, "Value not set (default = Enabled)"));
                 }
             }
             else
             {
-                results.Add(new TestResult(
-                    "Primary",
-                    "Registry (DisableRealtimeMonitoring)",
-                    true,
-                    "Registry key not found (default = Enabled)"));
+                results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", true, "Registry key not found (default = Enabled)"));
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Primary",
-                "Registry (DisableRealtimeMonitoring)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: PowerShell Get-MpComputerStatus - RealTimeProtectionEnabled
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe",
-                "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RealTimeProtectionEnabled\"")
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RealTimeProtectionEnabled\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -128,42 +114,27 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
             {
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
-
                 if (!string.IsNullOrWhiteSpace(output))
                 {
                     var passed = output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
-                    results.Add(new TestResult(
-                        "Cross-check",
-                        "Get-MpComputerStatus (RealTimeProtection)",
-                        passed,
-                        $"RealTimeProtectionEnabled = {output.Trim()}"));
+                    results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", passed, $"RealTimeProtectionEnabled = {output.Trim()}"));
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Cross-check",
-                        "Get-MpComputerStatus (RealTimeProtection)",
-                        false,
-                        "Could not query RealTimeProtectionEnabled"));
+                    results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", false, "Could not query RealTimeProtectionEnabled"));
                 }
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Cross-check",
-                "Get-MpComputerStatus (RealTimeProtection)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: PowerShell Get-MpComputerStatus - AMRunningMode
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe",
-                "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AMRunningMode\"")
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AMRunningMode\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -174,37 +145,22 @@ public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
             {
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
-
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    // AMRunningMode: "Normal" = active, "Passive" = not enforcing, "EDR Blocked" = disabled
                     var mode = output.Trim();
                     var passed = mode.Equals("Normal", StringComparison.OrdinalIgnoreCase);
-                    results.Add(new TestResult(
-                        "Verification",
-                        "Get-MpComputerStatus (AMRunningMode)",
-                        passed,
-                        $"AMRunningMode = {mode}"));
+                    results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", passed, $"AMRunningMode = {mode}"));
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Verification",
-                        "Get-MpComputerStatus (AMRunningMode)",
-                        false,
-                        "Could not query AMRunningMode"));
+                    results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", false, "Could not query AMRunningMode"));
                 }
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Verification",
-                "Get-MpComputerStatus (AMRunningMode)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", false, $"Error: {ex.Message}"));
         }
-
         return results;
     }
 }

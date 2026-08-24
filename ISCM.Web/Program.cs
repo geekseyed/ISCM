@@ -1,4 +1,5 @@
-﻿using ISCM.Application.Interfaces;
+﻿using ISCM.Application.Evaluators;
+using ISCM.Application.Interfaces;
 using ISCM.Infrastructure.Reporting;
 using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
@@ -18,7 +19,7 @@ builder.Services.AddTransient<IHardeningCheck, SmbV1ProtocolCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoRunDisabledCheck>();
 builder.Services.AddTransient<IHardeningCheck, WindowsDefenderCheck>();
 builder.Services.AddTransient<IHardeningCheck, GuestAccountCheck>();
-builder.Services.AddTransient<IHardeningCheck, UacCheck>();
+builder.Services.AddTransient<IHardeningCheck, UserAccountControlCheck>();
 builder.Services.AddTransient<IHardeningCheck, UsbStorageCheck>();
 builder.Services.AddTransient<IHardeningCheck, WindowsUpdateCheck>();
 builder.Services.AddTransient<IHardeningCheck, AutoLogonCheck>();
@@ -35,7 +36,8 @@ builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
 builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
-
+// Register ControlEvaluator
+builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();

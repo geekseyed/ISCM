@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class CredentialGuardCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string LsaPath = @"SYSTEM\CurrentControlSet\Control\Lsa";
@@ -118,51 +120,78 @@ public class CredentialGuardCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
 
         try
         {
             using var lsa = Registry.LocalMachine.OpenSubKey(LsaPath);
             using var dg = Registry.LocalMachine.OpenSubKey(DgPath);
 
-            var ppl = lsa?.GetValue("RunAsPPL");
-            var vbs = dg?.GetValue("EnableVirtualizationBasedSecurity");
+            // 1. VBS (EnableVirtualizationBasedSecurity = 1)
+            var vbsVal = dg?.GetValue("EnableVirtualizationBasedSecurity");
+            if (vbsVal != null && vbsVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-            bool ok = (ppl != null && int.TryParse(ppl.ToString(), out int pplInt) && (pplInt == 1 || pplInt == 2))
-                   && (vbs != null && int.TryParse(vbs.ToString(), out int vbsInt) && vbsInt == 1);
+            // 2. Platform Security Level (RequirePlatformSecurityFeatures = 3)
+            var platVal = dg?.GetValue("RequirePlatformSecurityFeatures");
+            if (platVal != null && int.TryParse(platVal.ToString(), out int plat) && plat == 3) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-            currentValue = ok ? "Credential Guard + LSASS protection enabled" : "Disabled or incomplete";
-            status = ok ? CheckStatus.Pass : CheckStatus.Fail;
+            // 3. Credential Guard (LsaCfgFlags = 1 or 2)
+            var cfgVal = lsa?.GetValue("LsaCfgFlags");
+            if (cfgVal != null && int.TryParse(cfgVal.ToString(), out int cfg) && (cfg == 1 || cfg == 2)) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 4. Secure Launch (SystemGuard = 1)
+            var sysVal = dg?.GetValue("SystemGuard");
+            if (sysVal != null && sysVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 5. RunAsPPL (RunAsPPL = 1 or 2)
+            var pplVal = lsa?.GetValue("RunAsPPL");
+            if (pplVal != null && int.TryParse(pplVal.ToString(), out int ppl) && (ppl == 1 || ppl == 2)) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 6. EnablePlainTextPassword (Disabled = 0)
+            using var lanmanKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters");
+            var plainVal = lanmanKey?.GetValue("EnablePlainTextPassword");
+            if (plainVal != null && plainVal.ToString() == "0") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} Credential Guard settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "VBS + Credential Guard + LSASS protection configured",
+                "Enable VBS + Credential Guard + LSASS protection to stop credential theft from memory.",
+                errorMessage: string.Empty,
+                description: "Uses virtualization-based security, Credential Guard and LSASS protected process to prevent credential-dumping tools from reading NTLM hashes and Kerberos tickets.",
+                registryPath: $@"HKLM\{LsaPath}\RunAsPPL",
+                cisReference: "CIS 5.5", riskScore: 85, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v RunAsPPL",
+                fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
+                subChecks: SubChecks));
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-            currentValue = $"Error: {ex.GetType().Name}";
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Uses virtualization-based security, Credential Guard and LSASS protected process to prevent credential-dumping tools from reading NTLM hashes and Kerberos tickets.",
+                registryPath: $@"HKLM\{LsaPath}\RunAsPPL",
+                cisReference: "CIS 5.5", riskScore: 85, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v RunAsPPL",
+                fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
+                subChecks: SubChecks));
         }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled",
-            "Enable VBS + Credential Guard + LSASS protection to stop credential theft from memory.",
-            errorMessage: errorMessage,
-            description: "Uses virtualization-based security, Credential Guard and LSASS protected process to prevent credential-dumping tools from reading NTLM hashes and Kerberos tickets.",
-            registryPath: $@"HKLM\{LsaPath}\RunAsPPL",
-            cisReference: "CIS 5.5",
-            riskScore: 85,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v RunAsPPL",
-            fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
-            subChecks: SubChecks));
     }
 
-    // اجرای ۳ روش تست واقعی
+    // Preserved: 3-Test Verification
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry برای EnableVirtualizationBasedSecurity
         try
         {
@@ -188,7 +217,6 @@ public class CredentialGuardCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (VBS)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: Get-CimInstance Win32_DeviceGuard
@@ -201,18 +229,19 @@ public class CredentialGuardCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var passed = !string.IsNullOrWhiteSpace(output) && output.Trim() != "0";
-            var details = passed ? $"CodeIntegrityPolicyEnforcementStatus = {output.Trim()}" : "Device Guard not active or not supported";
-            results.Add(new TestResult("Cross-check", "Get-CimInstance (DeviceGuard)", passed, details));
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var passed = !string.IsNullOrWhiteSpace(output) && output.Trim() != "0";
+                var details = passed ? $"CodeIntegrityPolicyEnforcementStatus = {output.Trim()}" : "Device Guard not active or not supported";
+                results.Add(new TestResult("Cross-check", "Get-CimInstance (DeviceGuard)", passed, details));
+            }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Cross-check", "Get-CimInstance (DeviceGuard)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: Registry برای RunAsPPL
@@ -241,7 +270,14 @@ public class CredentialGuardCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "Registry (RunAsPPL)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

@@ -3,13 +3,15 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
 {
-    private const string RegPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit";
-    private const string ValueName = "ProcessCreationIncludeCmdLine_Enabled";
+    private const string AuditRegPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit";
+    private const string LsaPath = @"SYSTEM\CurrentControlSet\Control\Lsa";
 
     public string CheckId => "PRC-001";
     public string Name => "Process Creation Auditing";
@@ -65,40 +67,67 @@ public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
-            var v = key?.GetValue(ValueName);
-            if (v != null && v.ToString() == "1") { currentValue = "Enabled"; status = CheckStatus.Pass; }
-            else { currentValue = "Disabled"; status = CheckStatus.Fail; }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+            // 1. ProcessCreationIncludeCmdLine_Enabled
+            using var auditKey = Registry.LocalMachine.OpenSubKey(AuditRegPath);
+            var cmdLineVal = auditKey?.GetValue("ProcessCreationIncludeCmdLine_Enabled");
+            if (cmdLineVal != null && cmdLineVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled", "Enable process-creation auditing with command-line capture for forensic visibility.",
-            errorMessage: errorMessage,
-            description: "Records every new process along with its full command line (Event 4688).",
-            registryPath: $@"HKLM\{RegPath}\{ValueName}",
-            cisReference: "CIS 10.2", riskScore: 55, sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
-            subChecks: SubChecks));
+            // 2. SCENoApplyLegacyAuditPolicy
+            using var lsaKey = Registry.LocalMachine.OpenSubKey(LsaPath);
+            var sceVal = lsaKey?.GetValue("SCENoApplyLegacyAuditPolicy");
+            if (sceVal != null && sceVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. auditpol Process Creation subcategory
+            string auditpolOutput = Run("auditpol", "/get /subcategory:\"Process Creation\"");
+            if (auditpolOutput.Contains("Success", StringComparison.OrdinalIgnoreCase)) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} Process Creation auditing settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "All 3 settings configured",
+                "Enable process-creation auditing with command-line capture for forensic visibility.",
+                errorMessage: string.Empty,
+                description: "Records every new process along with its full command line (Event 4688).",
+                registryPath: $@"HKLM\{AuditRegPath}\ProcessCreationIncludeCmdLine_Enabled",
+                cisReference: "CIS 10.2", riskScore: 55, sourceType: "RegistryReader + auditpol",
+                sourceCommand: $@"reg query ""HKLM\{AuditRegPath}"" /v ProcessCreationIncludeCmdLine_Enabled",
+                fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Records every new process along with its full command line (Event 4688).",
+                registryPath: $@"HKLM\{AuditRegPath}\ProcessCreationIncludeCmdLine_Enabled",
+                cisReference: "CIS 10.2", riskScore: 55, sourceType: "RegistryReader + auditpol",
+                sourceCommand: $@"reg query ""HKLM\{AuditRegPath}"" /v ProcessCreationIncludeCmdLine_Enabled",
+                fixTools: new List<string> { "gpedit.msc", "secpol.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry برای ProcessCreationIncludeCmdLine_Enabled
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
+            using var key = Registry.LocalMachine.OpenSubKey(AuditRegPath);
             if (key != null)
             {
-                var v = key.GetValue(ValueName);
+                var v = key.GetValue("ProcessCreationIncludeCmdLine_Enabled");
                 if (v != null && v.ToString() == "1")
                 {
                     results.Add(new TestResult("Primary", "Registry (ProcessCreationIncludeCmdLine_Enabled)", true, "Value = 1 (Enabled)"));
@@ -117,7 +146,6 @@ public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (ProcessCreationIncludeCmdLine_Enabled)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: auditpol برای Process Creation
@@ -132,13 +160,12 @@ public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "auditpol (Process Creation)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: Registry برای SCENoApplyLegacyAuditPolicy
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Lsa");
+            using var key = Registry.LocalMachine.OpenSubKey(LsaPath);
             if (key != null)
             {
                 var v = key.GetValue("SCENoApplyLegacyAuditPolicy");
@@ -160,8 +187,15 @@ public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "Registry (SCENoApplyLegacyAuditPolicy)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 
     private static string Run(string cmd, string args)
@@ -170,11 +204,11 @@ public class ProcessCreationAuditingCheck : IHardeningCheck, IMultiPathCheck
         {
             var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
             using var p = Process.Start(psi);
-            if (p == null) return "";
+            if (p == null) return string.Empty;
             string o = p.StandardOutput.ReadToEnd();
             p.WaitForExit(3000);
             return o;
         }
-        catch { return ""; }
+        catch { return string.Empty; }
     }
 }

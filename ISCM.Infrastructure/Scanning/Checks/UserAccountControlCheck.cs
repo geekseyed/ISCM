@@ -3,10 +3,12 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class UacCheck : IHardeningCheck, IMultiPathCheck
+[SupportedOSPlatform("windows")]
+public class UserAccountControlCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
 
@@ -87,36 +89,60 @@ public class UacCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegPath);
-            var v = key?.GetValue("EnableLUA");
-            if (v != null && v.ToString() == "1") { currentValue = "UAC Enabled"; status = CheckStatus.Pass; }
-            else { currentValue = "UAC Disabled"; status = CheckStatus.Fail; }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled",
-            "Enable UAC to require elevation consent on the secure desktop.",
-            errorMessage: errorMessage,
-            description: "User Account Control prevents silent administrator elevation and detects installer behavior.",
-            registryPath: $@"HKLM\{RegPath}\EnableLUA",
-            cisReference: "CIS 2.3.10.2",
-            riskScore: 70,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v EnableLUA",
-            fixTools: new List<string> { "secpol.msc" },
-            subChecks: SubChecks));
+            // 1. EnableLUA = 1
+            var luaVal = key?.GetValue("EnableLUA");
+            if (luaVal != null && luaVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 2. ConsentPromptBehaviorAdmin = 2
+            var consentVal = key?.GetValue("ConsentPromptBehaviorAdmin");
+            if (consentVal != null && int.TryParse(consentVal.ToString(), out int consent) && consent == 2) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. EnableInstallerDetection = 1
+            var installerVal = key?.GetValue("EnableInstallerDetection");
+            if (installerVal != null && installerVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} UAC settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "UAC Enabled with secure desktop prompt",
+                "Enable UAC to require elevation consent on the secure desktop.",
+                errorMessage: string.Empty,
+                description: "User Account Control prevents silent administrator elevation and detects installer behavior.",
+                registryPath: $@"HKLM\{RegPath}\EnableLUA",
+                cisReference: "CIS 2.3.10.2", riskScore: 70, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v EnableLUA",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "User Account Control prevents silent administrator elevation and detects installer behavior.",
+                registryPath: $@"HKLM\{RegPath}\EnableLUA",
+                cisReference: "CIS 2.3.10.2", riskScore: 70, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v EnableLUA",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry برای EnableLUA
         try
         {
@@ -143,7 +169,6 @@ public class UacCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (EnableLUA)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: Registry برای ConsentPromptBehaviorAdmin
@@ -182,7 +207,6 @@ public class UacCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "Registry (ConsentPromptBehaviorAdmin)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: PowerShell برای EnableInstallerDetection
@@ -195,24 +219,33 @@ public class UacCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int val))
+            if (process != null)
             {
-                var passed = val == 1;
-                results.Add(new TestResult("Verification", "PowerShell (EnableInstallerDetection)", passed, $"EnableInstallerDetection = {val}"));
-            }
-            else
-            {
-                results.Add(new TestResult("Verification", "PowerShell (EnableInstallerDetection)", false, "EnableInstallerDetection not configured"));
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int val))
+                {
+                    var passed = val == 1;
+                    results.Add(new TestResult("Verification", "PowerShell (EnableInstallerDetection)", passed, $"EnableInstallerDetection = {val}"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Verification", "PowerShell (EnableInstallerDetection)", false, "EnableInstallerDetection not configured"));
+                }
             }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Verification", "PowerShell (EnableInstallerDetection)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

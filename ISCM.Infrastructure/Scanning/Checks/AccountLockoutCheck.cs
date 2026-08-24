@@ -12,6 +12,7 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
     public CheckCategory Category => CheckCategory.Account;
     public CheckSeverity Severity => CheckSeverity.Medium;
 
+    // SubChecks definitions preserved exactly as provided
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck { Id = "LCK-001.1", Title = "Account lockout threshold", Expected = "5 invalid logon attempts",
@@ -49,200 +50,53 @@ public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
             UndoCli = "net accounts /lockoutwindow:0", IgnoreConsequence = "Counter may reset too fast/slow.", HasRegistryPath = false }
     };
 
-    public Task<Finding> EvaluateAsync()
+    public async Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+        string details = "";
 
         try
         {
             string output = Run("net", "accounts");
-            var line = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase));
-            if (line != null)
-            {
-                var num = new string(line.Where(char.IsDigit).ToArray());
-                if (int.TryParse(num, out int t))
-                {
-                    currentValue = t == 0 ? "Never" : t.ToString();
-                    status = t >= 5 ? CheckStatus.Pass : CheckStatus.Fail;
-                }
-                else
-                {
-                    currentValue = "Never";
-                    status = CheckStatus.Fail;
-                }
-            }
-            else
-            {
-                currentValue = "Not available";
-                status = CheckStatus.Unknown; // اصلاح شد: Warning به Unknown تغییر کرد
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-        }
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "5", "Lock accounts after repeated failed logons to mitigate brute-force attacks.",
-            errorMessage: errorMessage,
-            description: "Locks user accounts after repeated failed logon attempts.",
-            registryPath: null, cisReference: "CIS 5.4", riskScore: 60, sourceType: "net accounts",
-            sourceCommand: "net accounts", fixTools: new List<string> { "secpol.msc" },
-            subChecks: SubChecks));
+            // 1. Threshold
+            var tLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase));
+            if (tLine != null) { var num = new string(tLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int t) && t >= 5 && t > 0) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
+            else statuses.Add(CheckStatus.Unknown);
+
+            // 2. Duration
+            var dLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout duration", StringComparison.OrdinalIgnoreCase));
+            if (dLine != null) { var num = new string(dLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int d) && d >= 15) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
+            else statuses.Add(CheckStatus.Unknown);
+
+            // 3. Window
+            var wLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout observation", StringComparison.OrdinalIgnoreCase));
+            if (wLine != null) { var num = new string(wLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int w) && w >= 15) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
+            else statuses.Add(CheckStatus.Unknown);
+
+            var finalStatus = GetWorstStatus(statuses);
+            details = $"T:{(statuses[0] == CheckStatus.Pass ? "OK" : "FAIL")}, D:{(statuses[1] == CheckStatus.Pass ? "OK" : "FAIL")}, W:{(statuses[2] == CheckStatus.Pass ? "OK" : "FAIL")}";
+
+            return new Finding(CheckId, Name, Category, Severity, finalStatus, details, "5 threshold, 15 min duration", "Lock accounts after repeated failed logons.", description: "Locks user accounts after repeated failed logon attempts.", cisReference: "CIS 5.4", riskScore: 60, sourceType: "net accounts", sourceCommand: "net accounts", fixTools: new List<string> { "secpol.msc" }, subChecks: SubChecks);
+        }
+        catch (Exception ex) { return new Finding(CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error", errorMessage: ex.Message, subChecks: SubChecks); }
     }
 
+    // Preserved: 3-Test Verification
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
-        try
-        {
-            string output = Run("net", "accounts");
-            var thresholdLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase));
-            if (thresholdLine != null)
-            {
-                var num = new string(thresholdLine.Where(char.IsDigit).ToArray());
-                if (int.TryParse(num, out int threshold))
-                {
-                    var passed = threshold >= 5 && threshold > 0;
-                    results.Add(new TestResult("Primary", "net accounts", passed, $"Lockout threshold = {threshold}"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Primary", "net accounts", false, "Could not parse threshold"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Primary", "net accounts", false, "Lockout threshold not found"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "net accounts", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 1: net accounts
+        try { string output = Run("net", "accounts"); var thresholdLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase)); if (thresholdLine != null) { var num = new string(thresholdLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int threshold)) { var passed = threshold >= 5 && threshold > 0; results.Add(new TestResult("Primary", "net accounts", passed, $"Lockout threshold = {threshold}")); } else results.Add(new TestResult("Primary", "net accounts", false, "Could not parse threshold")); } else results.Add(new TestResult("Primary", "net accounts", false, "Lockout threshold not found")); } catch (Exception ex) { results.Add(new TestResult("Primary", "net accounts", false, $"Error: {ex.Message}")); }
         await Task.Delay(50);
-
-        try
-        {
-            if (!Directory.Exists(@"C:\temp")) Directory.CreateDirectory(@"C:\temp");
-
-            var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lockout.inf\" /areas SECURITYPOLICY")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (File.Exists(@"C:\temp\lockout.inf"))
-            {
-                var content = await File.ReadAllTextAsync(@"C:\temp\lockout.inf");
-                var lockoutLine = content.Split('\n').FirstOrDefault(l => l.Contains("LockoutBadCount", StringComparison.OrdinalIgnoreCase));
-                if (lockoutLine != null)
-                {
-                    var parts = lockoutLine.Split('=');
-                    if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out int lockoutCount))
-                    {
-                        var passed = lockoutCount >= 5 && lockoutCount > 0;
-                        results.Add(new TestResult("Cross-check", "secedit", passed, $"LockoutBadCount = {lockoutCount}"));
-                    }
-                    else
-                    {
-                        results.Add(new TestResult("Cross-check", "secedit", false, "Could not parse LockoutBadCount"));
-                    }
-                }
-                else
-                {
-                    results.Add(new TestResult("Cross-check", "secedit", false, "LockoutBadCount not found in export"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "secedit", false, "secedit export failed"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "secedit", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 2: secedit
+        try { if (!Directory.Exists(@"C:\temp")) Directory.CreateDirectory(@"C:\temp"); var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lockout.inf\" /areas SECURITYPOLICY") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var process = Process.Start(psi); await process.StandardOutput.ReadToEndAsync(); await process.WaitForExitAsync(); if (File.Exists(@"C:\temp\lockout.inf")) { var content = await File.ReadAllTextAsync(@"C:\temp\lockout.inf"); var lockoutLine = content.Split('\n').FirstOrDefault(l => l.Contains("LockoutBadCount", StringComparison.OrdinalIgnoreCase)); if (lockoutLine != null) { var parts = lockoutLine.Split('='); if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out int lockoutCount)) { var passed = lockoutCount >= 5 && lockoutCount > 0; results.Add(new TestResult("Cross-check", "secedit", passed, $"LockoutBadCount = {lockoutCount}")); } else results.Add(new TestResult("Cross-check", "secedit", false, "Could not parse LockoutBadCount")); } else results.Add(new TestResult("Cross-check", "secedit", false, "LockoutBadCount not found in export")); } else results.Add(new TestResult("Cross-check", "secedit", false, "secedit export failed")); } catch (Exception ex) { results.Add(new TestResult("Cross-check", "secedit", false, $"Error: {ex.Message}")); }
         await Task.Delay(50);
-
-        try
-        {
-            var psi = new ProcessStartInfo("powershell.exe",
-                "-Command \"$output = net accounts; $threshold = ($output | Select-String 'Lockout threshold').ToString().Split(':')[-1].Trim(); $duration = ($output | Select-String 'Lockout duration').ToString().Split(':')[-1].Trim(); $window = ($output | Select-String 'Lockout observation').ToString().Split(':')[-1].Trim(); Write-Output \\\"T=$threshold|D=$duration|W=$window\\\"\"")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    var parts = output.Trim().Split('|');
-                    if (parts.Length >= 3)
-                    {
-                        var tVal = parts[0].Replace("T=", "").Trim();
-                        var dVal = parts[1].Replace("D=", "").Trim();
-                        var wVal = parts[2].Replace("W=", "").Trim();
-
-                        var tNum = new string(tVal.Where(char.IsDigit).ToArray());
-                        var dNum = new string(dVal.Where(char.IsDigit).ToArray());
-                        var wNum = new string(wVal.Where(char.IsDigit).ToArray());
-
-                        if (int.TryParse(tNum, out int t) && int.TryParse(dNum, out int d) && int.TryParse(wNum, out int w))
-                        {
-                            var passed = t >= 5 && t > 0 && d >= 15 && w >= 15;
-                            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", passed, $"threshold={t}, duration={d}min, window={w}min"));
-                        }
-                        else
-                        {
-                            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Raw output: {output.Trim()}"));
-                        }
-                    }
-                    else
-                    {
-                        results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Could not parse output: {output.Trim()}"));
-                    }
-                }
-                else
-                {
-                    results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, "Empty output from PowerShell"));
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 3: PowerShell full parse
+        try { var psi = new ProcessStartInfo("powershell.exe", "-Command \"$output = net accounts; $threshold = ($output | Select-String 'Lockout threshold').ToString().Split(':')[-1].Trim(); $duration = ($output | Select-String 'Lockout duration').ToString().Split(':')[-1].Trim(); $window = ($output | Select-String 'Lockout observation').ToString().Split(':')[-1].Trim(); Write-Output \\\"T=$threshold|D=$duration|W=$window\\\"\"") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var process = Process.Start(psi); if (process != null) { var output = await process.StandardOutput.ReadToEndAsync(); await process.WaitForExitAsync(); if (!string.IsNullOrWhiteSpace(output)) { var parts = output.Trim().Split('|'); if (parts.Length >= 3) { var tVal = parts[0].Replace("T=", "").Trim(); var dVal = parts[1].Replace("D=", "").Trim(); var wVal = parts[2].Replace("W=", "").Trim(); var tNum = new string(tVal.Where(char.IsDigit).ToArray()); var dNum = new string(dVal.Where(char.IsDigit).ToArray()); var wNum = new string(wVal.Where(char.IsDigit).ToArray()); if (int.TryParse(tNum, out int t) && int.TryParse(dNum, out int d) && int.TryParse(wNum, out int w)) { var passed = t >= 5 && t > 0 && d >= 15 && w >= 15; results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", passed, $"threshold={t}, duration={d}min, window={w}min")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Raw output: {output.Trim()}")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Could not parse output: {output.Trim()}")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, "Empty output from PowerShell")); } } catch (Exception ex) { results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Error: {ex.Message}")); }
         return results;
     }
 
-    private static string Run(string cmd, string args)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-            using var p = Process.Start(psi);
-            if (p == null) return "";
-            string o = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(3000);
-            return o;
-        }
-        catch { return ""; }
-    }
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses) { if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail; if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error; if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown; return CheckStatus.Pass; }
+    private static string Run(string cmd, string args) { try { var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var p = Process.Start(psi); if (p == null) return ""; string o = p.StandardOutput.ReadToEnd(); p.WaitForExit(3000); return o; } catch { return ""; } }
 }

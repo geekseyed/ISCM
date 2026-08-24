@@ -1,11 +1,19 @@
 ﻿using ISCM.Domain.Common;
 using ISCM.Domain.Enums;
+using System;
+using System.Collections.Generic;
 
 namespace ISCM.Domain.Entities;
 
 public class Finding : BaseEntity
 {
     public string CheckId { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Optional SubControl identifier (e.g., "PWD-001.1", "PWD-001.2").
+    /// </summary>
+    public string? SubControlId { get; private set; }
+
     public string Name { get; private set; } = string.Empty;
     public CheckCategory Category { get; private set; }
     public CheckSeverity Severity { get; private set; }
@@ -22,11 +30,15 @@ public class Finding : BaseEntity
     public string SourceType { get; private set; } = "";
     public string SourceCommand { get; private set; } = "";
     public IReadOnlyList<string> FixTools { get; private set; } = new List<string>();
-
     public IReadOnlyList<SubCheck> SubChecks { get; private set; } = new List<SubCheck>();
-
-    // EDIT (گروه C - C6): نتایج تست‌های چندگانه
     public List<TestResult> TestResults { get; private set; } = new List<TestResult>();
+
+    // Governance fields
+    public bool IsSuppressed { get; private set; } = false;
+    public string? IgnoreReason { get; private set; }
+    public string? IgnoredBy { get; private set; }
+    public DateTime? IgnoredAt { get; private set; }
+    public bool IsFalsePositive { get; private set; } = false;
 
     private CheckStatus? _previousStatus;
 
@@ -49,7 +61,8 @@ public class Finding : BaseEntity
         string sourceType = "",
         string sourceCommand = "",
         IReadOnlyList<string>? fixTools = null,
-        IReadOnlyList<SubCheck>? subChecks = null)
+        IReadOnlyList<SubCheck>? subChecks = null,
+        string? subControlId = null)
     {
         if (string.IsNullOrWhiteSpace(checkId))
             throw new ArgumentException("CheckId cannot be empty.", nameof(checkId));
@@ -57,6 +70,7 @@ public class Finding : BaseEntity
             throw new ArgumentException("Name cannot be empty.", nameof(name));
 
         CheckId = checkId;
+        SubControlId = subControlId;
         Name = name;
         Category = category;
         Severity = severity;
@@ -75,58 +89,66 @@ public class Finding : BaseEntity
         SubChecks = subChecks ?? new List<SubCheck>();
     }
 
-    public void Ignore()
+    public void AddTestResult(TestResult result)
     {
-        if (Status == CheckStatus.Ignored) return;
+        if (result == null)
+            throw new ArgumentNullException(nameof(result));
+
+        TestResults.Add(result);
+    }
+
+    /// <summary>
+    /// Ignores this finding. Parameters are optional for backward compatibility with UI.
+    /// </summary>
+    public void Ignore(string reason = "Not specified", string ignoredBy = "System")
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            reason = "Not specified";
+        if (string.IsNullOrWhiteSpace(ignoredBy))
+            ignoredBy = "System";
+
+        IsSuppressed = true;
+        IgnoreReason = reason;
+        IgnoredBy = ignoredBy;
+        IgnoredAt = DateTime.UtcNow;
         _previousStatus = Status;
         Status = CheckStatus.Ignored;
-        MarkModified();
     }
 
     public void MarkFalsePositive()
     {
-        if (Status == CheckStatus.FalsePositive) return;
+        IsFalsePositive = true;
+        IsSuppressed = true;
         _previousStatus = Status;
         Status = CheckStatus.FalsePositive;
-        MarkModified();
     }
 
+    /// <summary>
+    /// Reverts the Ignore or FalsePositive state.
+    /// </summary>
     public void Undo()
     {
-        if (Status != CheckStatus.Ignored && Status != CheckStatus.FalsePositive) return;
-        Status = _previousStatus ?? CheckStatus.NotScanned;
-        _previousStatus = null;
-        MarkModified();
+        if (!IsSuppressed)
+            return;
+
+        IsSuppressed = false;
+        IsFalsePositive = false;
+        IgnoreReason = null;
+        IgnoredBy = null;
+        IgnoredAt = null;
+
+        if (_previousStatus.HasValue)
+        {
+            Status = _previousStatus.Value;
+            _previousStatus = null;
+        }
     }
 
-    public bool IsSuppressed => Status == CheckStatus.Ignored || Status == CheckStatus.FalsePositive;
-
-    public void SetError(string errorMessage)
+    public void UpdateStatus(CheckStatus newStatus)
     {
-        Status = CheckStatus.Error;
-        ErrorMessage = errorMessage;
-        MarkModified();
+        if (!IsSuppressed)
+        {
+            Status = newStatus;
+        }
     }
-
-    public void UpdateResult(CheckStatus newStatus, string newValue)
-    {
-        Status = newStatus;
-        CurrentValue = newValue;
-        ErrorMessage = null;
-        _previousStatus = null;
-        MarkModified();
-    }
-
-    // EDIT (گروه C - C6): افزودن نتیجهٔ یک تست
-    public void AddTestResult(TestResult result)
-    {
-        TestResults.Add(result);
-        MarkModified();
-    }
-
-    // EDIT (گروه C - C6): بررسی آیا همهٔ تست‌ها موفق بوده‌اند
-    public bool AllTestsPassed => TestResults.Count > 0 && TestResults.All(t => t.Passed);
-
-    // EDIT (گروه C - C6): تعداد تست‌های موفق
-    public int PassedTestCount => TestResults.Count(t => t.Passed);
 }

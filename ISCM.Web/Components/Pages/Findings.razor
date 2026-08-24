@@ -7,6 +7,7 @@
 @using ISCM.Web.Services
 @inject ScanStateService StateService
 @inject IJSRuntime JS
+@inject IControlEvaluator ControlEvaluator
 @implements IDisposable
 
 <PageTitle>DefenDoor - Findings</PageTitle>
@@ -728,12 +729,14 @@
 
             if (!findings.Any() && !control.IsBaseline) continue;
 
+            // ✅ استفاده از ControlEvaluator به جای متد محلی
+            var controlResult = ControlEvaluator.EvaluateFromFindings(control, findings);
+
             var parent = new ParentControlView
                 {
                     Definition = control,
                     Findings = findings,
-                // ✅ FIX: فراخوانی متد کمکی به جای متد حذف‌شده از ControlDefinition
-                    CalculatedStatus = CalculateParentStatus(findings),
+                    CalculatedStatus = controlResult.Status, // ✅ از ControlResult گرفته می‌شود
                     AllSubChecks = findings.SelectMany(f => f.SubChecks).ToList()
                 };
 
@@ -829,7 +832,7 @@
     {
         foreach (var f in GetSelectedFindings())
         {
-            if (!f.IsSuppressed) f.Ignore();
+            if (!f.IsSuppressed) f.Ignore("Bulk ignore via Findings UI", "Operator");
             StateService.LogAction($"User ignored: {f.CheckId}");
         }
         ClearSelection();

@@ -3,13 +3,15 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
 {
-    private const string RegPath = @"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging";
-    private const string ValueName = "EnableScriptBlockLogging";
+    private const string ScriptBlockPath = @"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging";
+    private const string ModulePath = @"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging";
 
     public string CheckId => "PSH-001";
     public string Name => "PowerShell Script Block Logging";
@@ -70,40 +72,67 @@ public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
-            var v = key?.GetValue(ValueName);
-            if (v != null && v.ToString() == "1") { currentValue = "Enabled"; status = CheckStatus.Pass; }
-            else { currentValue = "Disabled"; status = CheckStatus.Fail; }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
+            // 1. EnableScriptBlockLogging
+            using var sbKey = Registry.LocalMachine.OpenSubKey(ScriptBlockPath);
+            var sbVal = sbKey?.GetValue("EnableScriptBlockLogging");
+            if (sbVal != null && sbVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Enabled", "Enable PowerShell script block logging to detect malicious activity.",
-            errorMessage: errorMessage,
-            description: "Captures the content of PowerShell scripts and commands (Event 4104).",
-            registryPath: $@"HKLM\{RegPath}\{ValueName}",
-            cisReference: "CIS 10.3", riskScore: 55, sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc" },
-            subChecks: SubChecks));
+            // 2. EnableModuleLogging
+            using var modKey = Registry.LocalMachine.OpenSubKey(ModulePath);
+            var modVal = modKey?.GetValue("EnableModuleLogging");
+            if (modVal != null && modVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. EnableScriptBlockInvocationLogging (optional, nested)
+            var invVal = sbKey?.GetValue("EnableScriptBlockInvocationLogging");
+            if (invVal != null && invVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} PowerShell logging settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "Script Block + Module logging enabled",
+                "Enable PowerShell script block logging to detect malicious activity.",
+                errorMessage: string.Empty,
+                description: "Captures the content of PowerShell scripts and commands (Event 4104).",
+                registryPath: $@"HKLM\{ScriptBlockPath}\EnableScriptBlockLogging",
+                cisReference: "CIS 10.3", riskScore: 55, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{ScriptBlockPath}"" /v EnableScriptBlockLogging",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Captures the content of PowerShell scripts and commands (Event 4104).",
+                registryPath: $@"HKLM\{ScriptBlockPath}\EnableScriptBlockLogging",
+                cisReference: "CIS 10.3", riskScore: 55, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{ScriptBlockPath}"" /v EnableScriptBlockLogging",
+                fixTools: new List<string> { "gpedit.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry برای EnableScriptBlockLogging
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
+            using var key = Registry.LocalMachine.OpenSubKey(ScriptBlockPath);
             if (key != null)
             {
-                var v = key.GetValue(ValueName);
+                var v = key.GetValue("EnableScriptBlockLogging");
                 if (v != null && v.ToString() == "1")
                 {
                     results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", true, "EnableScriptBlockLogging = 1"));
@@ -122,13 +151,12 @@ public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (ScriptBlockLogging)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: Registry برای EnableModuleLogging
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging");
+            using var key = Registry.LocalMachine.OpenSubKey(ModulePath);
             if (key != null)
             {
                 var v = key.GetValue("EnableModuleLogging");
@@ -150,7 +178,6 @@ public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "Registry (ModuleLogging)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: PowerShell Get-WinEvent برای بررسی event 4104
@@ -163,18 +190,27 @@ public class PowerShellLoggingCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var passed = !string.IsNullOrWhiteSpace(output);
-            var details = passed ? $"Last ScriptBlock event: {output.Trim()}" : "No recent ScriptBlock events (logging may not be active)";
-            results.Add(new TestResult("Verification", "Get-WinEvent (4104)", passed, details));
+            if (process != null)
+            {
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                var passed = !string.IsNullOrWhiteSpace(output);
+                var details = passed ? $"Last ScriptBlock event: {output.Trim()}" : "No recent ScriptBlock events (logging may not be active)";
+                results.Add(new TestResult("Verification", "Get-WinEvent (4104)", passed, details));
+            }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Verification", "Get-WinEvent (4104)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

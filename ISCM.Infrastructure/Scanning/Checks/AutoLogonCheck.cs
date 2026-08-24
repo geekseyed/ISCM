@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegistryPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
@@ -18,7 +20,7 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
+        string currentValue = string.Empty;
         CheckStatus status = CheckStatus.Error;
         string? errorMessage = null;
 
@@ -42,7 +44,7 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
             else
             {
                 currentValue = "Registry Key Missing";
-                status = CheckStatus.Unknown; // اصلاح شد
+                status = CheckStatus.Unknown; // ✅ اصلاح: Warning → Unknown
             }
         }
         catch (Exception ex)
@@ -66,12 +68,11 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
         ));
     }
 
-    // EDIT (فاز 1 - پیام 2): سه تست واقعی برای AutoLogon
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
 
-        // Test 1: Registry AutoAdminLogon (اصلی - همان EvaluateAsync)
+        // Test 1: Registry AutoAdminLogon
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
@@ -80,45 +81,26 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
                 var v = key.GetValue(ValueName);
                 if (v != null && int.TryParse(v.ToString(), out int val))
                 {
-                    // 0 = Disabled (pass), 1 = Enabled (fail)
                     var passed = val == 0;
-                    results.Add(new TestResult(
-                        "Primary",
-                        "Registry (AutoAdminLogon)",
-                        passed,
-                        $"AutoAdminLogon = {val}"));
+                    results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", passed, $"AutoAdminLogon = {val}"));
                 }
                 else
                 {
-                    // Value not set = not configured (treat as pass since no auto-logon)
-                    results.Add(new TestResult(
-                        "Primary",
-                        "Registry (AutoAdminLogon)",
-                        true,
-                        "AutoAdminLogon not set (default = Disabled)"));
+                    results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", true, "AutoAdminLogon not set (default = Disabled)"));
                 }
             }
             else
             {
-                results.Add(new TestResult(
-                    "Primary",
-                    "Registry (AutoAdminLogon)",
-                    true,
-                    "Winlogon registry key not found (default = Disabled)"));
+                results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", true, "Winlogon registry key not found (default = Disabled)"));
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Primary",
-                "Registry (AutoAdminLogon)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 2: Registry DefaultPassword (خطر امنیتی - credential ذخیره شده)
+        // Test 2: Registry DefaultPassword
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
@@ -127,47 +109,28 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
                 var v = key.GetValue("DefaultPassword");
                 if (v != null && !string.IsNullOrWhiteSpace(v.ToString()))
                 {
-                    // Password stored in registry = security risk (fail)
-                    results.Add(new TestResult(
-                        "Cross-check",
-                        "Registry (DefaultPassword)",
-                        false,
-                        "DefaultPassword value found (credential stored in plaintext)"));
+                    results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", false, "DefaultPassword value found (credential stored in plaintext)"));
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Cross-check",
-                        "Registry (DefaultPassword)",
-                        true,
-                        "DefaultPassword not set (no plaintext credential stored)"));
+                    results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", true, "DefaultPassword not set (no plaintext credential stored)"));
                 }
             }
             else
             {
-                results.Add(new TestResult(
-                    "Cross-check",
-                    "Registry (DefaultPassword)",
-                    true,
-                    "Winlogon key not found (no credential risk)"));
+                results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", true, "Winlogon key not found (no credential risk)"));
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Cross-check",
-                "Registry (DefaultPassword)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 3: PowerShell Get-ItemProperty برای Winlogon (بررسی DefaultUserName)
+        // Test 3: PowerShell Get-ItemProperty
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe",
-                "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name 'DefaultUserName','AutoAdminLogon' -ErrorAction SilentlyContinue | Select-Object -Property DefaultUserName,AutoAdminLogon | ConvertTo-Json -Compress\"")
+            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name 'DefaultUserName','AutoAdminLogon' -ErrorAction SilentlyContinue | Select-Object -Property DefaultUserName,AutoAdminLogon | ConvertTo-Json -Compress\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
@@ -178,37 +141,22 @@ public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
             {
                 var output = await process.StandardOutput.ReadToEndAsync();
                 await process.WaitForExitAsync();
-
                 if (!string.IsNullOrWhiteSpace(output))
                 {
                     var hasAutoLogon = output.Contains("\"AutoAdminLogon\":1") || output.Contains("\"AutoAdminLogon\": \"1\"");
-                    var hasUser = output.Contains("DefaultUserName");
                     var passed = !hasAutoLogon;
-                    results.Add(new TestResult(
-                        "Verification",
-                        "PowerShell (Winlogon properties)",
-                        passed,
-                        hasAutoLogon ? "AutoAdminLogon=1 detected" : "AutoAdminLogon not enabled"));
+                    results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", passed, hasAutoLogon ? "AutoAdminLogon=1 detected" : "AutoAdminLogon not enabled"));
                 }
                 else
                 {
-                    results.Add(new TestResult(
-                        "Verification",
-                        "PowerShell (Winlogon properties)",
-                        true,
-                        "Winlogon properties not found (default safe state)"));
+                    results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", true, "Winlogon properties not found (default safe state)"));
                 }
             }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult(
-                "Verification",
-                "PowerShell (Winlogon properties)",
-                false,
-                $"Error: {ex.Message}"));
+            results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", false, $"Error: {ex.Message}"));
         }
-
         return results;
     }
 }

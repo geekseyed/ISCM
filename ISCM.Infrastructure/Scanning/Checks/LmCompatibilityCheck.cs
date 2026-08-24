@@ -3,9 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string LsaPath = @"SYSTEM\CurrentControlSet\Control\Lsa";
@@ -65,44 +67,55 @@ public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown"; CheckStatus status = CheckStatus.Error; string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+
         try
         {
             using var key = Registry.LocalMachine.OpenSubKey(LsaPath);
-            var v = key?.GetValue("LmCompatibilityLevel");
-            if (v != null && int.TryParse(v.ToString(), out int level) && level >= 5)
-            {
-                currentValue = $"NTLM Level {level}";
-                status = CheckStatus.Pass;
-            }
-            else
-            {
-                currentValue = v?.ToString() ?? "Not set (defaults to level 3)";
-                status = CheckStatus.Fail;
-            }
-        }
-        catch (Exception ex) { errorMessage = ex.Message; status = CheckStatus.Error; }
 
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Send NTLMv2 response only. Refuse LM & NTLM",
-            "Force NTLMv2 and prevent LM/NTLM usage to protect against downgrade attacks.",
-            errorMessage: errorMessage,
-            description: "Hardens NTLM authentication to refuse weak LM and NTLM protocols.",
-            registryPath: $@"HKLM\{LsaPath}\LmCompatibilityLevel",
-            cisReference: "CIS 2.3.10.8",
-            riskScore: 60,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v LmCompatibilityLevel",
-            fixTools: new List<string> { "secpol.msc" },
-            subChecks: SubChecks));
+            // 1. LmCompatibilityLevel >= 5
+            var lmVal = key?.GetValue("LmCompatibilityLevel");
+            if (lmVal != null && int.TryParse(lmVal.ToString(), out int level) && level >= 5) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 2. NoLMHash = 1
+            var noLmVal = key?.GetValue("NoLMHash");
+            if (noLmVal != null && noLmVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} NTLM/LM settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "NTLMv2 enforced + LM hash disabled",
+                "Force NTLMv2 and prevent LM/NTLM usage to protect against downgrade attacks.",
+                errorMessage: string.Empty,
+                description: "Hardens NTLM authentication to refuse weak LM and NTLM protocols.",
+                registryPath: $@"HKLM\{LsaPath}\LmCompatibilityLevel",
+                cisReference: "CIS 2.3.10.8", riskScore: 60, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v LmCompatibilityLevel",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Hardens NTLM authentication to refuse weak LM and NTLM protocols.",
+                registryPath: $@"HKLM\{LsaPath}\LmCompatibilityLevel",
+                cisReference: "CIS 2.3.10.8", riskScore: 60, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v LmCompatibilityLevel",
+                fixTools: new List<string> { "secpol.msc" },
+                subChecks: SubChecks));
+        }
     }
 
-    // اجرای ۳ روش تست واقعی
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry برای LmCompatibilityLevel
         try
         {
@@ -139,7 +152,6 @@ public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (LmCompatibilityLevel)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: Registry برای NoLMHash
@@ -168,17 +180,15 @@ public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Cross-check", "Registry (NoLMHash)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
-        // Test 3: secedit export با ایجاد پوشه
+        // Test 3: secedit export
         try
         {
             if (!Directory.Exists(@"C:\temp"))
             {
                 Directory.CreateDirectory(@"C:\temp");
             }
-
             var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lmcheck.inf\" /areas SECURITYPOLICY")
             {
                 RedirectStandardOutput = true,
@@ -186,9 +196,11 @@ public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
+            if (process != null)
+            {
+                await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+            }
             if (File.Exists(@"C:\temp\lmcheck.inf"))
             {
                 var content = await File.ReadAllTextAsync(@"C:\temp\lmcheck.inf");
@@ -220,7 +232,14 @@ public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

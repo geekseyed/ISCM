@@ -3,10 +3,11 @@ using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.Management;
+using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+[SupportedOSPlatform("windows")]
 public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
 {
     private const string RegPath = @"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient";
@@ -56,7 +57,7 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
             GraphicalSteps = "1) Open dhcpmgmt.msc on the DHCP server.\n2) Expand IPv4 > your scope > Scope Options.\n3) Right-click Scope Options > Configure Options.\n4) Switch to the Advanced tab, Vendor class = Microsoft Options.\n5) Check 001 Microsoft Disable Netbios Option and set byte value to 0x2.\n6) OK.",
             UndoCli = "# Remove option 001 from the DHCP scope.",
             IgnoreConsequence = "Clients fall back to local adapter default, leaving NetBIOS active on many hosts.",
-            HasRegistryPath = false, RegistryPath = "",
+            HasRegistryPath = false, RegistryPath = string.Empty,
             AlternativeToRegistry = "DHCP is the preferred central method; use adapter fallback (11.4) only if you do not control DHCP." },
         new SubCheck { Id = "LLN-001.3", Title = "NetBIOS client prerequisite — adapter set to use DHCP value", Expected = "Use NetBIOS setting from the DHCP server",
             WhatItDoes = "Allows the DHCP option 001 to take effect on the client adapter.",
@@ -75,7 +76,7 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
             GraphicalSteps = "1) Run ncpa.cpl.\n2) Right-click the target adapter > Properties.\n3) Select Internet Protocol Version 4 (TCP/IPv4) > Properties.\n4) Advanced > WINS tab.\n5) Select 'Default (Use NetBIOS setting from the DHCP server)'.\n6) OK on all dialogs.",
             UndoCli = "# Switch the WINS radio button to 'Enable NetBIOS over TCP/IP'.",
             IgnoreConsequence = "Adapter-level NetBIOS setting overrides the DHCP option, so even with DHCP 0x2 the client may keep NetBIOS on.",
-            HasRegistryPath = false, RegistryPath = "",
+            HasRegistryPath = false, RegistryPath = string.Empty,
             AlternativeToRegistry = "Prefer the WINS tab UI or DHCP; use the registry method (11.5) only for central deployment." },
         new SubCheck { Id = "LLN-001.4", Title = "NetBIOS over TCP/IP — direct per-adapter disable (no DHCP control)", Expected = "Disable NetBIOS over TCP/IP on every adapter",
             WhatItDoes = "Disables NetBIOS directly on the adapter when you cannot control DHCP.",
@@ -157,53 +158,80 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
 
     public Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
 
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegPath);
-            var v = key?.GetValue(ValueName);
+            // 1. LLMNR (EnableMulticast = 0)
+            using var dnsKey = Registry.LocalMachine.OpenSubKey(RegPath);
+            var llmnrVal = dnsKey?.GetValue(ValueName);
+            if (llmnrVal != null && int.TryParse(llmnrVal.ToString(), out int llmnr) && llmnr == 0) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
 
-            if (v != null && int.TryParse(v.ToString(), out int parsed))
+            // 2. WPAD WinHTTP (DisableWpad = 1)
+            using var winhttpKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp");
+            var wpadVal = winhttpKey?.GetValue("DisableWpad");
+            if (wpadVal != null && int.TryParse(wpadVal.ToString(), out int wpad) && wpad == 1) statuses.Add(CheckStatus.Pass);
+            else statuses.Add(CheckStatus.Fail);
+
+            // 3. NetBIOS per-adapter (check first adapter's NetbiosOptions)
+            using var netbtKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\NetBT\Parameters\Interfaces");
+            if (netbtKey != null)
             {
-                currentValue = parsed == 0 ? "LLMNR Disabled" : "LLMNR Enabled";
-                status = parsed == 0 ? CheckStatus.Pass : CheckStatus.Fail;
+                var subKeys = netbtKey.GetSubKeyNames();
+                bool allDisabled = true;
+                bool foundAny = false;
+                foreach (var subKey in subKeys.Where(s => s.StartsWith("Tcpip_", StringComparison.OrdinalIgnoreCase)))
+                {
+                    using var ifaceKey = netbtKey.OpenSubKey(subKey);
+                    var optVal = ifaceKey?.GetValue("NetbiosOptions");
+                    if (optVal != null && int.TryParse(optVal.ToString(), out int opt))
+                    {
+                        foundAny = true;
+                        if (opt != 2) allDisabled = false;
+                    }
+                }
+                statuses.Add(foundAny && allDisabled ? CheckStatus.Pass : CheckStatus.Fail);
             }
             else
             {
-                currentValue = "LLMNR Enabled (default, policy missing)";
-                status = CheckStatus.Fail;
+                statuses.Add(CheckStatus.Fail);
             }
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            string details = $"{passCount}/{statuses.Count} LLMNR/NetBIOS/WPAD settings compliant";
+
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, finalStatus, details,
+                "LLMNR, NetBIOS, and WPAD disabled",
+                "Disable LLMNR and NetBIOS across all layers to prevent responder/NBT-NS/WPAD poisoning.",
+                errorMessage: string.Empty,
+                description: "Disables legacy name-resolution and proxy auto-discovery protocols commonly abused by local attackers (Responder, NBT-NS poisoning, WPAD poisoning).",
+                registryPath: $@"HKLM\{RegPath}\{ValueName}",
+                cisReference: "CIS 18.5.14.1", riskScore: 75, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
+                fixTools: new List<string> { "gpedit.msc", "ncpa.cpl", "dhcpmgmt.msc", "gpmc.msc", "inetcpl.cpl" },
+                subChecks: SubChecks));
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-            currentValue = $"Error: {ex.GetType().Name}";
+            return Task.FromResult(new Finding(
+                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
+                errorMessage: ex.Message,
+                description: "Disables legacy name-resolution and proxy auto-discovery protocols commonly abused by local attackers.",
+                registryPath: $@"HKLM\{RegPath}\{ValueName}",
+                cisReference: "CIS 18.5.14.1", riskScore: 75, sourceType: "RegistryReader",
+                sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
+                fixTools: new List<string> { "gpedit.msc", "ncpa.cpl", "dhcpmgmt.msc", "gpmc.msc", "inetcpl.cpl" },
+                subChecks: SubChecks));
         }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Disabled",
-            "Disable LLMNR and NetBIOS across all layers to prevent responder/NBT-NS/WPAD poisoning.",
-            errorMessage: errorMessage,
-            description: "Disables legacy name-resolution and proxy auto-discovery protocols commonly abused by local attackers (Responder, NBT-NS poisoning, WPAD poisoning).",
-            registryPath: $@"HKLM\{RegPath}\{ValueName}",
-            cisReference: "CIS 18.5.14.1",
-            riskScore: 75,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegPath}"" /v {ValueName}",
-            fixTools: new List<string> { "gpedit.msc", "ncpa.cpl", "dhcpmgmt.msc", "gpmc.msc", "inetcpl.cpl" },
-            subChecks: SubChecks));
     }
 
-    // اجرای ۳ روش تست واقعی
+    // Preserved: 3-Test Verification
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
         // Test 1: Registry HKLM برای LLMNR (EnableMulticast)
         try
         {
@@ -230,7 +258,6 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Primary", "Registry (LLMNR)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 2: WMI برای NetBIOS over TCP/IP (TcpipNetbiosOptions)
@@ -243,32 +270,32 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
                 CreateNoWindow = true
             };
             using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int netbios))
+            if (process != null)
             {
-                // 2 = Disable, 0 = Default (Use DHCP), 1 = Enable
-                var passed = netbios == 2 || netbios == 0;
-                var desc = netbios switch
+                var output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+                if (!string.IsNullOrWhiteSpace(output) && int.TryParse(output.Trim(), out int netbios))
                 {
-                    0 => "Default (Use DHCP setting)",
-                    1 => "Enable NetBIOS",
-                    2 => "Disable NetBIOS",
-                    _ => $"Unknown value: {netbios}"
-                };
-                results.Add(new TestResult("Cross-check", "WMI (NetBIOS)", passed, $"TcpipNetbiosOptions = {netbios} ({desc})"));
-            }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "WMI (NetBIOS)", false, "Could not query NetBIOS setting"));
+                    var passed = netbios == 2 || netbios == 0;
+                    var desc = netbios switch
+                    {
+                        0 => "Default (Use DHCP setting)",
+                        1 => "Enable NetBIOS",
+                        2 => "Disable NetBIOS",
+                        _ => $"Unknown value: {netbios}"
+                    };
+                    results.Add(new TestResult("Cross-check", "WMI (NetBIOS)", passed, $"TcpipNetbiosOptions = {netbios} ({desc})"));
+                }
+                else
+                {
+                    results.Add(new TestResult("Cross-check", "WMI (NetBIOS)", false, "Could not query NetBIOS setting"));
+                }
             }
         }
         catch (Exception ex)
         {
             results.Add(new TestResult("Cross-check", "WMI (NetBIOS)", false, $"Error: {ex.Message}"));
         }
-
         await Task.Delay(50);
 
         // Test 3: Registry HKLM برای WPAD (DisableWpad)
@@ -297,7 +324,14 @@ public class LlmnrNetbiosCheck : IHardeningCheck, IMultiPathCheck
         {
             results.Add(new TestResult("Verification", "Registry (WPAD)", false, $"Error: {ex.Message}"));
         }
-
         return results;
+    }
+
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    {
+        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
+        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
+        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
+        return CheckStatus.Pass;
     }
 }

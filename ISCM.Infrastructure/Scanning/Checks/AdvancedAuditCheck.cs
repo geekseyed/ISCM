@@ -12,6 +12,7 @@ public class AdvancedAuditCheck : IHardeningCheck, IMultiPathCheck
     public CheckCategory Category => CheckCategory.Audit;
     public CheckSeverity Severity => CheckSeverity.Medium;
 
+    // SubChecks definitions preserved exactly as provided (11 items)
     private static readonly List<SubCheck> SubChecks = new()
     {
         new SubCheck { Id = "AUD-001.1", Title = "Audit Logon", Expected = "Success and Failure", WhatItDoes = "Logs successful and failed user logons.", Recommendation = "Enable S+F.", CheckCurrentCli = "auditpol /get /subcategory:\"Logon\"", CliCommand = "auditpol /set /subcategory:\"Logon\" /success:enable /failure:enable", VerifyCli = "auditpol /get /subcategory:\"Logon\"", Verification = "S+F enabled.", ConsoleTool = "secpol.msc", DestinationLabel = "Advanced Audit → Logon/Logoff → Audit Logon", GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > Logon/Logoff > Audit Logon", ConsolePath = "… > System Audit Policies > Logon/Logoff", YouAreHere = "secpol.msc → Advanced Audit → System Audit Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > Logon/Logoff > Audit Logon > Success and Failure", GraphicalSteps = "1) secpol.msc → Advanced Audit → System Audit Policies → Logon/Logoff. 2) 'Audit Logon' → S+F.", UndoCli = "auditpol /set /subcategory:\"Logon\" /success:disable /failure:disable", IgnoreConsequence = "No logon trail.", HasRegistryPath = false },
@@ -27,118 +28,95 @@ public class AdvancedAuditCheck : IHardeningCheck, IMultiPathCheck
         new SubCheck { Id = "AUD-001.11", Title = "Audit Security System Extension", Expected = "Success and Failure", WhatItDoes = "Logs security-extension loads.", Recommendation = "Enable S+F.", CheckCurrentCli = "auditpol /get /subcategory:\"Security System Extension\"", CliCommand = "auditpol /set /subcategory:\"Security System Extension\" /success:enable /failure:enable", VerifyCli = "auditpol /get /subcategory:\"Security System Extension\"", Verification = "S+F enabled.", ConsoleTool = "secpol.msc", DestinationLabel = "Advanced Audit → System → Security System Extension", GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > System > Audit Security System Extension", ConsolePath = "… > System Audit Policies > System", YouAreHere = "secpol.msc → Advanced Audit → System Audit Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration > System Audit Policies > System > Audit Security System Extension > Success and Failure", GraphicalSteps = "1) System. 2) 'Audit Security System Extension' → S+F.", UndoCli = "auditpol /set /subcategory:\"Security System Extension\" /success:disable /failure:disable", IgnoreConsequence = "Extension loads untracked.", HasRegistryPath = false }
     };
 
-
-
-    public Task<Finding> EvaluateAsync()
+    public async Task<Finding> EvaluateAsync()
     {
-        string currentValue = "Unknown";
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var statuses = new List<CheckStatus>();
+        string details = "";
+
         try
         {
-            string output = Run("auditpol", "/get /subcategory:\"Logon\"");
-            if (output.Contains("Success and Failure", StringComparison.OrdinalIgnoreCase))
+            // Run auditpol once for all categories
+            string output = Run("auditpol", "/get /category:*");
+            if (string.IsNullOrEmpty(output)) return new Finding(CheckId, Name, Category, Severity, CheckStatus.Error, "No output", "N/A", "Error", subChecks: SubChecks);
+
+            // Define expected states for each subcategory
+            var checks = new Dictionary<string, string>
             {
-                currentValue = "Configured (Success and Failure)";
-                status = CheckStatus.Pass;
-            }
-            else
+                { "Logon", "Success and Failure" },
+                { "Logoff", "Success" },
+                { "Special Logon", "Success and Failure" },
+                { "Credential Validation", "Success and Failure" },
+                { "User Account Management", "Success and Failure" },
+                { "Security Group Management", "Success and Failure" },
+                { "Process Creation", "Success" },
+                { "Authentication Policy Change", "Success and Failure" },
+                { "Authorization Policy Change", "Success and Failure" },
+                { "Security State Change", "Success and Failure" },
+                { "Security System Extension", "Success and Failure" }
+            };
+
+            foreach (var check in checks)
             {
-                currentValue = "Not fully configured";
-                status = CheckStatus.Fail;
+                // Find the line in output. Format: "    Subcategory : Value"
+                // We look for the subcategory name and check the value on the same or next line
+                // Simplified parsing: look for "SubcategoryName" and then check for "Success" or "Failure" nearby
+                // A robust way is to split by lines and find the index.
+
+                // Since auditpol output is tricky, we'll use a simple contains check for the specific setting
+                // Note: This is a simplified parser. A real one would parse the structured output.
+                // For now, we assume if the specific string "SubcategoryName" is followed by the expected value in the block.
+
+                // Better approach: Split output into blocks by empty lines or just search for the specific subcategory line
+                var lines = output.Split('\n');
+                bool found = false;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Contains(check.Key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // The value is usually on the same line after a colon or on the next line
+                        string context = lines[i];
+                        if (i + 1 < lines.Length) context += lines[i + 1];
+
+                        if (context.Contains(check.Value, StringComparison.OrdinalIgnoreCase))
+                        {
+                            statuses.Add(CheckStatus.Pass);
+                            found = true;
+                        }
+                        else
+                        {
+                            statuses.Add(CheckStatus.Fail);
+                            found = true;
+                        }
+                        break;
+                    }
+                }
+                if (!found) statuses.Add(CheckStatus.Unknown);
             }
+
+            var finalStatus = GetWorstStatus(statuses);
+            int passCount = statuses.Count(s => s == CheckStatus.Pass);
+            details = $"{passCount}/{checks.Count} configured correctly";
+
+            return new Finding(CheckId, Name, Category, Severity, finalStatus, details, "All 11 subcategories configured", "Enable granular audit policies.", description: "Enables detailed security-event logging.", cisReference: "CIS 6.2", riskScore: 50, sourceType: "auditpol", sourceCommand: "auditpol /get /category:*", fixTools: new List<string> { "secpol.msc" }, subChecks: SubChecks);
         }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-            status = CheckStatus.Unknown; // اصلاح شد
-            currentValue = "Manual review required";
-        }
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            "Success and Failure",
-            "Enable granular audit policies for monitoring and forensics.",
-            errorMessage: errorMessage,
-            description: "Enables detailed security-event logging across logon, account, policy and system categories.",
-            registryPath: null,
-            cisReference: "CIS 6.2",
-            riskScore: 50,
-            sourceType: "auditpol",
-            sourceCommand: "auditpol /get /category:*",
-            fixTools: new List<string> { "secpol.msc" },
-            subChecks: SubChecks));
+        catch (Exception ex) { return new Finding(CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error", errorMessage: ex.Message, subChecks: SubChecks); }
     }
-    // اجرای ۳ روش تست واقعی
+
+    // Preserved: 3-Test Verification
     public async Task<List<TestResult>> RunMultipleTestsAsync()
     {
         var results = new List<TestResult>();
-
-        // Test 1: auditpol برای Logon (CMD)
-        try
-        {
-            string output = Run("auditpol", "/get /subcategory:\"Logon\"");
-            var passed = output.Contains("Success and Failure", StringComparison.OrdinalIgnoreCase);
-            var details = passed ? "Logon audit: Success and Failure" : "Logon audit not fully configured";
-            results.Add(new TestResult("Primary", "auditpol (Logon)", passed, details));
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "auditpol (Logon)", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 1: auditpol Logon
+        try { string output = Run("auditpol", "/get /subcategory:\"Logon\""); var passed = output.Contains("Success and Failure", StringComparison.OrdinalIgnoreCase); results.Add(new TestResult("Primary", "auditpol (Logon)", passed, passed ? "Logon audit: Success and Failure" : "Logon audit not fully configured")); } catch (Exception ex) { results.Add(new TestResult("Primary", "auditpol (Logon)", false, $"Error: {ex.Message}")); }
         await Task.Delay(50);
-
-        // Test 2: auditpol برای Process Creation (CMD)
-        try
-        {
-            string output = Run("auditpol", "/get /subcategory:\"Process Creation\"");
-            var passed = output.Contains("Success", StringComparison.OrdinalIgnoreCase);
-            var details = passed ? "Process Creation audit: Success enabled" : "Process Creation audit not enabled";
-            results.Add(new TestResult("Cross-check", "auditpol (Process Creation)", passed, details));
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "auditpol (Process Creation)", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 2: auditpol Process Creation
+        try { string output = Run("auditpol", "/get /subcategory:\"Process Creation\""); var passed = output.Contains("Success", StringComparison.OrdinalIgnoreCase); results.Add(new TestResult("Cross-check", "auditpol (Process Creation)", passed, passed ? "Process Creation audit: Success enabled" : "Process Creation audit not enabled")); } catch (Exception ex) { results.Add(new TestResult("Cross-check", "auditpol (Process Creation)", false, $"Error: {ex.Message}")); }
         await Task.Delay(50);
-
-        // Test 3: PowerShell Get-WinEvent برای بررسی اینکه event 4624 در حال تولید است
-        try
-        {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624} -MaxEvents 1 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TimeCreated\"")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            var output = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
-
-            var passed = !string.IsNullOrWhiteSpace(output);
-            var details = passed ? $"Last logon event: {output.Trim()}" : "No recent logon events found (audit may not be active)";
-            results.Add(new TestResult("Verification", "Get-WinEvent (4624)", passed, details));
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Verification", "Get-WinEvent (4624)", false, $"Error: {ex.Message}"));
-        }
-
+        // Test 3: PowerShell Get-WinEvent
+        try { var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624} -MaxEvents 1 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TimeCreated\"") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var process = Process.Start(psi); var output = await process.StandardOutput.ReadToEndAsync(); await process.WaitForExitAsync(); var passed = !string.IsNullOrWhiteSpace(output); results.Add(new TestResult("Verification", "Get-WinEvent (4624)", passed, passed ? $"Last logon event: {output.Trim()}" : "No recent logon events found")); } catch (Exception ex) { results.Add(new TestResult("Verification", "Get-WinEvent (4624)", false, $"Error: {ex.Message}")); }
         return results;
     }
 
-    private static string Run(string cmd, string args)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-            using var p = Process.Start(psi);
-            if (p == null) return "";
-            string o = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(3000);
-            return o;
-        }
-        catch { return ""; }
-    }
+    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses) { if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail; if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error; if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown; return CheckStatus.Pass; }
+    private static string Run(string cmd, string args) { try { var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var p = Process.Start(psi); if (p == null) return ""; string o = p.StandardOutput.ReadToEnd(); p.WaitForExit(3000); return o; } catch { return ""; } }
 }
