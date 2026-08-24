@@ -7,10 +7,6 @@ using ISCM.Domain.Enums;
 
 namespace ISCM.Application.Evaluators;
 
-/// <summary>
-/// Default implementation of IControlEvaluator.
-/// Applies deterministic aggregation rules to produce Parent Status.
-/// </summary>
 public class ControlEvaluator : IControlEvaluator
 {
     public ControlResult Evaluate(
@@ -25,36 +21,30 @@ public class ControlEvaluator : IControlEvaluator
             EvaluatedAt = DateTime.UtcNow
         };
 
-        // Rule 1: No results → UNKNOWN
         if (!results.Any())
         {
             controlResult.Status = CheckStatus.Unknown;
             return controlResult;
         }
 
-        // Add all SubControlResults to the ControlResult
         controlResult.SubControlResults = results;
 
-        // Filter out N/A SubControls (not applicable to this OS/build)
         var applicableResults = results
             .Where(r => r.Status != CheckStatus.NotApplicable)
             .ToList();
 
-        // Rule 2: No applicable results → N/A
         if (!applicableResults.Any())
         {
             controlResult.Status = CheckStatus.NotApplicable;
             return controlResult;
         }
 
-        // Rule 3: Any ERROR → ERROR (evaluation crashed)
         if (applicableResults.Any(r => r.Status == CheckStatus.Error))
         {
             controlResult.Status = CheckStatus.Error;
             return controlResult;
         }
 
-        // Rule 4: Any FAIL (required) → FAIL
         var requiredFailures = applicableResults
             .Where(r => r.Status == CheckStatus.Fail)
             .ToList();
@@ -65,7 +55,6 @@ public class ControlEvaluator : IControlEvaluator
             return controlResult;
         }
 
-        // Rule 5: Any UNKNOWN (required) → UNKNOWN
         var unknowns = applicableResults
             .Where(r => r.Status == CheckStatus.Unknown)
             .ToList();
@@ -76,34 +65,27 @@ public class ControlEvaluator : IControlEvaluator
             return controlResult;
         }
 
-        // Rule 6: All PASS → PASS
         if (applicableResults.All(r => r.Status == CheckStatus.Pass))
         {
             controlResult.Status = CheckStatus.Pass;
             return controlResult;
         }
 
-        // Fallback: UNKNOWN (should not reach here)
         controlResult.Status = CheckStatus.Unknown;
         return controlResult;
     }
 
-    /// <summary>
-    /// Temporary implementation for migration phase.
-    /// Converts Findings to SubControlResults and delegates to Evaluate().
-    /// </summary>
     public ControlResult EvaluateFromFindings(
         ControlDefinition controlDefinition,
         IEnumerable<Finding> findings)
     {
         var findingsList = findings?.ToList() ?? new List<Finding>();
 
-        // Convert Findings to SubControlResults (temporary mapping)
         var subControlResults = findingsList.Select(f => new SubControlResult
         {
-            SubControlId = f.CheckId, // Using CheckId as temporary SubControlId
+            SubControlId = f.CheckId,
             Status = f.Status,
-            Evidence = new List<Evidence>
+            EvidenceItems = new List<Evidence> 
             {
                 new Evidence
                 {
