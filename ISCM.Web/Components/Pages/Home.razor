@@ -201,6 +201,13 @@
                     <span>⚡ Start Real Scan</span>
                 }
             </button>
+
+            @if (_isScanning && _currentScanStatus != null)
+            {
+                <div style="color: #06b6d4; margin-top: 15px; font-family: monospace; font-size: 14px;">
+                    ⚙️ @_currentScanStatus
+                </div>
+            }
         </div>
 
         @if (_errorMessage != null)
@@ -285,6 +292,7 @@
     private bool _isScanning;
     private string? _errorMessage;
     private string? _reportPath;
+    private string? _currentScanStatus;
 
     private async Task StartScanAsync()
     {
@@ -295,9 +303,18 @@
             _isScanning = true;
             _errorMessage = null;
             _reportPath = null;
+            _scanResult = null;
+            _currentScanStatus = "Starting...";
             StateHasChanged();
 
-            _scanResult = await ScanService.RunScanAsync();
+            var progress = new Progress<string>(status =>
+            {
+                _currentScanStatus = status;
+                StateHasChanged();
+            });
+
+            _scanResult = await ScanService.RunScanAsync(ScanMode.Full, progress);
+            _currentScanStatus = null;
         }
         catch (Exception ex)
         {
@@ -318,7 +335,7 @@
             _isScanning = true;
             StateHasChanged();
 
-            string outputDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "DefenDoorReports");
+            string outputDir = Path.Combine(AppContext.BaseDirectory, "Reports");
             _reportPath = await ReportService.GenerateAndSaveReportAsync(_scanResult, outputDir);
         }
         catch (Exception ex)

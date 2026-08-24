@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using ISCM.Application.Interfaces;
+﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -22,17 +16,26 @@ public class WindowsHardeningScanner : IScanService
         _checks = checks;
     }
 
-    public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full)
+    public async Task<ScanResult> RunScanAsync(ScanMode mode = ScanMode.Full, IProgress<string>? progress = null)
     {
-        // ۱. خواندن اطلاعات پایه سیستم
-        var (hostname, ipAddress, osVersion) = _systemInfoCollector.Collect();
+        // ارسال پیام به UI: شروع اسکن
+        progress?.Report("Initializing scan engine...");
+        await Task.Delay(500); // نیم ثانیه مکث برای حس خوب
 
-        // ۲. ساخت ظرف نتایج اسکن
+        var (hostname, ipAddress, osVersion) = _systemInfoCollector.Collect();
         var scanResult = new ScanResult(hostname, ipAddress, osVersion, mode);
 
-        // ۳. اجرای تک‌تک بررسی‌ها (مثل فایروال)
+        progress?.Report("System information collected successfully.");
+        await Task.Delay(500);
+
         foreach (var check in _checks)
         {
+            // ارسال نام چک فعلی به UI
+            progress?.Report($"Checking {check.CheckId}: {check.Name}...");
+
+            // تاخیر عمدی ۱ ثانیه‌ای برای شبیه‌سازی اسکن واقعی
+            await Task.Delay(1000);
+
             try
             {
                 var finding = await check.EvaluateAsync();
@@ -40,7 +43,6 @@ public class WindowsHardeningScanner : IScanService
             }
             catch (Exception ex)
             {
-                // اگر یک چک کلاً کرش کرد، نرم‌افزار متوقف نشود، آن چک Error ثبت شود
                 var errorFinding = new Finding(
                     check.CheckId,
                     "Unknown Check",
@@ -56,7 +58,9 @@ public class WindowsHardeningScanner : IScanService
             }
         }
 
-        // ۴. پایان اسکن
+        progress?.Report("Finalizing scan and calculating compliance score...");
+        await Task.Delay(500);
+
         scanResult.CompleteScan();
         return scanResult;
     }
