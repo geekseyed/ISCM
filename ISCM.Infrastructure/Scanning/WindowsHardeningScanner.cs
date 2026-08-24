@@ -2,6 +2,10 @@
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning;
 
@@ -9,11 +13,17 @@ public class WindowsHardeningScanner : IScanService
 {
     private readonly WindowsSystemInfoCollector _systemInfoCollector;
     private readonly IEnumerable<IHardeningCheck> _checks;
+    private readonly IMultiPathCheckValidator _multiPathValidator;
 
-    public WindowsHardeningScanner(WindowsSystemInfoCollector systemInfoCollector, IEnumerable<IHardeningCheck> checks)
+    // ✅ فقط یک Constructor با تمام وابستگی‌های ضروری
+    public WindowsHardeningScanner(
+        WindowsSystemInfoCollector systemInfoCollector,
+        IEnumerable<IHardeningCheck> checks,
+        IMultiPathCheckValidator multiPathValidator)
     {
-        _systemInfoCollector = systemInfoCollector;
-        _checks = checks;
+        _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
+        _checks = checks ?? throw new ArgumentNullException(nameof(checks));
+        _multiPathValidator = multiPathValidator ?? throw new ArgumentNullException(nameof(multiPathValidator));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -59,6 +69,17 @@ public class WindowsHardeningScanner : IScanService
                         progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
                         await Task.Delay(30);
                     }
+
+                    // ✅ اعتبارسنجی تست‌های چندمسیره
+                    var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
+                    if (!validationResult.IsValid)
+                    {
+                        progress?.Report($"[WARNING] {check.CheckId}: MultiPath validation failed: {string.Join(", ", validationResult.Errors)}");
+                    }
+                    else if (validationResult.Warnings.Any())
+                    {
+                        progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
+                    }
                 }
 
                 scanResult.AddFinding(finding);
@@ -75,7 +96,8 @@ public class WindowsHardeningScanner : IScanService
                     "Crash",
                     "N/A",
                     "The check failed to execute.",
-                    ex.Message);
+                    errorMessage: ex.Message);
+
                 scanResult.AddFinding(errorFinding);
                 progress?.Report($"[ERROR] {check.CheckId}: {check.Name} = Crash ({ex.Message})");
             }
@@ -95,7 +117,23 @@ public class WindowsHardeningScanner : IScanService
 
         return await check.EvaluateAsync();
     }
+    public async Task<Finding> RescanSubControlAsync(string checkId, string subControlId)
+    {
+        // Phase 2.4: SubControl-aware Rescan
+        // Currently, this delegates to RescanCheckAsync because our Checks
+        // still evaluate at the Parent level (Phase 1.4 not yet applied).
+        // Once Phase 1.4 is complete, this will evaluate only the specific SubControl.
 
+        var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
+            ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
+
+        // Log the SubControl-specific rescan request
+        Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
+
+        // For now, rescan the entire Parent Control
+        // TODO: After Phase 1.4, evaluate only the specific SubControl
+        return await check.EvaluateAsync();
+    }
     private static string BuildResultLine(Finding finding)
     {
         string tag = finding.Status switch

@@ -37,7 +37,7 @@ builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
 builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
-
+builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
 builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
 
 // ✅ ثبت سرویس اعتبارسنجی کاتالوگ
