@@ -37,32 +37,30 @@ builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
 builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
-builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
-builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
 
-// ✅ ثبت سرویس اعتبارسنجی کاتالوگ
+builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
 builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
+builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
-builder.Services.AddScoped<ScanStateService>();
+
+// ✅ Phase 2.4: Register ScanStateService with ServiceProvider injection
+builder.Services.AddScoped<ScanStateService>(sp => new ScanStateService(sp));
+
 builder.Services.AddScoped<ScanHistoryService>();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<ReportGateService>();
 
 var app = builder.Build();
 
-// =====================================================================
-// ✅ PHASE 1.6: Validate Catalog Integrity at Startup
-// This ensures the application fails fast if the catalog is corrupted.
-// =====================================================================
+// Validate Catalog Integrity at Startup
 using (var scope = app.Services.CreateScope())
 {
     var validator = scope.ServiceProvider.GetRequiredService<ICatalogValidator>();
     validator.Validate();
     Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
 }
-// =====================================================================
 
 if (!app.Environment.IsDevelopment())
 {

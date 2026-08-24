@@ -1,264 +1,290 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
-using System.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ISCM.Web.Services;
 
 public class ScanStateService
 {
-    private readonly IScanService _scanService;
-    private readonly ScanHistoryService _historyService;
+    private readonly IServiceProvider? _serviceProvider;
+    private ScanResult? _currentScanResult;
+    private readonly List<string> _activityLog = new();
+    private readonly List<string> _consoleLogs = new();
 
-    public ScanStateService(IScanService scanService, ScanHistoryService historyService)
-    {
-        _scanService = scanService;
-        _historyService = historyService;
-    }
-
-    public ScanResult? CurrentScanResult { get; set; }
-    public bool IsScanning { get; set; } = false;
     public event Action? OnChange;
 
-    // EDIT (گروه C): چراغ Connected همیشه فعال (نرم‌افزار محلی)
-    public bool IsConnected { get; private set; } = true;
-
-    // EDIT (گروه C): شمارنده‌های زنده — با هر اسکن/Rescan از صفر شروع می‌کنند
-    public int LivePassCount { get; private set; } = 0;
-    public int LiveFailCount { get; private set; } = 0;
-    public string LastCheckResult { get; private set; } = ""; // "pass" / "fail" / ""
-
-    public string SelectedZone { get; set; } = "ERDC";
-    public string SelectedSystem { get; set; } = "Shift Expert System";
-    public string HostnameContext => $"{SelectedZone} / {SelectedSystem}";
-
-    public List<string> EventLog { get; set; } = new();
-    public List<string> ConsoleLogs { get; set; } = new();
-
-    public string ScanDuration { get; set; } = "—";
-    public int TotalChecks { get; set; } = 0;
-    public string ConsoleStatusText { get; set; } = "Ready to scan";
-    public string ConsoleStatusClass { get; set; } = "";
-
-    public int CompletedChecks { get; private set; } = 0;
-    public int ExpectedChecks { get; private set; } = 0;
-
-    public string ScanTimeText { get; private set; } = "Not scanned yet";
-
+    // --- System Info Editing State ---
     public bool IsEditingSystemInfo { get; private set; }
     public string DraftHostname { get; set; } = "";
     public string DraftIpAddress { get; set; } = "";
     public string DraftOsVersion { get; set; } = "";
     public string DraftOsBuild { get; set; } = "";
 
-    private string? _overrideHostname;
-    private string? _overrideIpAddress;
-    private string? _overrideOsVersion;
-    private string? _overrideOsBuild;
+    // --- Display State ---
+    public string DisplayHostname { get; set; } = "Unknown";
+    public string DisplayIpAddress { get; set; } = "0.0.0.0";
+    public string DisplayOsVersion { get; set; } = "Unknown";
+    public string DisplayOsBuild { get; set; } = "Unknown";
 
-    public string DisplayHostname => _overrideHostname ?? CurrentScanResult?.Hostname ?? "—";
-    public string DisplayIpAddress => _overrideIpAddress ?? CurrentScanResult?.IpAddress ?? "—";
-    public string DisplayOsVersion => _overrideOsVersion ?? CurrentScanResult?.OsVersion ?? "—";
-    public string DisplayOsBuild => _overrideOsBuild ?? CurrentScanResult?.OsBuild ?? "—";
+    // --- Scan State ---
+    public bool IsScanning { get; private set; }
+    public bool IsConnected { get; set; } = true;
+    public int CompletedChecks { get; private set; }
+    public int ExpectedChecks { get; private set; }
+    public int TotalChecks => ExpectedChecks;
+    public string ScanDuration { get; private set; } = "00:00";
+    public string ScanTimeText => ScanDuration;
 
-    private static readonly HashSet<string> AllowedTools = new(StringComparer.OrdinalIgnoreCase)
+    // --- Live Stats ---
+    public int LivePassCount { get; private set; }
+    public int LiveFailCount { get; private set; }
+
+    // --- Console / Event Log ---
+    public IReadOnlyList<string> ConsoleLogs => _consoleLogs.AsReadOnly();
+    public IReadOnlyList<string> EventLog => _activityLog.AsReadOnly();
+    public string ConsoleStatusText { get; private set; } = "Ready";
+    public string ConsoleStatusClass { get; private set; } = "status-ready";
+
+    // --- Context / Selection ---
+    public string SelectedZone { get; set; } = "All";
+    public string SelectedSystem { get; set; } = "All";
+    public string HostnameContext { get; set; } = "Localhost";
+
+    // --- Last Check Result ---
+    public Finding? LastCheckResult { get; private set; }
+
+    public ScanStateService(IServiceProvider? serviceProvider = null)
     {
-        "secpol.msc", "regedit.exe", "powershell.exe", "net.exe",
-        "gpedit.msc", "lusrmgr.msc", "compmgmt.msc"
-    };
+        _serviceProvider = serviceProvider;
+    }
+
+    public ScanResult? CurrentScanResult => _currentScanResult;
+    public IReadOnlyList<string> ActivityLog => _activityLog.AsReadOnly();
+
+    public void SetScanResult(ScanResult result)
+    {
+        _currentScanResult = result;
+        UpdateDisplayInfo();
+        NotifyStateChanged();
+    }
+
+    public void ClearScanResult()
+    {
+        _currentScanResult = null;
+        NotifyStateChanged();
+    }
+
+    public void LogAction(string message)
+    {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        _activityLog.Add($"[{timestamp}] {message}");
+        NotifyStateChanged();
+    }
+
+    public void LogConsole(string message, string statusClass = "status-info")
+    {
+        var timestamp = DateTime.Now.ToString("HH:mm:ss");
+        _consoleLogs.Add($"[{timestamp}] {message}");
+        ConsoleStatusText = message;
+        ConsoleStatusClass = statusClass;
+        NotifyStateChanged();
+    }
+
+    private void UpdateDisplayInfo()
+    {
+        if (_currentScanResult != null)
+        {
+            DisplayHostname = _currentScanResult.Hostname ?? "Unknown";
+            DisplayIpAddress = _currentScanResult.IpAddress ?? "0.0.0.0";
+            DisplayOsVersion = _currentScanResult.OsVersion ?? "Unknown";
+            DisplayOsBuild = _currentScanResult.OsBuild ?? "Unknown";
+            HostnameContext = DisplayHostname;
+        }
+    }
 
     public void StartEditingSystemInfo()
     {
-        DraftHostname = DisplayHostname == "—" ? "" : DisplayHostname;
-        DraftIpAddress = DisplayIpAddress == "—" ? "" : DisplayIpAddress;
-        DraftOsVersion = DisplayOsVersion == "—" ? "" : DisplayOsVersion;
-        DraftOsBuild = DisplayOsBuild == "—" ? "" : DisplayOsBuild;
+        if (_currentScanResult == null) return;
         IsEditingSystemInfo = true;
-        OnChange?.Invoke();
+        DraftHostname = _currentScanResult.Hostname ?? "";
+        DraftIpAddress = _currentScanResult.IpAddress ?? "";
+        DraftOsVersion = _currentScanResult.OsVersion ?? "";
+        DraftOsBuild = _currentScanResult.OsBuild ?? "";
+        NotifyStateChanged();
     }
 
     public void SaveSystemInfoEdits()
     {
-        _overrideHostname = string.IsNullOrWhiteSpace(DraftHostname) ? null : DraftHostname.Trim();
-        _overrideIpAddress = string.IsNullOrWhiteSpace(DraftIpAddress) ? null : DraftIpAddress.Trim();
-        _overrideOsVersion = string.IsNullOrWhiteSpace(DraftOsVersion) ? null : DraftOsVersion.Trim();
-        _overrideOsBuild = string.IsNullOrWhiteSpace(DraftOsBuild) ? null : DraftOsBuild.Trim();
+        if (_currentScanResult == null || !IsEditingSystemInfo) return;
+
+        _currentScanResult.Hostname = DraftHostname;
+        _currentScanResult.IpAddress = DraftIpAddress;
+        _currentScanResult.OsVersion = DraftOsVersion;
+        _currentScanResult.OsBuild = DraftOsBuild;
+
+        UpdateDisplayInfo();
         IsEditingSystemInfo = false;
-        LogAction("System information manually edited by user.");
+        LogAction("System information updated manually.");
+        NotifyStateChanged();
     }
 
     public void CancelSystemInfoEdits()
     {
         IsEditingSystemInfo = false;
-        OnChange?.Invoke();
+        NotifyStateChanged();
     }
 
-    public void LogAction(string action)
-    {
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {action}");
-        OnChange?.Invoke();
-    }
-
-    public void LaunchFixTool(string tool)
-    {
-        if (!AllowedTools.Contains(tool))
-        {
-            LogAction($"Blocked unknown tool: {tool}");
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(tool) { UseShellExecute = true });
-            LogAction($"User launched fix tool: {tool}");
-        }
-        catch (Exception ex)
-        {
-            LogAction($"Failed to launch {tool}: {ex.Message}");
-        }
-    }
-
-    // EDIT (گروه C): ریست شمارنده‌ها هنگام Rescan و ثبت نتیجهٔ همان یک چک
-    public async Task RescanSingleCheckAsync(string checkId)
-    {
-        if (CurrentScanResult == null || IsScanning) return;
-
-        try
-        {
-            // ریست شمارنده‌های زنده قبل از Rescan
-            LivePassCount = 0;
-            LiveFailCount = 0;
-            LastCheckResult = "";
-            CompletedChecks = 0;
-            ExpectedChecks = 1; // فقط یک چک
-            IsScanning = true;
-            ConsoleStatusText = "Rescanning...";
-            ConsoleStatusClass = "scanning";
-            OnChange?.Invoke();
-
-            var newFinding = await _scanService.RescanCheckAsync(checkId);
-            CurrentScanResult.ReplaceFinding(newFinding);
-
-            // ثبت نتیجه در شمارندهٔ زنده
-            if (newFinding.Status == CheckStatus.Pass)
-            {
-                LivePassCount = 1;
-                LastCheckResult = "pass";
-            }
-            else if (newFinding.Status == CheckStatus.Fail)
-            {
-                LiveFailCount = 1;
-                LastCheckResult = "fail";
-            }
-            CompletedChecks = 1;
-
-            ConsoleStatusText = $"Rescan complete - {newFinding.Status}";
-            ConsoleStatusClass = "complete";
-            LastCheckResult = "";
-            LogAction($"User rescanned {checkId} => {newFinding.Status}");
-        }
-        catch (Exception ex)
-        {
-            LogAction($"Rescan failed for {checkId}: {ex.Message}");
-            ConsoleStatusText = "Rescan Failed";
-            ConsoleStatusClass = "failed";
-        }
-        finally
-        {
-            IsScanning = false;
-            OnChange?.Invoke();
-        }
-    }
-
-    // EDIT (گروه C): متد کمکی برای ثبت نتیجهٔ هر چک حین اسکن
-    public void RecordLiveCheckResult(string statusToken)
-    {
-        if (statusToken.Contains("[PASS]"))
-        {
-            LivePassCount++;
-            LastCheckResult = "pass";
-        }
-        else if (statusToken.Contains("[FAIL]") || statusToken.Contains("[ERROR]"))
-        {
-            LiveFailCount++;
-            LastCheckResult = "fail";
-        }
-        CompletedChecks++;
-        OnChange?.Invoke();
-    }
-
-    public async Task ExecuteScanAsync()
+    public async Task ExecuteScanAsync(ScanMode mode = ScanMode.Full)
     {
         if (IsScanning) return;
 
+        IsScanning = true;
+        CompletedChecks = 0;
+        ExpectedChecks = 0;
+        LivePassCount = 0;
+        LiveFailCount = 0;
+        _consoleLogs.Clear();
+        _activityLog.Clear();
+
+        LogConsole("Initializing scan...", "status-info");
+
         try
         {
-            IsScanning = true;
-            ConsoleLogs.Clear();
-
-            // EDIT (گروه C): ریست شمارنده‌های زنده در شروع اسکن
-            LivePassCount = 0;
-            LiveFailCount = 0;
-            LastCheckResult = "";
-
-            CompletedChecks = 0;
-            ExpectedChecks = _scanService.TotalCheckCount;
-
-            ConsoleStatusText = "Scanning...";
-            ConsoleStatusClass = "scanning";
-            ScanDuration = "...";
-            TotalChecks = 0;
-
-            LogAction($"Scan started for {HostnameContext}");
-            OnChange?.Invoke();
-
-            var stopwatch = Stopwatch.StartNew();
-
-            var progress = new Progress<string>(status =>
+            var scanService = _serviceProvider?.GetService<IScanService>();
+            if (scanService == null)
             {
-                ConsoleLogs.Add($"[{DateTime.Now:HH:mm:ss}] {status}");
+                LogConsole("ERROR: IScanService not available", "status-error");
+                return;
+            }
 
-                // EDIT (گروه C): ثبت زنده برای هر چک کامل‌شده
-                if (status.StartsWith("[PASS]") || status.StartsWith("[FAIL]") ||
-                    status.StartsWith("[WARN]") || status.StartsWith("[ERROR]"))
+            ExpectedChecks = scanService.TotalCheckCount;
+            NotifyStateChanged();
+
+            var progress = new Progress<string>(msg =>
+            {
+                LogConsole(msg, msg.Contains("ERROR") ? "status-error" : "status-info");
+
+                if (msg.Contains("[PASS]") || msg.Contains("[FAIL]") || msg.Contains("[UNKNOWN]") || msg.Contains("[ERROR]"))
                 {
-                    RecordLiveCheckResult(status);
-                }
-                else
-                {
-                    OnChange?.Invoke();
+                    CompletedChecks++;
+                    if (msg.Contains("[PASS]")) LivePassCount++;
+                    else if (msg.Contains("[FAIL]")) LiveFailCount++;
+
+                    NotifyStateChanged();
                 }
             });
 
-            var scanResult = await _scanService.RunScanAsync(ScanMode.Full, progress);
-
-            stopwatch.Stop();
-
-            CurrentScanResult = scanResult;
-            _historyService.AddScan(scanResult);
-
-            ScanDuration = $"{stopwatch.Elapsed.TotalSeconds:F1}s";
-            TotalChecks = scanResult.Findings.Count;
-
-            ConsoleStatusText = $"Scan Complete - {scanResult.Findings.Count}/{scanResult.Findings.Count} checks";
-            ConsoleStatusClass = "complete";
-
-            ScanTimeText = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-            LastCheckResult = "";
-
-            LogAction($"Scan completed. Score: {scanResult.ComplianceScore}%");
+            var result = await scanService.RunScanAsync(mode, progress);
+            SetScanResult(result);
+            LogConsole("Scan completed successfully.", "status-success");
         }
         catch (Exception ex)
         {
-            LogAction($"Error during scan: {ex.Message}");
-            ConsoleStatusText = "Scan Failed";
-            ConsoleStatusClass = "failed";
-            IsConnected = false;
+            LogConsole($"Scan failed: {ex.Message}", "status-error");
         }
         finally
         {
             IsScanning = false;
-            OnChange?.Invoke();
+            NotifyStateChanged();
         }
     }
+
+    public async Task RescanCheckAsync(string checkId)
+    {
+        await RescanSingleCheckAsync(checkId);
+    }
+
+    public async Task RescanSingleCheckAsync(string checkId)
+    {
+        if (_currentScanResult == null) return;
+
+        try
+        {
+            LogAction($"Rescanning {checkId}...");
+            LogConsole($"Rescanning {checkId}...", "status-info");
+
+            var scanService = _serviceProvider?.GetService<IScanService>();
+            if (scanService == null)
+            {
+                LogAction("ERROR: IScanService not available");
+                return;
+            }
+
+            var updatedFinding = await scanService.RescanCheckAsync(checkId);
+            LastCheckResult = updatedFinding;
+
+            if (_currentScanResult.Findings is List<Finding> findingsList)
+            {
+                var existingFinding = findingsList.FirstOrDefault(f => f.CheckId == checkId);
+                if (existingFinding != null)
+                {
+                    findingsList.Remove(existingFinding);
+                    findingsList.Add(updatedFinding);
+                    LogAction($"{checkId} rescanned successfully");
+                }
+            }
+            else
+            {
+                LogAction("WARNING: Findings collection is read-only. Cannot update in-place.");
+            }
+
+            NotifyStateChanged();
+        }
+        catch (Exception ex)
+        {
+            LogAction($"ERROR rescanning {checkId}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Phase 2.4: SubControl-aware Rescan
+    /// </summary>
+    public async Task RescanSubControlAsync(string checkId, string subControlId)
+    {
+        if (_currentScanResult == null) return;
+
+        try
+        {
+            LogAction($"Rescanning SubControl {subControlId}...");
+            LogConsole($"Rescanning SubControl {subControlId}...", "status-info");
+
+            var scanService = _serviceProvider?.GetService<IScanService>();
+            if (scanService == null)
+            {
+                LogAction("ERROR: IScanService not available");
+                return;
+            }
+
+            var updatedFinding = await scanService.RescanSubControlAsync(checkId, subControlId);
+            LastCheckResult = updatedFinding;
+
+            if (_currentScanResult.Findings is List<Finding> findingsList)
+            {
+                var existingFinding = findingsList.FirstOrDefault(f => f.CheckId == checkId);
+                if (existingFinding != null)
+                {
+                    findingsList.Remove(existingFinding);
+                    findingsList.Add(updatedFinding);
+                    LogAction($"SubControl {subControlId} rescanned successfully");
+                }
+            }
+            else
+            {
+                LogAction("WARNING: Findings collection is read-only. Cannot update in-place.");
+            }
+
+            NotifyStateChanged();
+        }
+        catch (Exception ex)
+        {
+            LogAction($"ERROR rescanning SubControl {subControlId}: {ex.Message}");
+        }
+    }
+
+    private void NotifyStateChanged() => OnChange?.Invoke();
 }

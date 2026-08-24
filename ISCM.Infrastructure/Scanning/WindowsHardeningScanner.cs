@@ -15,7 +15,6 @@ public class WindowsHardeningScanner : IScanService
     private readonly IEnumerable<IHardeningCheck> _checks;
     private readonly IMultiPathCheckValidator _multiPathValidator;
 
-    // ✅ فقط یک Constructor با تمام وابستگی‌های ضروری
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
         IEnumerable<IHardeningCheck> checks,
@@ -49,7 +48,6 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
-                // ✅ استاندارد: فراخوانی یکسان EvaluateAsync برای تمام چک‌ها
                 var finding = await check.EvaluateAsync();
 
                 if (check is IMultiPathCheck multiPathCheck)
@@ -70,7 +68,6 @@ public class WindowsHardeningScanner : IScanService
                         await Task.Delay(30);
                     }
 
-                    // ✅ اعتبارسنجی تست‌های چندمسیره
                     var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
                     if (!validationResult.IsValid)
                     {
@@ -117,13 +114,14 @@ public class WindowsHardeningScanner : IScanService
 
         return await check.EvaluateAsync();
     }
+
+    /// <summary>
+    /// Phase 2.4: SubControl-aware Rescan
+    /// Currently delegates to RescanCheckAsync because Checks still evaluate at the Parent level.
+    /// Once Phase 1.4 is fully applied to all Checks, this will evaluate only the specific SubControl.
+    /// </summary>
     public async Task<Finding> RescanSubControlAsync(string checkId, string subControlId)
     {
-        // Phase 2.4: SubControl-aware Rescan
-        // Currently, this delegates to RescanCheckAsync because our Checks
-        // still evaluate at the Parent level (Phase 1.4 not yet applied).
-        // Once Phase 1.4 is complete, this will evaluate only the specific SubControl.
-
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
 
@@ -131,16 +129,17 @@ public class WindowsHardeningScanner : IScanService
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
 
         // For now, rescan the entire Parent Control
-        // TODO: After Phase 1.4, evaluate only the specific SubControl
+        // TODO: After full Phase 1.4 integration, evaluate only the specific SubControl
         return await check.EvaluateAsync();
     }
+
     private static string BuildResultLine(Finding finding)
     {
         string tag = finding.Status switch
         {
             CheckStatus.Pass => "[PASS]",
             CheckStatus.Fail => "[FAIL]",
-            CheckStatus.Unknown => "[UNKNOWN]", // ✅ اصلاح: به جای WARN از UNKNOWN استفاده شود
+            CheckStatus.Unknown => "[UNKNOWN]",
             CheckStatus.Error => "[ERROR]",
             _ => "[INFO]"
         };

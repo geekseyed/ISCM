@@ -456,12 +456,12 @@
 <div class="neon-terminal">
     <div class="terminal-header">
         <div class="terminal-dots">
-            <span class="t-dot-red @(StateService.LastCheckResult == "fail" ? "pulse" : "")" @key="@($"r{_redKey}")"></span>
-            <span class="t-dot-green @(StateService.LastCheckResult == "pass" ? "pulse" : "")" @key="@($"g{_greenKey}")"></span>
+            <span class="t-dot-red @(StateService.LastCheckResult?.Status == CheckStatus.Fail ? "pulse" : "")" @key="@($"r{_redKey}")"></span>
+            <span class="t-dot-green @(StateService.LastCheckResult?.Status == CheckStatus.Pass ? "pulse" : "")" @key="@($"g{_greenKey}")"></span>
         </div>
         <div class="terminal-title">DEFENDOOR.SCAN — @StateService.DisplayHostname</div>
         <div class="terminal-chip @StateService.ConsoleStatusClass">@StateService.ConsoleStatusText</div>
-        <button class="btn-scan" @onclick="StateService.ExecuteScanAsync" disabled="@StateService.IsScanning">
+        <button class="btn-scan" @onclick="() => StateService.ExecuteScanAsync()" disabled="@StateService.IsScanning">
             @if (StateService.IsScanning)
             {
                 <span class="dots-wave"><span></span><span></span><span></span><span></span><span></span></span>

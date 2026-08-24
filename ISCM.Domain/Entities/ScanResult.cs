@@ -5,18 +5,17 @@ namespace ISCM.Domain.Entities;
 
 public class ScanResult : BaseEntity
 {
-    public string Hostname { get; private set; } = string.Empty;
-    public string IpAddress { get; private set; } = string.Empty;
+    public string Hostname { get; set; } = string.Empty;
+    public string IpAddress { get; set; } = string.Empty;
     public string MacAddress { get; private set; } = string.Empty;
-    public string OsVersion { get; private set; } = string.Empty;
-    public string OsBuild { get; private set; } = string.Empty;
+    public string OsVersion { get; set; } = string.Empty;
+    public string OsBuild { get; set; } = string.Empty;
     public ScanMode Mode { get; private set; }
     public DateTimeOffset StartedAtUtc { get; private set; }
     public DateTimeOffset? CompletedAtUtc { get; private set; }
 
     private readonly List<Finding> _findings = new();
-    public IReadOnlyCollection<Finding> Findings => _findings.AsReadOnly();
-
+    public List<Finding> Findings { get; set; } = new();
     private ScanResult() { }
 
     public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)

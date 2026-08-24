@@ -5,6 +5,7 @@
 @using ISCM.Domain.Entities
 @using ISCM.Domain.Enums
 @using ISCM.Web.Services
+@using ISCM.Application.Interfaces
 @inject ScanStateService StateService
 @inject IJSRuntime JS
 @inject IControlEvaluator ControlEvaluator
@@ -670,6 +671,14 @@
                                         <div class="subcheck-dest">@f.CurrentValue</div>
                                     </div>
                                     <div class="subcheck-expected">Expected: @f.ExpectedValue</div>
+
+                                    <!-- ✅ Phase 2.4: دکمه Rescan برای SubControl -->
+                                    <button class="bulk-btn"
+                                            @onclick="() => RescanSubControl(parent.Definition.ControlId, f.CheckId)"
+                                            @onclick:stopPropagation="true"
+                                            title="Rescan this specific setting">
+                                        🔄
+                                    </button>
                                 </div>
                             }
                         </div>
@@ -702,18 +711,14 @@
         public List<SubCheck> AllSubChecks { get; set; } = new();
     }
 
-    // ✅ FIX: محاسبه وضعیت والد به‌عنوان یک متد کمکی جداگانه (جداسازی مسئولیت‌ها)
     private CheckStatus CalculateParentStatus(List<Finding> findings)
     {
         if (!findings.Any()) return CheckStatus.Unknown;
-
-        // اولویت‌بندی وضعیت‌ها برای جلوگیری از False PASS
         if (findings.Any(f => f.Status == CheckStatus.Error)) return CheckStatus.Error;
         if (findings.Any(f => f.Status == CheckStatus.Fail)) return CheckStatus.Fail;
         if (findings.Any(f => f.Status == CheckStatus.Unknown)) return CheckStatus.Unknown;
         if (findings.All(f => f.Status == CheckStatus.Pass)) return CheckStatus.Pass;
-
-        return CheckStatus.Unknown; // Fallback
+        return CheckStatus.Unknown;
     }
 
     private List<ParentControlView> GetParentControls()
@@ -729,14 +734,13 @@
 
             if (!findings.Any() && !control.IsBaseline) continue;
 
-            // ✅ استفاده از ControlEvaluator به جای متد محلی
             var controlResult = ControlEvaluator.EvaluateFromFindings(control, findings);
 
             var parent = new ParentControlView
                 {
                     Definition = control,
                     Findings = findings,
-                    CalculatedStatus = controlResult.Status, // ✅ از ControlResult گرفته می‌شود
+                    CalculatedStatus = controlResult.Status,
                     AllSubChecks = findings.SelectMany(f => f.SubChecks).ToList()
                 };
 
@@ -824,7 +828,7 @@
     private async Task BulkRescan()
     {
         foreach (var f in GetSelectedFindings().ToList())
-            await StateService.RescanSingleCheckAsync(f.CheckId);
+            await StateService.RescanCheckAsync(f.CheckId);
         ClearSelection();
     }
 
@@ -875,6 +879,12 @@
         if (!ExpandedIds.Add(id)) ExpandedIds.Remove(id);
     }
     private void OnDrawerClose() { SelectedFinding = null; SelectedSub = null; }
+
+    // ✅ Phase 2.4: متد Rescan برای SubControl
+    private async Task RescanSubControl(string controlId, string subControlId)
+    {
+        await StateService.RescanSubControlAsync(controlId, subControlId);
+    }
 
     private async Task DownloadFindingsAsCsv(List<Finding> items, string filename)
     {
