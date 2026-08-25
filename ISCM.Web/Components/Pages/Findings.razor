@@ -594,7 +594,7 @@
 
     <div class="bulk-bar @(SelectedFindingIds.Count > 0 ? "visible" : "")">
         <span class="bulk-count">@SelectedFindingIds.Count selected</span>
-        <button class="bulk-btn" @onclick="BulkRescan">🔄 Rescan</button>
+        <button class="bulk-btn" @onclick="BulkRescan"> Rescan</button>
         <button class="bulk-btn" @onclick="BulkIgnore">🚫 Ignore</button>
         <button class="bulk-btn" @onclick="BulkMarkFp">🏳️ Mark FP</button>
         <button class="bulk-btn" @onclick="BulkExport">📤 Export Selected</button>
@@ -672,7 +672,7 @@
                                     </div>
                                     <div class="subcheck-expected">Expected: @f.ExpectedValue</div>
 
-                                    <!-- ✅ Phase 2.4: دکمه Rescan برای SubControl -->
+                                    <!-- ✅ Phase 2.5: دکمه Rescan برای SubControl -->
                                     <button class="bulk-btn"
                                             @onclick="() => RescanSubControl(parent.Definition.ControlId, f.CheckId)"
                                             @onclick:stopPropagation="true"
@@ -711,26 +711,28 @@
         public List<SubCheck> AllSubChecks { get; set; } = new();
     }
 
-    private CheckStatus CalculateParentStatus(List<Finding> findings)
-    {
-        if (!findings.Any()) return CheckStatus.Unknown;
-        if (findings.Any(f => f.Status == CheckStatus.Error)) return CheckStatus.Error;
-        if (findings.Any(f => f.Status == CheckStatus.Fail)) return CheckStatus.Fail;
-        if (findings.Any(f => f.Status == CheckStatus.Unknown)) return CheckStatus.Unknown;
-        if (findings.All(f => f.Status == CheckStatus.Pass)) return CheckStatus.Pass;
-        return CheckStatus.Unknown;
-    }
-
     private List<ParentControlView> GetParentControls()
     {
         if (StateService.CurrentScanResult == null) return new();
 
         var allFindings = StateService.CurrentScanResult.Findings.ToList();
+        Console.WriteLine($"[DEBUG FINDINGS] Total findings available: {allFindings.Count}");
+
+        if (allFindings.Any())
+        {
+            Console.WriteLine($"[DEBUG FINDINGS] First finding CheckId: '{allFindings.First().CheckId}'");
+        }
+
         var parents = new List<ParentControlView>();
 
         foreach (var control in ControlCatalog.GetAll())
         {
             var findings = ControlCatalog.GetFindingsForControl(control, allFindings).ToList();
+
+            // 🔍 DEBUG LOG: بررسی دقیق دلیل عدم تطابق
+            Console.WriteLine($"[DEBUG FINDINGS] Control '{control.ControlId}' ({control.Title})");
+            Console.WriteLine($"  -> TechnicalCheckIds: [{string.Join(", ", control.TechnicalCheckIds)}]");
+            Console.WriteLine($"  -> Findings matched: {findings.Count}");
 
             if (!findings.Any() && !control.IsBaseline) continue;
 
@@ -756,6 +758,13 @@
         {
             var parents = GetParentControls();
 
+            // ✅ فیلتر بر اساس دسته‌بندی انتخاب‌شده (از داشبورد یا منوی بالا)
+            if (!string.IsNullOrWhiteSpace(SelectedCategory))
+            {
+                parents = parents.Where(p => p.Definition.Category.ToString() == SelectedCategory).ToList();
+            }
+
+            // فیلتر بر اساس وضعیت (All, Baseline, Extended, Fail, Pass, Unknown)
             if (SelectedFilter == "Baseline")
             {
                 parents = parents.Where(p => p.Definition.IsBaseline).ToList();
@@ -781,6 +790,7 @@
                 parents = parents.Where(p => p.Definition.IsBaseline).ToList();
             }
 
+            // فیلتر جستجو (Search)
             if (!string.IsNullOrWhiteSpace(SearchTerm))
             {
                 parents = parents.Where(p =>
@@ -789,9 +799,26 @@
                 ).ToList();
             }
 
+            // ✅ مرتب‌سازی سفارشی: ابتدا Baseline (01-17)، سپس Extended، سپس ERDC/Mining
             return parents
-                .OrderBy(p => p.CalculatedStatus == CheckStatus.Fail ? 0 :
-                              p.CalculatedStatus == CheckStatus.Unknown ? 1 : 2)
+                .OrderBy(p =>
+                {
+                    if (p.Definition.IsBaseline)
+                    {
+                        if (int.TryParse(p.Definition.ControlId, out var num))
+                            return (0, num); // اولویت 0: Baseline، مرتب‌سازی عددی
+                        return (0, 999);
+                    }
+                    else if (p.Definition.ControlId.StartsWith("EXT-"))
+                    {
+                        return (1, 0); // اولویت 1: Extended
+                    }
+                    else if (p.Definition.ControlId.StartsWith("ERDC-"))
+                    {
+                        return (2, 0); // اولویت 2: ERDC/Mining
+                    }
+                    return (3, 0); // سایر
+                })
                 .ThenBy(p => p.Definition.ControlId)
                 .ToList();
         }
@@ -880,7 +907,7 @@
     }
     private void OnDrawerClose() { SelectedFinding = null; SelectedSub = null; }
 
-    // ✅ Phase 2.4: متد Rescan برای SubControl
+    // ✅ Phase 2.5: متد Rescan برای SubControl
     private async Task RescanSubControl(string controlId, string subControlId)
     {
         await StateService.RescanSubControlAsync(controlId, subControlId);

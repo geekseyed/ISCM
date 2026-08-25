@@ -242,7 +242,7 @@ public class ScanStateService
     }
 
     /// <summary>
-    /// Phase 2.4: SubControl-aware Rescan
+    /// Phase 2.5: SubControl-aware Rescan
     /// </summary>
     public async Task RescanSubControlAsync(string checkId, string subControlId)
     {

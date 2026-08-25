@@ -37,17 +37,17 @@
         gap: 8px;
     }
 
-    .btn-scan:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
-    }
+        .btn-scan:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.6);
+        }
 
-    .btn-scan:disabled {
-        background: #475569;
-        cursor: not-allowed;
-        box-shadow: none;
-        transform: none;
-    }
+        .btn-scan:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
 
     .dots-wave {
         display: inline-flex;
@@ -55,23 +55,44 @@
         align-items: center;
     }
 
-    .dots-wave span {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #ffffff;
-        animation: dotWave 1.2s infinite ease-in-out;
-    }
+        .dots-wave span {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #ffffff;
+            animation: dotWave 1.2s infinite ease-in-out;
+        }
 
-    .dots-wave span:nth-child(1) { animation-delay: 0s; }
-    .dots-wave span:nth-child(2) { animation-delay: 0.1s; }
-    .dots-wave span:nth-child(3) { animation-delay: 0.2s; }
-    .dots-wave span:nth-child(4) { animation-delay: 0.3s; }
-    .dots-wave span:nth-child(5) { animation-delay: 0.4s; }
+            .dots-wave span:nth-child(1) {
+                animation-delay: 0s;
+            }
+
+            .dots-wave span:nth-child(2) {
+                animation-delay: 0.1s;
+            }
+
+            .dots-wave span:nth-child(3) {
+                animation-delay: 0.2s;
+            }
+
+            .dots-wave span:nth-child(4) {
+                animation-delay: 0.3s;
+            }
+
+            .dots-wave span:nth-child(5) {
+                animation-delay: 0.4s;
+            }
 
     @@keyframes dotWave {
-        0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-        30% { transform: translateY(-6px); opacity: 1; }
+        0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.5;
+        }
+
+        30% {
+            transform: translateY(-6px);
+            opacity: 1;
+        }
     }
 
     .neon-terminal {
@@ -84,13 +105,13 @@
         margin-bottom: 10px;
     }
 
-    .neon-terminal::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 3px);
-        pointer-events: none;
-    }
+        .neon-terminal::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0px, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 3px);
+            pointer-events: none;
+        }
 
     .terminal-header {
         display: flex;
@@ -101,10 +122,10 @@
         border-bottom: 1px solid rgba(6, 182, 212, 0.25);
     }
 
-    .terminal-header .btn-scan {
-        padding: 6px 16px;
-        font-size: 12px;
-    }
+        .terminal-header .btn-scan {
+            padding: 6px 16px;
+            font-size: 12px;
+        }
 
     .terminal-dots {
         display: flex;
@@ -112,12 +133,12 @@
         align-items: center;
     }
 
-    .terminal-dots span {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        transition: all 0.15s ease;
-    }
+        .terminal-dots span {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: all 0.15s ease;
+        }
 
     .t-dot-red {
         background: #4a1515;
@@ -142,9 +163,17 @@
     }
 
     @@keyframes dotPulse {
-        0% { transform: scale(1); }
-        40% { transform: scale(1.7); }
-        100% { transform: scale(1); }
+        0% {
+            transform: scale(1);
+        }
+
+        40% {
+            transform: scale(1.7);
+        }
+
+        100% {
+            transform: scale(1);
+        }
     }
 
     .terminal-title {
@@ -166,23 +195,23 @@
         white-space: nowrap;
     }
 
-    .terminal-chip.scanning {
-        color: #ffb020;
-        border-color: rgba(255, 176, 32, 0.5);
-        text-shadow: 0 0 8px rgba(255, 176, 32, 0.7);
-    }
+        .terminal-chip.scanning {
+            color: #ffb020;
+            border-color: rgba(255, 176, 32, 0.5);
+            text-shadow: 0 0 8px rgba(255, 176, 32, 0.7);
+        }
 
-    .terminal-chip.complete {
-        color: #00ff9c;
-        border-color: rgba(0, 255, 156, 0.5);
-        text-shadow: 0 0 8px rgba(0, 255, 156, 0.7);
-    }
+        .terminal-chip.complete {
+            color: #00ff9c;
+            border-color: rgba(0, 255, 156, 0.5);
+            text-shadow: 0 0 8px rgba(0, 255, 156, 0.7);
+        }
 
-    .terminal-chip.failed {
-        color: #ff3860;
-        border-color: rgba(255, 56, 96, 0.5);
-        text-shadow: 0 0 8px rgba(255, 56, 96, 0.7);
-    }
+        .terminal-chip.failed {
+            color: #ff3860;
+            border-color: rgba(255, 56, 96, 0.5);
+            text-shadow: 0 0 8px rgba(255, 56, 96, 0.7);
+        }
 
     .terminal-body {
         height: 220px;
@@ -197,12 +226,34 @@
         scrollbar-color: #164e63 #04060c;
     }
 
-    .log-placeholder { color: #475569; }
-    .log-info { color: #7dd3fc; text-shadow: 0 0 6px rgba(125, 211, 252, 0.45); }
-    .log-pass { color: #00ff9c; text-shadow: 0 0 8px rgba(0, 255, 156, 0.55); }
-    .log-fail { color: #ff3860; text-shadow: 0 0 8px rgba(255, 56, 96, 0.55); }
-    .log-warn { color: #ffb020; text-shadow: 0 0 8px rgba(255, 176, 32, 0.55); }
-    .terminal-prompt { color: #06b6d4; text-shadow: 0 0 8px rgba(6, 182, 212, 0.7); }
+    .log-placeholder {
+        color: #475569;
+    }
+
+    .log-info {
+        color: #7dd3fc;
+        text-shadow: 0 0 6px rgba(125, 211, 252, 0.45);
+    }
+
+    .log-pass {
+        color: #00ff9c;
+        text-shadow: 0 0 8px rgba(0, 255, 156, 0.55);
+    }
+
+    .log-fail {
+        color: #ff3860;
+        text-shadow: 0 0 8px rgba(255, 56, 96, 0.55);
+    }
+
+    .log-warn {
+        color: #ffb020;
+        text-shadow: 0 0 8px rgba(255, 176, 32, 0.55);
+    }
+
+    .terminal-prompt {
+        color: #06b6d4;
+        text-shadow: 0 0 8px rgba(6, 182, 212, 0.7);
+    }
 
     .terminal-cursor {
         display: inline-block;
@@ -215,7 +266,11 @@
         animation: blink 1s steps(1) infinite;
     }
 
-    @@keyframes blink { 50% { opacity: 0; } }
+    @@keyframes blink {
+        50% {
+            opacity: 0;
+        }
+    }
 
     .terminal-footer {
         display: flex;
@@ -233,7 +288,9 @@
         border-right: 1px solid rgba(6, 182, 212, 0.12);
     }
 
-    .summary-item:last-child { border-right: none; }
+        .summary-item:last-child {
+            border-right: none;
+        }
 
     .summary-num {
         font-size: 14px;
@@ -242,11 +299,26 @@
         color: #e2e8f0;
     }
 
-    .summary-num.pass { color: #00ff9c; text-shadow: 0 0 8px rgba(0, 255, 156, 0.5); }
-    .summary-num.fail { color: #ff3860; text-shadow: 0 0 8px rgba(255, 56, 96, 0.5); }
-    .summary-num.warn { color: #ffb020; text-shadow: 0 0 8px rgba(255, 176, 32, 0.5); }
+        .summary-num.pass {
+            color: #00ff9c;
+            text-shadow: 0 0 8px rgba(0, 255, 156, 0.5);
+        }
 
-    .summary-label { font-size: 9px; color: #64748b; text-transform: uppercase; }
+        .summary-num.fail {
+            color: #ff3860;
+            text-shadow: 0 0 8px rgba(255, 56, 96, 0.5);
+        }
+
+        .summary-num.warn {
+            color: #ffb020;
+            text-shadow: 0 0 8px rgba(255, 176, 32, 0.5);
+        }
+
+    .summary-label {
+        font-size: 9px;
+        color: #64748b;
+        text-transform: uppercase;
+    }
 
     .two-col {
         display: grid;
@@ -280,13 +352,16 @@
         cursor: pointer;
     }
 
-    .btn-edit:hover { background: #475569; }
-    .btn-edit:disabled {
-        background: #1e293b;
-        color: #475569;
-        cursor: not-allowed;
-        opacity: 0.5;
-    }
+        .btn-edit:hover {
+            background: #475569;
+        }
+
+        .btn-edit:disabled {
+            background: #1e293b;
+            color: #475569;
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
 
     .score-layout {
         display: flex;
@@ -301,10 +376,25 @@
         flex-shrink: 0;
     }
 
-    .score-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-    .score-ring circle { fill: none; stroke-width: 8; }
-    .ring-bg { stroke: rgba(255, 255, 255, 0.1); }
-    .ring-fill { stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+        .score-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .score-ring circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+    .ring-bg {
+        stroke: rgba(255, 255, 255, 0.1);
+    }
+
+    .ring-fill {
+        stroke-linecap: round;
+        transition: stroke-dashoffset 0.5s ease;
+    }
 
     .score-value {
         position: absolute;
@@ -314,8 +404,18 @@
         text-align: center;
     }
 
-    .score-percent { font-size: 22px; font-weight: 800; line-height: 1; color: #e2e8f0; }
-    .score-grade-text { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+    .score-percent {
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1;
+        color: #e2e8f0;
+    }
+
+    .score-grade-text {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 2px;
+    }
 
     .score-stats {
         flex-grow: 1;
@@ -334,15 +434,43 @@
         padding-bottom: 6px;
     }
 
-    .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .stat-dot.pass { background: #10b981; }
-    .stat-dot.fail { background: #ef4444; }
-    .stat-dot.warn { background: #f59e0b; }
+    .stat-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
 
-    .stat-num { font-size: 15px; font-weight: 700; font-family: 'Consolas', monospace; margin-left: auto; color: #e2e8f0; }
-    .stat-num.pass { color: #10b981; }
-    .stat-num.fail { color: #ef4444; }
-    .stat-num.warn { color: #f59e0b; }
+        .stat-dot.pass {
+            background: #10b981;
+        }
+
+        .stat-dot.fail {
+            background: #ef4444;
+        }
+
+        .stat-dot.warn {
+            background: #f59e0b;
+        }
+
+    .stat-num {
+        font-size: 15px;
+        font-weight: 700;
+        font-family: 'Consolas', monospace;
+        margin-left: auto;
+        color: #e2e8f0;
+    }
+
+        .stat-num.pass {
+            color: #10b981;
+        }
+
+        .stat-num.fail {
+            color: #ef4444;
+        }
+
+        .stat-num.warn {
+            color: #f59e0b;
+        }
 
     .donut-section {
         display: flex;
@@ -353,8 +481,18 @@
         border-top: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .donut-chart { position: relative; width: 70px; height: 70px; flex-shrink: 0; }
-    .donut-chart svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+    .donut-chart {
+        position: relative;
+        width: 70px;
+        height: 70px;
+        flex-shrink: 0;
+    }
+
+        .donut-chart svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
 
     .donut-center {
         position: absolute;
@@ -364,19 +502,57 @@
         text-align: center;
     }
 
-    .donut-num { font-size: 14px; font-weight: 700; color: #e2e8f0; }
-    .donut-label { font-size: 8px; color: #64748b; text-transform: uppercase; }
+    .donut-num {
+        font-size: 14px;
+        font-weight: 700;
+        color: #e2e8f0;
+    }
 
-    .donut-legend { display: flex; flex-direction: column; gap: 5px; }
+    .donut-label {
+        font-size: 8px;
+        color: #64748b;
+        text-transform: uppercase;
+    }
 
-    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; }
+    .donut-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
 
-    .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .legend-dot.pass { background: #10b981; }
-    .legend-dot.fail { background: #ef4444; }
-    .legend-dot.warn { background: #f59e0b; }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #94a3b8;
+    }
 
-    .legend-num { font-weight: bold; font-family: 'Consolas', monospace; margin-left: auto; color: #e2e8f0; }
+    .legend-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+        .legend-dot.pass {
+            background: #10b981;
+        }
+
+        .legend-dot.fail {
+            background: #ef4444;
+        }
+
+        .legend-dot.warn {
+            background: #f59e0b;
+        }
+
+    .legend-num {
+        font-weight: bold;
+        font-family: 'Consolas', monospace;
+        margin-left: auto;
+        color: #e2e8f0;
+    }
 
     .sys-row {
         display: flex;
@@ -387,8 +563,17 @@
         font-size: 13px;
     }
 
-    .sys-label { color: #64748b; text-transform: uppercase; font-size: 11px; }
-    .sys-value { color: #e2e8f0; font-family: 'Consolas', monospace; font-weight: bold; }
+    .sys-label {
+        color: #64748b;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
+
+    .sys-value {
+        color: #e2e8f0;
+        font-family: 'Consolas', monospace;
+        font-weight: bold;
+    }
 
     .sys-input {
         background: #0f172a;
@@ -401,7 +586,11 @@
         width: 55%;
     }
 
-    .edit-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .edit-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
 
     .btn-save {
         background: #10b981;
@@ -441,16 +630,49 @@
         transition: 0.3s;
     }
 
-    .category-card:hover { border-color: #06b6d4; transform: translateY(-2px); }
+        .category-card:hover {
+            border-color: #06b6d4;
+            transform: translateY(-2px);
+        }
 
-    .category-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .category-title { color: #94a3b8; font-size: 11px; font-weight: bold; text-transform: uppercase; }
-    .category-pct { font-weight: 800; font-family: 'Consolas', monospace; font-size: 14px; }
+    .category-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
 
-    .progress-track { height: 4px; background: #1e293b; border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
-    .progress-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+    .category-title {
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
 
-    .category-sub { color: #64748b; font-size: 10px; }
+    .category-pct {
+        font-weight: 800;
+        font-family: 'Consolas', monospace;
+        font-size: 14px;
+    }
+
+    .progress-track {
+        height: 4px;
+        background: #1e293b;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.5s ease;
+    }
+
+    .category-sub {
+        color: #64748b;
+        font-size: 10px;
+    }
 </style>
 
 <div class="neon-terminal">
@@ -490,7 +712,6 @@
         {
             foreach (var log in StateService.ConsoleLogs.AsEnumerable().Reverse())
             {
-                @* EDIT (گروه C - C6): شناسایی خطوط تست و indent آن‌ها *@
                 @if (log.TrimStart().StartsWith("├─") || log.TrimStart().StartsWith("└─"))
                 {
                     <div class="@GetLogClass(log)" style="margin-left: 24px; font-size: 11px;">@log</div>
@@ -603,7 +824,7 @@
         var barColor = GetBarColor(pct);
         <a href="@($"/findings?category={group.Category}")" class="category-card">
             <div class="category-head">
-                <div class="category-title">@group.Category</div>
+                <div class="category-title">@GetCategoryLabel(group.Category)</div>
                 <div class="category-pct" style="color: @barColor;">@(group.HasResult ? $"{pct}%" : "—")</div>
             </div>
             <div class="progress-track">
@@ -660,16 +881,19 @@
 
     private void CalculateCategoryBreakdown()
     {
+        var allFindings = StateService.CurrentScanResult?.Findings ?? new List<Finding>();
+
         CategoryBreakdown = Enum.GetValues(typeof(CheckCategory)).Cast<CheckCategory>().Select(c =>
         {
-            var findings = StateService.CurrentScanResult?.Findings.Where(f => f.Category == c).ToList() ?? new List<Finding>();
+            var findings = allFindings.Where(f => f.Category == c).ToList();
+
             return new CategoryStat
-            {
-                Category = c.ToString(),
-                PassCount = findings.Count(f => f.Status == CheckStatus.Pass),
-                FailCount = findings.Count(f => f.Status == CheckStatus.Fail),
-                HasResult = StateService.CurrentScanResult != null
-            };
+                {
+                    Category = c.ToString(),
+                    PassCount = findings.Count(f => f.Status == CheckStatus.Pass),
+                    FailCount = findings.Count(f => f.Status == CheckStatus.Fail),
+                    HasResult = StateService.CurrentScanResult != null
+                };
         }).ToList();
     }
 
@@ -678,6 +902,19 @@
 
     private static string GetBarColor(int pct)
         => pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
+
+    // ✅ متد تبدیل نام دسته‌بندی‌ها به برچسب‌های حرفه‌ای (فقط یک بار تعریف شده)
+    private string GetCategoryLabel(string category)
+    {
+        return category switch
+        {
+            "Account" => "Account & Access Policies",
+            "Network" => "Network & Communication Security",
+            "System" => "System Hardening & Protections",
+            "Audit" => "Auditing, Logging & Monitoring",
+            _ => category
+        };
+    }
 
     private string PassedDisplay
     {
@@ -733,12 +970,5 @@
     public void Dispose()
     {
         StateService.OnChange -= HandleStateChanged;
-    }
-    // EDIT (گروه C - C6): تشخیص رنگ برای خطوط تست
-    private static string GetTestClass(string log)
-    {
-        if (log.Contains("Pass ✓")) return "log-pass";
-        if (log.Contains("Fail ✗")) return "log-fail";
-        return "log-info";
     }
 }
