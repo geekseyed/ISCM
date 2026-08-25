@@ -75,6 +75,57 @@ public class ControlEvaluator : IControlEvaluator
         return controlResult;
     }
 
+    public Finding EvaluateFromSubControls(ControlDefinition controlDefinition, List<SubControlResult> subControlResults)
+    {
+        var controlResult = Evaluate(controlDefinition, subControlResults);
+        var allEvidence = subControlResults.SelectMany(s => s.EvidenceItems).ToList();
+
+        // استفاده از اولین TechnicalCheckId
+        var primaryCheckId = controlDefinition.TechnicalCheckIds.FirstOrDefault() ?? controlDefinition.ControlId;
+
+        // DEBUG LOG
+        Console.WriteLine($"[DEBUG] EvaluateFromSubControls:");
+        Console.WriteLine($"  - ControlId: {controlDefinition.ControlId}");
+        Console.WriteLine($"  - Title: {controlDefinition.Title}");
+        Console.WriteLine($"  - TechnicalCheckIds: {string.Join(", ", controlDefinition.TechnicalCheckIds)}");
+        Console.WriteLine($"  - PrimaryCheckId (for Finding): {primaryCheckId}");
+        Console.WriteLine($"  - SubControlResults count: {subControlResults.Count}");
+
+        var finding = new Finding(
+            primaryCheckId,
+            controlDefinition.Title,
+            controlDefinition.Category,
+            controlDefinition.Severity,
+            controlResult.Status,
+            allEvidence.FirstOrDefault()?.RawOutput ?? "No evidence collected",
+            subControlResults.FirstOrDefault()?.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
+            controlDefinition.Description,
+            errorMessage: null,
+            description: controlDefinition.Description,
+            registryPath: string.Empty,
+            cisReference: controlDefinition.BaselineId,
+            riskScore: (int)controlDefinition.Severity * 20,
+            sourceType: "Multi-Source Evidence",
+            sourceCommand: string.Join(", ", allEvidence.Select(e => e.SourceName).Distinct()),
+            fixTools: new List<string>()
+        );
+
+        Console.WriteLine($"  - Finding.CheckId: {finding.CheckId}");
+        Console.WriteLine($"  - Finding.Status: {finding.Status}");
+
+        foreach (var evidence in allEvidence)
+        {
+            finding.AddTestResult(new TestResult(
+                evidence.SourceType,
+                evidence.SourceName,
+                evidence.Evaluation == CheckStatus.Pass,
+                evidence.RawOutput
+            ));
+        }
+
+        return finding;
+    }
+
     public ControlResult EvaluateFromFindings(
         ControlDefinition controlDefinition,
         IEnumerable<Finding> findings)
@@ -85,7 +136,7 @@ public class ControlEvaluator : IControlEvaluator
         {
             SubControlId = f.CheckId,
             Status = f.Status,
-            EvidenceItems = new List<Evidence> 
+            EvidenceItems = new List<Evidence>
             {
                 new Evidence
                 {

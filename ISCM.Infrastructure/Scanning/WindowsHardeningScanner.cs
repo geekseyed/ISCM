@@ -1,4 +1,5 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Evaluators;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -14,15 +15,18 @@ public class WindowsHardeningScanner : IScanService
     private readonly WindowsSystemInfoCollector _systemInfoCollector;
     private readonly IEnumerable<IHardeningCheck> _checks;
     private readonly IMultiPathCheckValidator _multiPathValidator;
+    private readonly IControlEvaluator _controlEvaluator;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
         IEnumerable<IHardeningCheck> checks,
-        IMultiPathCheckValidator multiPathValidator)
+        IMultiPathCheckValidator multiPathValidator,
+        IControlEvaluator controlEvaluator)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
         _multiPathValidator = multiPathValidator ?? throw new ArgumentNullException(nameof(multiPathValidator));
+        _controlEvaluator = controlEvaluator ?? throw new ArgumentNullException(nameof(controlEvaluator));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -48,14 +52,28 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
-                var finding = await check.EvaluateAsync();
+                // Phase 2.5: Use EvaluateSubControlsAsync for detailed evaluation
+                var subControlResults = await check.EvaluateSubControlsAsync();
 
+                // Validate multi-path tests if applicable
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
+
+                    // Add test results to evidence
                     foreach (var result in testResults)
                     {
-                        finding.AddTestResult(result);
+                        foreach (var subResult in subControlResults)
+                        {
+                            subResult.EvidenceItems.Add(new Evidence
+                            {
+                                SourceType = result.TestMethod,
+                                SourceName = result.TestName,
+                                RawOutput = result.Details,
+                                Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
+                                Timestamp = DateTime.UtcNow
+                            });
+                        }
                     }
 
                     if (testResults.Count >= 3)
@@ -78,6 +96,26 @@ public class WindowsHardeningScanner : IScanService
                         progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
                     }
                 }
+
+                // Get the control definition from catalog
+                var controlDefinition = ControlCatalog.GetByCheckId(check.CheckId);
+                if (controlDefinition == null)
+                {
+                    // Fallback: create a simple definition using check.CheckId as both ControlId and TechnicalCheckId
+                    controlDefinition = new ControlDefinition
+                    {
+                        ControlId = check.CheckId,  // ✅ استفاده از CheckId به جای ControlId عددی
+                        Title = check.Name,
+                        Category = check.Category,
+                        Severity = check.Severity,
+                        IsBaseline = true,
+                        TechnicalCheckIds = new() { check.CheckId },  // ✅ تنظیم TechnicalCheckIds
+                        SubControls = new()
+                    };
+                }
+
+                // ✅ استفاده از EvaluateFromSubControls برای ایجاد Finding با CheckId صحیح
+                var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
 
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
@@ -112,25 +150,36 @@ public class WindowsHardeningScanner : IScanService
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
 
-        return await check.EvaluateAsync();
+        var subControlResults = await check.EvaluateSubControlsAsync();
+        var controlDefinition = ControlCatalog.GetByCheckId(checkId);
+
+        if (controlDefinition == null)
+        {
+            controlDefinition = new ControlDefinition
+            {
+                ControlId = checkId,
+                Title = check.Name,
+                Category = check.Category,
+                Severity = check.Severity,
+                IsBaseline = true,
+                TechnicalCheckIds = new() { checkId },
+                SubControls = new()
+            };
+        }
+
+        return _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
     }
 
-    /// <summary>
-    /// Phase 2.4: SubControl-aware Rescan
-    /// Currently delegates to RescanCheckAsync because Checks still evaluate at the Parent level.
-    /// Once Phase 1.4 is fully applied to all Checks, this will evaluate only the specific SubControl.
-    /// </summary>
     public async Task<Finding> RescanSubControlAsync(string checkId, string subControlId)
     {
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
 
-        // Log the SubControl-specific rescan request
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
 
-        // For now, rescan the entire Parent Control
+        // For now, rescan the entire check
         // TODO: After full Phase 1.4 integration, evaluate only the specific SubControl
-        return await check.EvaluateAsync();
+        return await RescanCheckAsync(checkId);
     }
 
     private static string BuildResultLine(Finding finding)

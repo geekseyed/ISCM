@@ -1,27 +1,28 @@
-﻿using ISCM.Domain.Entities;
+﻿using ISCM.Application.Interfaces;
+using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace ISCM.Application.Interfaces;
+namespace ISCM.Infrastructure.Scanning.Checks;
 
-public interface IHardeningCheck
+/// <summary>
+/// Base class for all hardening checks. Provides default implementation for EvaluateSubControlsAsync.
+/// </summary>
+public abstract class BaseHardeningCheck : IHardeningCheck
 {
-    string CheckId { get; }
-    string Name { get; }
-    CheckCategory Category { get; }
-    CheckSeverity Severity { get; }
+    public abstract string CheckId { get; }
+    public abstract string Name { get; }
+    public abstract CheckCategory Category { get; }
+    public abstract CheckSeverity Severity { get; }
+
+    public abstract Task<Finding> EvaluateAsync();
 
     /// <summary>
-    /// Evaluates the check and returns a single Finding (legacy method).
+    /// Default implementation: delegates to EvaluateAsync and wraps result in a single SubControlResult.
+    /// Override this in concrete checks to provide detailed SubControl evaluation.
     /// </summary>
-    Task<Finding> EvaluateAsync();
-
-    /// <summary>
-    /// Phase 2.5: Evaluates all SubControls independently and returns detailed results with Evidence.
-    /// Default implementation wraps EvaluateAsync() result. Concrete checks can override for detailed evaluation.
-    /// </summary>
-    async Task<List<SubControlResult>> EvaluateSubControlsAsync()
+    public virtual async Task<List<SubControlResult>> EvaluateSubControlsAsync()
     {
         var finding = await EvaluateAsync();
 
