@@ -1,5 +1,6 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Application.Evaluators;
+using ISCM.Application.Services;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -16,17 +17,20 @@ public class WindowsHardeningScanner : IScanService
     private readonly IEnumerable<IHardeningCheck> _checks;
     private readonly IMultiPathCheckValidator _multiPathValidator;
     private readonly IControlEvaluator _controlEvaluator;
+    private readonly IBaselineService _baselineService; // ✅ فیلد اضافه شد
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
         IEnumerable<IHardeningCheck> checks,
         IMultiPathCheckValidator multiPathValidator,
-        IControlEvaluator controlEvaluator)
+        IControlEvaluator controlEvaluator,
+        IBaselineService baselineService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
         _multiPathValidator = multiPathValidator ?? throw new ArgumentNullException(nameof(multiPathValidator));
         _controlEvaluator = controlEvaluator ?? throw new ArgumentNullException(nameof(controlEvaluator));
+        _baselineService = baselineService ?? throw new ArgumentNullException(nameof(baselineService)); // ✅ مقداردهی اضافه شد
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -36,11 +40,15 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("[INFO] DefenDoor Scanner initialized");
         await Task.Delay(100);
 
-        progress?.Report($"[INFO] Loading baseline: windows11-pro-hardening.json ({TotalCheckCount} rules)");
+        var defaultBaseline = _baselineService.GetDefaultBaseline();
+        progress?.Report($"[INFO] Loading baseline: {defaultBaseline.Name} v{defaultBaseline.Version} ({TotalCheckCount} rules)");
         await Task.Delay(50);
 
         var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
         var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode);
+
+        // ✅ Phase 3.2: تنظیم BaselineId در ScanResult
+        scanResult.BaselineId = defaultBaseline.BaselineId;
 
         progress?.Report($"[INFO] Collecting system info... Hostname: {hostname}, IP: {ipAddress}");
         progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
@@ -104,12 +112,12 @@ public class WindowsHardeningScanner : IScanService
                     // Fallback: create a simple definition using check.CheckId as both ControlId and TechnicalCheckId
                     controlDefinition = new ControlDefinition
                     {
-                        ControlId = check.CheckId,  // ✅ استفاده از CheckId به جای ControlId عددی
+                        ControlId = check.CheckId,
                         Title = check.Name,
                         Category = check.Category,
                         Severity = check.Severity,
                         IsBaseline = true,
-                        TechnicalCheckIds = new() { check.CheckId },  // ✅ تنظیم TechnicalCheckIds
+                        TechnicalCheckIds = new() { check.CheckId },
                         SubControls = new()
                     };
                 }

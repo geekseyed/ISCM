@@ -812,6 +812,13 @@
             <div class="sys-row"><span class="sys-label">IP Address</span><span class="sys-value">@StateService.DisplayIpAddress</span></div>
             <div class="sys-row"><span class="sys-label">OS Version</span><span class="sys-value">@StateService.DisplayOsVersion</span></div>
             <div class="sys-row"><span class="sys-label">Build</span><span class="sys-value">@StateService.DisplayOsBuild</span></div>
+
+            <!-- ✅ Phase 3.4: نمایش نام Baseline فعال (در حالت عادی) -->
+            <div class="sys-row">
+                <span class="sys-label">Active Baseline</span>
+                <span class="sys-value" style="color: #06b6d4; font-size: 11px;">@StateService.BaselineName</span>
+            </div>
+
             <div class="sys-row"><span class="sys-label">Scan Time</span><span class="sys-value">@StateService.ScanTimeText</span></div>
         }
     </div>
@@ -903,7 +910,7 @@
     private static string GetBarColor(int pct)
         => pct >= 100 ? "#10b981" : pct >= 50 ? "#f59e0b" : "#ef4444";
 
-    // ✅ متد تبدیل نام دسته‌بندی‌ها به برچسب‌های حرفه‌ای (فقط یک بار تعریف شده)
+    // ✅ متد تبدیل نام دسته‌بندی‌ها به برچسب‌های حرفه‌ای
     private string GetCategoryLabel(string category)
     {
         return category switch

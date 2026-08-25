@@ -1,5 +1,6 @@
 ﻿using ISCM.Application.Evaluators;
 using ISCM.Application.Interfaces;
+using ISCM.Application.Services;
 using ISCM.Application.Validators;
 using ISCM.Infrastructure.Reporting;
 using ISCM.Infrastructure.Scanning;
@@ -40,6 +41,8 @@ builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
 
 // ✅ Phase 2.5: ثبت IControlEvaluator
 builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
+// ✅ Phase 3.3: ثبت IBaselineService
+builder.Services.AddSingleton<IBaselineService, BaselineService>();
 
 builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
 builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();

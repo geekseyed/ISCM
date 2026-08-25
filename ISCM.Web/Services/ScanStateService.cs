@@ -58,6 +58,9 @@ public class ScanStateService
     // --- Last Check Result ---
     public Finding? LastCheckResult { get; private set; }
 
+    // --- Baseline Info (Phase 3.2) ---
+    public string BaselineName { get; private set; } = "Hosseini Standard v1.0";
+
     public ScanStateService(IServiceProvider? serviceProvider = null)
     {
         _serviceProvider = serviceProvider;
@@ -70,6 +73,21 @@ public class ScanStateService
     {
         _currentScanResult = result;
         UpdateDisplayInfo();
+
+        // ✅ Phase 3.2: به‌روزرسانی نام Baseline
+        if (!string.IsNullOrEmpty(result.BaselineId))
+        {
+            var baselineService = _serviceProvider?.GetService<IBaselineService>();
+            if (baselineService != null)
+            {
+                var baseline = baselineService.GetBaselineById(result.BaselineId);
+                if (baseline != null)
+                {
+                    BaselineName = $"{baseline.Name} v{baseline.Version}";
+                }
+            }
+        }
+
         NotifyStateChanged();
     }
 
