@@ -1,5 +1,8 @@
 ﻿using ISCM.Domain.Common;
 using ISCM.Domain.Enums;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ISCM.Domain.Entities;
 
@@ -15,7 +18,10 @@ public class ScanResult : BaseEntity
     public DateTimeOffset? CompletedAtUtc { get; private set; }
 
     private readonly List<Finding> _findings = new();
-    public List<Finding> Findings { get; set; } = new();
+
+    // ✅ اصلاح حیاتی: اتصال پراپرتی عمومی به لیست خصوصی
+    public List<Finding> Findings => _findings;
+
     private ScanResult() { }
 
     public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)
@@ -35,18 +41,19 @@ public class ScanResult : BaseEntity
     public void AddFinding(Finding finding)
     {
         ArgumentNullException.ThrowIfNull(finding);
-        if (_findings.Any(x => x.CheckId == finding.CheckId))
-            throw new InvalidOperationException($"Check '{finding.CheckId}' already exists in this scan.");
 
-        _findings.Add(finding);
-        MarkModified();
+        // ✅ اصلاح: به جای پرتاب خطا، یافتۀ قدیمی را جایگزین می‌کنیم تا از Duplicate جلوگیری شود
+        ReplaceFinding(finding);
     }
 
     public void ReplaceFinding(Finding finding)
     {
         ArgumentNullException.ThrowIfNull(finding);
         var existing = _findings.FirstOrDefault(x => x.CheckId == finding.CheckId);
-        if (existing != null) _findings.Remove(existing);
+        if (existing != null)
+        {
+            _findings.Remove(existing);
+        }
         _findings.Add(finding);
         MarkModified();
     }
@@ -61,13 +68,8 @@ public class ScanResult : BaseEntity
     public int FailCount => _findings.Count(f => f.Status == CheckStatus.Fail);
     public int WarningCount => _findings.Count(f => f.Status == CheckStatus.Unknown);
 
-    // EDIT (گام ۲۴): یافته‌های سرکوب‌شده (Ignored + FP) برای کارت KPI
     public int SuppressedCount => _findings.Count(f => f.IsSuppressed);
-
-    // EDIT (گام ۲۴): موارد بحرانی باز (Fail + Critical) برای کارت KPI
     public int CriticalOpenCount => _findings.Count(f => f.Status == CheckStatus.Fail && f.Severity == CheckSeverity.Critical);
-
-    // EDIT (گام ۲۴): ریسک باز (Fail + Warn) برای کارت KPI
     public int OpenRiskCount => _findings.Count(f => f.Status == CheckStatus.Fail || f.Status == CheckStatus.Unknown);
 
     public int ComplianceScore
@@ -75,12 +77,12 @@ public class ScanResult : BaseEntity
         get
         {
             if (_findings.Count == 0) return 0;
-            // EDIT: FalsePositive هم مثل Ignored/Error/NotScanned از مخرج امتیاز حذف می‌شود
             var eligibleChecks = _findings.Count(f =>
                 f.Status != CheckStatus.Error &&
                 f.Status != CheckStatus.NotScanned &&
                 f.Status != CheckStatus.Ignored &&
                 f.Status != CheckStatus.FalsePositive);
+
             if (eligibleChecks == 0) return 0;
             return (int)Math.Round((double)PassCount / eligibleChecks * 100);
         }
