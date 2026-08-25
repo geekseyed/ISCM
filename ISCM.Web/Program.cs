@@ -38,14 +38,16 @@ builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
 
+// ✅ Phase 2.5: ثبت IControlEvaluator
 builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
+
 builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
 builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 
-// ✅ Phase 2.4: Register ScanStateService with ServiceProvider injection
+// ✅ Phase 2.5: ثبت ScanStateService با ServiceProvider injection
 builder.Services.AddScoped<ScanStateService>(sp => new ScanStateService(sp));
 
 builder.Services.AddScoped<ScanHistoryService>();

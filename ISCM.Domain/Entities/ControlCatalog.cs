@@ -19,7 +19,7 @@ public static class ControlCatalog
         // 1. Password Policy (6 SubControls)
         new ControlDefinition
         {
-            ControlId = "01", BaselineId = "MNDCHI-01", Title = "Password Policy",
+            ControlId = "01", BaselineId = "Hosseini-01", Title = "Password Policy",
             Description = "Defines rules for password strength, age, and history to prevent weak or reused credentials.",
             Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "PWD-001" },
@@ -37,7 +37,7 @@ public static class ControlCatalog
         // 2. Account Lockout Policy (3 SubControls)
         new ControlDefinition
         {
-            ControlId = "02", BaselineId = "MNDCHI-02", Title = "Account Lockout Policy",
+            ControlId = "02", BaselineId = "Hosseini-02", Title = "Account Lockout Policy",
             Description = "Locks user accounts after repeated failed logon attempts to mitigate brute-force attacks.",
             Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "LCK-001" },
@@ -52,7 +52,7 @@ public static class ControlCatalog
         // 3. Disable Guest Account (2 SubControls)
         new ControlDefinition
         {
-            ControlId = "03", BaselineId = "MNDCHI-03", Title = "Disable Guest Account",
+            ControlId = "03", BaselineId = "Hosseini-03", Title = "Disable Guest Account",
             Description = "Removes the built-in Guest account as an attack vector for anonymous access.",
             Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsBaseline = true,
             TechnicalCheckIds = new() { "GUEST-001" },
@@ -66,7 +66,7 @@ public static class ControlCatalog
         // 4. Advanced Audit Policy Configuration (11 SubControls)
         new ControlDefinition
         {
-            ControlId = "04", BaselineId = "MNDCHI-04", Title = "Advanced Audit Policy Configuration",
+            ControlId = "04", BaselineId = "Hosseini-04", Title = "Advanced Audit Policy Configuration",
             Description = "Enables granular logging of security-relevant events for monitoring and forensics.",
             Category = CheckCategory.Audit, Severity = CheckSeverity.Medium, IsBaseline = true,
             TechnicalCheckIds = new() { "AUD-001" },
@@ -89,7 +89,7 @@ public static class ControlCatalog
         // 5. Process Creation Auditing (3 SubControls)
         new ControlDefinition
         {
-            ControlId = "05", BaselineId = "MNDCHI-05", Title = "Process Creation Auditing",
+            ControlId = "05", BaselineId = "Hosseini-05", Title = "Process Creation Auditing",
             Description = "Records every new process together with its full command line for deep forensic visibility.",
             Category = CheckCategory.Audit, Severity = CheckSeverity.Medium, IsBaseline = true,
             TechnicalCheckIds = new() { "PRC-001" },
@@ -104,7 +104,7 @@ public static class ControlCatalog
         // 6. PowerShell Script Block Logging (3 SubControls)
         new ControlDefinition
         {
-            ControlId = "06", BaselineId = "MNDCHI-06", Title = "PowerShell Script Block Logging",
+            ControlId = "06", BaselineId = "Hosseini-06", Title = "PowerShell Script Block Logging",
             Description = "Captures PowerShell script content and execution context to improve detection of malicious activity.",
             Category = CheckCategory.Audit, Severity = CheckSeverity.Medium, IsBaseline = true,
             TechnicalCheckIds = new() { "PSH-001" },
@@ -119,7 +119,7 @@ public static class ControlCatalog
         // 7. User Rights Assignment (9 SubControls)
         new ControlDefinition
         {
-            ControlId = "07", BaselineId = "MNDCHI-07", Title = "User Rights Assignment",
+            ControlId = "07", BaselineId = "Hosseini-07", Title = "User Rights Assignment",
             Description = "Controls which users or groups are allowed to perform sensitive system operations.",
             Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "URA-001" },
@@ -140,7 +140,7 @@ public static class ControlCatalog
         // 8. Security Options (13 SubControls)
         new ControlDefinition
         {
-            ControlId = "08", BaselineId = "MNDCHI-08", Title = "Security Options",
+            ControlId = "08", BaselineId = "Hosseini-08", Title = "Security Options",
             Description = "Hardens core operating-system security behaviors such as UAC, NTLM, SMB signing, and built-in account handling.",
             Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "UAC-001", "LM-001", "ADM-001" },
@@ -165,7 +165,7 @@ public static class ControlCatalog
         // 9. Disable CMD & Script Execution (3 SubControls)
         new ControlDefinition
         {
-            ControlId = "09", BaselineId = "MNDCHI-09", Title = "Disable CMD & Script Execution",
+            ControlId = "09", BaselineId = "Hosseini-09", Title = "Disable CMD & Script Execution",
             Description = "Blocks standard users from running cmd.exe and batch scripts, reducing attack surface.",
             Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsBaseline = true,
             TechnicalCheckIds = new() { "CMD-001" },
@@ -180,7 +180,7 @@ public static class ControlCatalog
         // 10. Windows Defender Firewall (16 SubControls)
         new ControlDefinition
         {
-            ControlId = "10", BaselineId = "MNDCHI-10", Title = "Windows Defender Firewall",
+            ControlId = "10", BaselineId = "Hosseini-10", Title = "Windows Defender Firewall",
             Description = "Ensures the host firewall is enabled on all profiles and blocks inbound connections by default.",
             Category = CheckCategory.Network, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "FW-001" },
@@ -208,7 +208,7 @@ public static class ControlCatalog
         // 11. Disable LLMNR & NetBIOS (7 SubControls)
         new ControlDefinition
         {
-            ControlId = "11", BaselineId = "MNDCHI-11", Title = "Disable LLMNR & NetBIOS",
+            ControlId = "11", BaselineId = "Hosseini-11", Title = "Disable LLMNR & NetBIOS",
             Description = "Disables legacy name-resolution behaviors commonly abused in poisoning and relay attacks.",
             Category = CheckCategory.Network, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "LLN-001" },
@@ -227,7 +227,7 @@ public static class ControlCatalog
         // 12. Credential Guard & LSA Protection (6 SubControls)
         new ControlDefinition
         {
-            ControlId = "12", BaselineId = "MNDCHI-12", Title = "Credential Guard & LSA Protection",
+            ControlId = "12", BaselineId = "Hosseini-12", Title = "Credential Guard & LSA Protection",
             Description = "Uses virtualization-based security and protected LSASS to reduce credential theft from memory.",
             Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsBaseline = true,
             TechnicalCheckIds = new() { "CRG-001" },
@@ -245,7 +245,7 @@ public static class ControlCatalog
         // 13. Disable SMBv1 (5 SubControls)
         new ControlDefinition
         {
-            ControlId = "13", BaselineId = "MNDCHI-13", Title = "Disable SMBv1",
+            ControlId = "13", BaselineId = "Hosseini-13", Title = "Disable SMBv1",
             Description = "Removes the legacy SMBv1 protocol and blocks related insecure compatibility fallbacks.",
             Category = CheckCategory.Network, Severity = CheckSeverity.Critical, IsBaseline = true,
             TechnicalCheckIds = new() { "SMB-001" },
@@ -262,7 +262,7 @@ public static class ControlCatalog
         // 14. Windows Update / Patch Management (4 SubControls)
         new ControlDefinition
         {
-            ControlId = "14", BaselineId = "MNDCHI-14", Title = "Windows Update / Patch Management",
+            ControlId = "14", BaselineId = "Hosseini-14", Title = "Windows Update / Patch Management",
             Description = "Manages automatic update behavior for patch management in isolated or WSUS-backed environments.",
             Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "WUP-001" },
@@ -278,7 +278,7 @@ public static class ControlCatalog
         // 15. Disable Autorun / Autoplay (3 SubControls)
         new ControlDefinition
         {
-            ControlId = "15", BaselineId = "MNDCHI-15", Title = "Disable Autorun / Autoplay",
+            ControlId = "15", BaselineId = "Hosseini-15", Title = "Disable Autorun / Autoplay",
             Description = "Stops Windows from auto-executing code on removable media.",
             Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsBaseline = true,
             TechnicalCheckIds = new() { "ARD-001" },
@@ -293,7 +293,7 @@ public static class ControlCatalog
         // 16. Secure RDP (7 SubControls)
         new ControlDefinition
         {
-            ControlId = "16", BaselineId = "MNDCHI-16", Title = "Secure RDP",
+            ControlId = "16", BaselineId = "Hosseini-16", Title = "Secure RDP",
             Description = "Hardens Remote Desktop with NLA, stronger encryption, and session limits.",
             Category = CheckCategory.Network, Severity = CheckSeverity.High, IsBaseline = true,
             TechnicalCheckIds = new() { "RDP-001" },
@@ -312,7 +312,7 @@ public static class ControlCatalog
         // 17. Event Log Size & Retention (13 SubControls)
         new ControlDefinition
         {
-            ControlId = "17", BaselineId = "MNDCHI-17", Title = "Event Log Size & Retention",
+            ControlId = "17", BaselineId = "Hosseini-17", Title = "Event Log Size & Retention",
             Description = "Increases log capacity and clarifies where size, retention, and automatic backup options are actually configured.",
             Category = CheckCategory.Audit, Severity = CheckSeverity.Low, IsBaseline = true,
             TechnicalCheckIds = new() { "EVL-001" },
