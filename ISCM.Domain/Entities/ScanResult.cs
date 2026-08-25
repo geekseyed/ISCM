@@ -17,6 +17,10 @@ public class ScanResult : BaseEntity
     public DateTimeOffset StartedAtUtc { get; private set; }
     public DateTimeOffset? CompletedAtUtc { get; private set; }
 
+    public string? BaselineId { get; set; }
+    public BaselineDefinition? Baseline { get; set; }
+
+  
     private readonly List<Finding> _findings = new();
 
     // ✅ اصلاح حیاتی: اتصال پراپرتی عمومی به لیست خصوصی
