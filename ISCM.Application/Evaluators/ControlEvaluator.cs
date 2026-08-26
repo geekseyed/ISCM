@@ -1,17 +1,15 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using ISCM.Application.Interfaces;
+﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ISCM.Application.Evaluators;
 
 public class ControlEvaluator : IControlEvaluator
 {
-    public ControlResult Evaluate(
-        ControlDefinition controlDefinition,
-        IEnumerable<SubControlResult> subControlResults)
+    public ControlResult Evaluate(ControlDefinition controlDefinition, IEnumerable<SubControlResult> subControlResults)
     {
         var results = subControlResults?.ToList() ?? new List<SubControlResult>();
 
@@ -21,7 +19,7 @@ public class ControlEvaluator : IControlEvaluator
             EvaluatedAt = DateTime.UtcNow
         };
 
-        if (!results.Any())
+        if (results.Count == 0)
         {
             controlResult.Status = CheckStatus.Unknown;
             return controlResult;
@@ -29,43 +27,33 @@ public class ControlEvaluator : IControlEvaluator
 
         controlResult.SubControlResults = results;
 
-        var applicableResults = results
-            .Where(r => r.Status != CheckStatus.NotApplicable)
-            .ToList();
+        var applicable = results.Where(r => r.Status != CheckStatus.NotApplicable).ToList();
 
-        if (!applicableResults.Any())
+        if (applicable.Count == 0)
         {
             controlResult.Status = CheckStatus.NotApplicable;
             return controlResult;
         }
 
-        if (applicableResults.Any(r => r.Status == CheckStatus.Error))
+        if (applicable.Any(r => r.Status == CheckStatus.Error))
         {
             controlResult.Status = CheckStatus.Error;
             return controlResult;
         }
 
-        var requiredFailures = applicableResults
-            .Where(r => r.Status == CheckStatus.Fail)
-            .ToList();
-
-        if (requiredFailures.Any())
+        if (applicable.Any(r => r.Status == CheckStatus.Fail))
         {
             controlResult.Status = CheckStatus.Fail;
             return controlResult;
         }
 
-        var unknowns = applicableResults
-            .Where(r => r.Status == CheckStatus.Unknown)
-            .ToList();
-
-        if (unknowns.Any())
+        if (applicable.Any(r => r.Status == CheckStatus.Unknown))
         {
             controlResult.Status = CheckStatus.Unknown;
             return controlResult;
         }
 
-        if (applicableResults.All(r => r.Status == CheckStatus.Pass))
+        if (applicable.All(r => r.Status == CheckStatus.Pass))
         {
             controlResult.Status = CheckStatus.Pass;
             return controlResult;
@@ -75,43 +63,36 @@ public class ControlEvaluator : IControlEvaluator
         return controlResult;
     }
 
-    public Finding EvaluateFromSubControls(ControlDefinition controlDefinition, List<SubControlResult> subControlResults)
+    // ✅ امضای جدید با پارامتر اختیاری checkId - باید دقیقاً با اینترفیس یکی باشد
+    public Finding EvaluateFromSubControls(ControlDefinition controlDefinition, List<SubControlResult> subControlResults, string? checkId = null)
     {
         var controlResult = Evaluate(controlDefinition, subControlResults);
         var allEvidence = subControlResults.SelectMany(s => s.EvidenceItems).ToList();
 
-        // استفاده از اولین TechnicalCheckId
-        var primaryCheckId = controlDefinition.TechnicalCheckIds.FirstOrDefault() ?? controlDefinition.ControlId;
-
-        // DEBUG LOG
-        Console.WriteLine($"[DEBUG] EvaluateFromSubControls:");
-        Console.WriteLine($"  - ControlId: {controlDefinition.ControlId}");
-        Console.WriteLine($"  - Title: {controlDefinition.Title}");
-        Console.WriteLine($"  - TechnicalCheckIds: {string.Join(", ", controlDefinition.TechnicalCheckIds)}");
-        Console.WriteLine($"  - PrimaryCheckId (for Finding): {primaryCheckId}");
-        Console.WriteLine($"  - SubControlResults count: {subControlResults.Count}");
+        // ✅ اصلاح فاز 4: اگر اسکنر CheckId چکِ اجراشده را بفرستد، همان استفاده شود
+        var primaryCheckId = checkId
+            ?? controlDefinition.TechnicalCheckIds.FirstOrDefault()
+            ?? controlDefinition.ControlId;
 
         var finding = new Finding(
-            primaryCheckId,
-            controlDefinition.Title,
-            controlDefinition.Category,
-            controlDefinition.Severity,
-            controlResult.Status,
-            allEvidence.FirstOrDefault()?.RawOutput ?? "No evidence collected",
-            subControlResults.FirstOrDefault()?.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
-            controlDefinition.Description,
-            errorMessage: null,
+            checkId: primaryCheckId,
+            name: controlDefinition.Title,
+            category: controlDefinition.Category,
+            severity: controlDefinition.Severity,
+            status: controlResult.Status,
+            currentValue: allEvidence.FirstOrDefault()?.RawOutput ?? "No evidence collected",
+            expectedValue: subControlResults.FirstOrDefault()?.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
             description: controlDefinition.Description,
+            errorMessage: null,
             registryPath: string.Empty,
             cisReference: controlDefinition.BaselineId,
             riskScore: (int)controlDefinition.Severity * 20,
             sourceType: "Multi-Source Evidence",
             sourceCommand: string.Join(", ", allEvidence.Select(e => e.SourceName).Distinct()),
-            fixTools: new List<string>()
+            fixTools: new List<string>(),
+            subChecks: null,
+            recommendation: $"Review and harden: {controlDefinition.Title}"
         );
-
-        Console.WriteLine($"  - Finding.CheckId: {finding.CheckId}");
-        Console.WriteLine($"  - Finding.Status: {finding.Status}");
 
         foreach (var evidence in allEvidence)
         {
@@ -126,9 +107,7 @@ public class ControlEvaluator : IControlEvaluator
         return finding;
     }
 
-    public ControlResult EvaluateFromFindings(
-        ControlDefinition controlDefinition,
-        IEnumerable<Finding> findings)
+    public ControlResult EvaluateFromFindings(ControlDefinition controlDefinition, IEnumerable<Finding> findings)
     {
         var findingsList = findings?.ToList() ?? new List<Finding>();
 

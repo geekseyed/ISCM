@@ -1,6 +1,4 @@
 ﻿using ISCM.Application.Interfaces;
-using ISCM.Application.Evaluators;
-using ISCM.Application.Services;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -17,7 +15,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly IEnumerable<IHardeningCheck> _checks;
     private readonly IMultiPathCheckValidator _multiPathValidator;
     private readonly IControlEvaluator _controlEvaluator;
-    private readonly IBaselineService _baselineService; // ✅ فیلد اضافه شد
+    private readonly IBaselineService _baselineService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -30,7 +28,7 @@ public class WindowsHardeningScanner : IScanService
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
         _multiPathValidator = multiPathValidator ?? throw new ArgumentNullException(nameof(multiPathValidator));
         _controlEvaluator = controlEvaluator ?? throw new ArgumentNullException(nameof(controlEvaluator));
-        _baselineService = baselineService ?? throw new ArgumentNullException(nameof(baselineService)); // ✅ مقداردهی اضافه شد
+        _baselineService = baselineService ?? throw new ArgumentNullException(nameof(baselineService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -45,10 +43,10 @@ public class WindowsHardeningScanner : IScanService
         await Task.Delay(50);
 
         var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
-        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode);
-
-        // ✅ Phase 3.2: تنظیم BaselineId در ScanResult
-        scanResult.BaselineId = defaultBaseline.BaselineId;
+        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode)
+        {
+            BaselineId = defaultBaseline.BaselineId
+        };
 
         progress?.Report($"[INFO] Collecting system info... Hostname: {hostname}, IP: {ipAddress}");
         progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
@@ -60,15 +58,14 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
-                // Phase 2.5: Use EvaluateSubControlsAsync for detailed evaluation
+                // Phase 2.5: ارزیابی دقیق هر SubControl
                 var subControlResults = await check.EvaluateSubControlsAsync();
 
-                // Validate multi-path tests if applicable
+                // اعتبارسنجی چندمسیره در صورت پشتیبانی چک
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
 
-                    // Add test results to evidence
                     foreach (var result in testResults)
                     {
                         foreach (var subResult in subControlResults)
@@ -105,11 +102,9 @@ public class WindowsHardeningScanner : IScanService
                     }
                 }
 
-                // Get the control definition from catalog
                 var controlDefinition = ControlCatalog.GetByCheckId(check.CheckId);
                 if (controlDefinition == null)
                 {
-                    // Fallback: create a simple definition using check.CheckId as both ControlId and TechnicalCheckId
                     controlDefinition = new ControlDefinition
                     {
                         ControlId = check.CheckId,
@@ -122,8 +117,8 @@ public class WindowsHardeningScanner : IScanService
                     };
                 }
 
-                // ✅ استفاده از EvaluateFromSubControls برای ایجاد Finding با CheckId صحیح
-                var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
+                // ✅ اصلاح فاز 4: عبور check.CheckId تا UAC/LM/ADM روی هم بازنویسی نشوند
+                var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
 
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
@@ -131,15 +126,24 @@ public class WindowsHardeningScanner : IScanService
             catch (Exception ex)
             {
                 var errorFinding = new Finding(
-                    check.CheckId,
-                    "Unknown Check",
-                    CheckCategory.System,
-                    CheckSeverity.High,
-                    CheckStatus.Error,
-                    "Crash",
-                    "N/A",
-                    "The check failed to execute.",
-                    errorMessage: ex.Message);
+                    checkId: check.CheckId,
+                    name: check.Name,
+                    category: check.Category,
+                    severity: check.Severity,
+                    status: CheckStatus.Error,
+                    currentValue: "Crash",
+                    expectedValue: "N/A",
+                    description: "The check failed to execute.",
+                    errorMessage: ex.Message,
+                    registryPath: string.Empty,
+                    cisReference: null,
+                    riskScore: (int)check.Severity * 20,
+                    sourceType: "Error",
+                    sourceCommand: string.Empty,
+                    fixTools: new List<string>(),
+                    subChecks: null,
+                    recommendation: "Investigate the check execution error."
+                );
 
                 scanResult.AddFinding(errorFinding);
                 progress?.Report($"[ERROR] {check.CheckId}: {check.Name} = Crash ({ex.Message})");
@@ -175,7 +179,8 @@ public class WindowsHardeningScanner : IScanService
             };
         }
 
-        return _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
+        // ✅ عبور checkId در Rescan هم
+        return _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, checkId);
     }
 
     public async Task<Finding> RescanSubControlAsync(string checkId, string subControlId)
@@ -185,8 +190,7 @@ public class WindowsHardeningScanner : IScanService
 
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
 
-        // For now, rescan the entire check
-        // TODO: After full Phase 1.4 integration, evaluate only the specific SubControl
+        // فعلاً کل چک اسکن مجدد می‌شود
         return await RescanCheckAsync(checkId);
     }
 
