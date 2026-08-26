@@ -49,6 +49,10 @@ builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
+// ✅ Phase 4.2: ثبت سرویس Remediation
+builder.Services.AddSingleton<IRemediationService, RemediationService>();
+// ✅ Phase 4.4: ثبت RemediationService
+builder.Services.AddSingleton<IRemediationService, RemediationService>();
 
 // ✅ Phase 2.5: ثبت ScanStateService با ServiceProvider injection
 builder.Services.AddScoped<ScanStateService>(sp => new ScanStateService(sp));
