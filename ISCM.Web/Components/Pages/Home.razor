@@ -927,7 +927,7 @@
     {
         get
         {
-            if (StateService.IsScanning || StateService.LivePassCount > 0)
+            if (StateService.IsScanning)
                 return StateService.LivePassCount.ToString();
             return StateService.CurrentScanResult?.PassCount.ToString() ?? "—";
         }
@@ -937,7 +937,7 @@
     {
         get
         {
-            if (StateService.IsScanning || StateService.LiveFailCount > 0)
+            if (StateService.IsScanning)
                 return StateService.LiveFailCount.ToString();
             return StateService.CurrentScanResult?.FailCount.ToString() ?? "—";
         }

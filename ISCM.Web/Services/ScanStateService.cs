@@ -170,6 +170,8 @@ public class ScanStateService
         _activityLog.Clear();
 
         LogConsole("Initializing scan...", "status-info");
+        LogAction("Scan started.");
+
 
         try
         {
@@ -200,6 +202,7 @@ public class ScanStateService
             var result = await scanService.RunScanAsync(mode, progress);
             SetScanResult(result);
             LogConsole("Scan completed successfully.", "status-success");
+            LogAction($"Scan completed: {result.PassCount} passed, {result.FailCount} failed.");
         }
         catch (Exception ex)
         {
