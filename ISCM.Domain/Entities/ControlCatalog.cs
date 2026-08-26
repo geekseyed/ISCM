@@ -334,14 +334,87 @@ public static class ControlCatalog
             }
         },
         
-        // ══════════════════════════════════════════════════════════════
-        // EXTENDED CHECKS (Not in PDF baseline, but still scanned)
-        // ═══════════════════════════════════════════════════════════════
-        
-        new ControlDefinition { ControlId = "EXT-01", BaselineId = "", Title = "Windows Defender", Description = "Verifies Windows Defender antivirus is enabled.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false, TechnicalCheckIds = new() { "DEF-001" }, SubControls = new() },
-        new ControlDefinition { ControlId = "EXT-02", BaselineId = "", Title = "USB Storage Policy", Description = "Restricts USB storage device access to prevent data exfiltration.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsBaseline = false, TechnicalCheckIds = new() { "USB-001" }, SubControls = new() },
-        new ControlDefinition { ControlId = "EXT-03", BaselineId = "", Title = "AutoLogon Disabled", Description = "Ensures automatic logon is disabled to prevent unauthorized access.", Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = false, TechnicalCheckIds = new() { "ALG-001" }, SubControls = new() }
-    };
+                    // ══════════════════════════════════════════════════════════════
+            // EXTENDED CHECKS (Mining Center Specific)
+            // ══════════════════════════════════════════════════════════════
+            
+            // EXT-01: Windows Security Features (WEG, ASR, CFA, Core Isolation)
+            new ControlDefinition
+            {
+                ControlId = "EXT-01",
+                BaselineId = "MINING-EXT-01",
+                Title = "Windows Security Features",
+                Description = "Windows Exploit Guard, Attack Surface Reduction, Controlled Folder Access, and Core Isolation",
+                Category = CheckCategory.System,
+                Severity = CheckSeverity.Critical,
+                IsBaseline = false,
+                TechnicalCheckIds = new() { "WEG-001", "ASR-001", "CFA-001", "CORE-001" },
+                SubControls = new()
+                {
+                    new SubControlDefinition { SubControlId = "WEG-001.1", SettingName = "Attack Surface Reduction Rules", ExpectedValue = "Enabled (Audit Mode)", Description = "ASR rules in audit/learning mode", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "Registry", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "CFA-001.1", SettingName = "Controlled Folder Access", ExpectedValue = "Enabled (Evaluation Mode)", Description = "Protect sensitive folders from ransomware", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "Registry", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "CORE-001.1", SettingName = "Core Isolation (Memory Integrity)", ExpectedValue = "Enabled", Description = "Memory integrity protection", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "Registry" } },
+                    new SubControlDefinition { SubControlId = "WEG-001.2", SettingName = "Reputation-Based Protection", ExpectedValue = "Enabled", Description = "SmartScreen and reputation checks", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-01", EvidenceSources = new() { "Registry" } }
+                }
+            },
+            
+            // EXT-02: USB Storage Restrictions
+            new ControlDefinition
+            {
+                ControlId = "EXT-02",
+                BaselineId = "MINING-EXT-02",
+                Title = "USB Storage Restrictions",
+                Description = "Restrict USB storage device access to prevent data exfiltration",
+                Category = CheckCategory.System,
+                Severity = CheckSeverity.High,
+                IsBaseline = false,
+                TechnicalCheckIds = new() { "USB-001" },
+                SubControls = new()
+                {
+                    new SubControlDefinition { SubControlId = "USB-001.1", SettingName = "USB Storage Device Access", ExpectedValue = "Restricted", Description = "Block or restrict USB storage", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-02", EvidenceSources = new() { "Registry", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "USB-001.2", SettingName = "Removable Storage Deny Execute", ExpectedValue = "Enabled", Description = "Prevent execution from removable storage", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-02", EvidenceSources = new() { "Registry" } }
+                }
+            },
+            
+            // EXT-03: AppLocker Audit Mode
+            new ControlDefinition
+            {
+                ControlId = "EXT-03",
+                BaselineId = "MINING-EXT-03",
+                Title = "AppLocker Audit Configuration",
+                Description = "AppLocker in audit-only mode for executable, installer, and script control",
+                Category = CheckCategory.System,
+                Severity = CheckSeverity.Medium,
+                IsBaseline = false,
+                TechnicalCheckIds = new() { "APL-001" },
+                SubControls = new()
+                {
+                    new SubControlDefinition { SubControlId = "APL-001.1", SettingName = "AppLocker Executable Rules", ExpectedValue = "Audit Only", Description = "Audit executable files from Windows path", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-03", EvidenceSources = new() { "EventLog", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "APL-001.2", SettingName = "AppLocker Windows Installer Rules", ExpectedValue = "Audit Only", Description = "Audit MSI installers from Windows path", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-03", EvidenceSources = new() { "EventLog", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "APL-001.3", SettingName = "AppLocker Script Rules", ExpectedValue = "Audit Only", Description = "Audit scripts from Windows path", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-03", EvidenceSources = new() { "EventLog", "PowerShell" } }
+                }
+            },
+            
+            // EXT-04: Enhanced Audit Logging
+            new ControlDefinition
+            {
+                ControlId = "EXT-04",
+                BaselineId = "MINING-EXT-04",
+                Title = "Enhanced Audit Logging",
+                Description = "Comprehensive audit logging including Sysmon, PowerShell, and Security logs",
+                Category = CheckCategory.Audit,
+                Severity = CheckSeverity.High,
+                IsBaseline = false,
+                TechnicalCheckIds = new() { "AUD-002" },
+                SubControls = new()
+                {
+                    new SubControlDefinition { SubControlId = "AUD-002.1", SettingName = "Sysmon Logging", ExpectedValue = "Enabled", Description = "System monitoring logging", Category = CheckCategory.Audit, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "EventLog", "Registry" } },
+                    new SubControlDefinition { SubControlId = "AUD-002.2", SettingName = "PowerShell Module Logging", ExpectedValue = "Enabled", Description = "Log PowerShell module usage", Category = CheckCategory.Audit, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "Registry", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "AUD-002.3", SettingName = "PowerShell Script Block Logging", ExpectedValue = "Enabled", Description = "Log PowerShell script blocks", Category = CheckCategory.Audit, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "Registry", "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "AUD-002.4", SettingName = "Security Event Log Size", ExpectedValue = "1GB", Description = "Increase security log capacity", Category = CheckCategory.Audit, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell" } },
+                    new SubControlDefinition { SubControlId = "AUD-002.5", SettingName = "Audit Policy Configuration", ExpectedValue = "Enabled (Account Logon, Object Access, Policy Change)", Description = "Comprehensive audit policies", Category = CheckCategory.Audit, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "AuditPol", "PowerShell" } }
+                }
+            } };
 
     public static IReadOnlyList<ControlDefinition> GetAll() => _controls.AsReadOnly();
     public static IEnumerable<ControlDefinition> GetBaseline() => _controls.Where(c => c.IsBaseline);

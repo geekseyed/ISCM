@@ -24,7 +24,6 @@ public static class BaselineSeeder
             ReferenceDocument = "Windows11_Hardening_17_Items_Guide_Revised.pdf"
         };
 
-        // Map all 17 baseline controls
         var controlIds = new List<string> { "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17" };
 
         foreach (var controlId in controlIds)
@@ -43,49 +42,48 @@ public static class BaselineSeeder
     }
 
     /// <summary>
-    /// Creates the ERDC Mining Standard baseline (1 extended control).
+    /// Creates the Mining Center Standard baseline based on PDF requirements (4 controls).
     /// </summary>
-    public static BaselineDefinition CreateErdcBaseline()
+    public static BaselineDefinition CreateMiningBaseline()
     {
         var baseline = new BaselineDefinition
         {
-            BaselineId = "ERDC-V1",
-            Name = "ERDC Mining Additional Hardening",
+            BaselineId = "MINING-V1", // ✅ کلمه ERDC کاملاً حذف شد
+            Name = "Mining Center Security Hardening",
             Version = "1.0",
-            Description = "Additional security measures for ERDC mining environments, including USB restrictions, AppLocker, and advanced Windows Security features.",
+            Description = "Security hardening for mining center Windows systems based on practical security measures (USB, WEG, AppLocker, Audit).",
             IsDefault = false,
             IsActive = true,
             ReferenceDocument = "معدنچی.pdf"
         };
 
-        // Map the extended control
-        baseline.ControlMappings.Add(new BaselineControlMapping
+        // Map the 4 mining-specific controls exactly as per PDF
+        var miningControls = new List<string> { "EXT-01", "EXT-02", "EXT-03", "EXT-04" };
+
+        foreach (var controlId in miningControls)
         {
-            BaselineId = baseline.BaselineId,
-            ControlId = "EXT-01",
-            IsRequired = true,
-            Priority = 1,
-            IsActive = true
-        });
+            baseline.ControlMappings.Add(new BaselineControlMapping
+            {
+                BaselineId = baseline.BaselineId,
+                ControlId = controlId,
+                IsRequired = true,
+                Priority = 1,
+                IsActive = true
+            });
+        }
 
         return baseline;
     }
 
-    /// <summary>
-    /// Gets all default baselines.
-    /// </summary>
     public static List<BaselineDefinition> GetAllDefaults()
     {
         return new List<BaselineDefinition>
         {
             CreateHosseiniBaseline(),
-            CreateErdcBaseline()
+            CreateMiningBaseline()
         };
     }
 
-    /// <summary>
-    /// Gets the default baseline (Hosseini).
-    /// </summary>
     public static BaselineDefinition GetDefault()
     {
         return CreateHosseiniBaseline();

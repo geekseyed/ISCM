@@ -2,1347 +2,472 @@
 @rendermode InteractiveServer
 @using ISCM.Application.Interfaces
 @using ISCM.Domain.Entities
-@using ISCM.Domain.Enums
 @using ISCM.Web.Services
-@using System.Globalization
-@inject IReportService ReportService
 @inject ScanStateService StateService
-@inject ScanHistoryService HistoryService
-@inject ReportGateService GateService
+@inject IBaselineService BaselineService
 
 <PageTitle>DefenDoor - Reports</PageTitle>
 
 <style>
     .glass-panel {
-        background: rgba(30,41,59,0.7);
+        background: rgba(30, 41, 59, 0.7);
         backdrop-filter: blur(12px);
-        border: 1px solid rgba(255,255,255,0.1);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
-        box-sizing: border-box;
+        padding: 24px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        margin-bottom: 16px;
     }
 
-    .header-row {
+    .page-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
+        margin-bottom: 24px;
+    }
+
+    .page-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #e2e8f0;
+        margin: 0;
     }
 
     .btn-back {
         background: #334155;
         border: none;
-        padding: 8px 20px;
+        padding: 10px 20px;
         color: #06b6d4;
         font-weight: bold;
-        border-radius: 6px;
+        border-radius: 8px;
         cursor: pointer;
         text-decoration: none;
-        font-size: 12px;
-    }
-    /* ── زیرتب‌ها ── */
-    .subtab-bar {
-        display: flex;
-        gap: 8px;
-        border-bottom: 1px solid #1e293b;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-    }
-
-    .subtab {
-        background: transparent;
-        border: 1px solid transparent;
-        border-bottom: 2px solid transparent;
-        color: #94a3b8;
-        font-size: 12px;
-        font-weight: bold;
-        padding: 8px 16px;
-        border-radius: 8px 8px 0 0;
-        cursor: pointer;
+        font-size: 13px;
         transition: 0.2s;
-        display: flex;
-        gap: 6px;
-        align-items: center;
     }
 
-        .subtab:hover {
-            color: #e2e8f0;
-            background: rgba(6,182,212,0.05);
-        }
+    .btn-back:hover {
+        background: #475569;
+        transform: translateY(-2px);
+    }
 
-        .subtab.active {
-            color: #06b6d4;
-            border-color: rgba(6,182,212,0.4);
-            border-bottom-color: #06b6d4;
-            background: rgba(6,182,212,0.08);
-            box-shadow: 0 0 12px rgba(6,182,212,0.15);
-        }
-
-    .subtab-icon {
-        font-size: 14px;
+    .report-section {
+        margin-bottom: 24px;
     }
 
     .section-title {
+        font-size: 16px;
+        font-weight: 600;
         color: #94a3b8;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin: 0 0 10px 0;
-    }
-
-    .section-sub {
-        color: #64748b;
-        font-size: 11px;
-        margin: -6px 0 10px 0;
-    }
-
-    .panel {
-        background: rgba(15,23,42,0.6);
-        border: 1px solid #1e293b;
-        border-radius: 10px;
-        padding: 16px;
         margin-bottom: 16px;
-    }
-    /* ── Report Types (3) ── */
-    .type-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 10px;
-    }
-
-    .type-card {
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #334155;
-        border-radius: 8px;
-        padding: 12px;
-        cursor: pointer;
-        text-align: center;
-        transition: 0.2s;
-        position: relative;
-    }
-
-        .type-card:hover {
-            border-color: #06b6d4;
-        }
-
-        .type-card.active {
-            border-color: #06b6d4;
-            background: rgba(6,182,212,0.08);
-        }
-
-        .type-card.disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-        }
-
-    .type-icon {
-        font-size: 22px;
-    }
-
-    .type-name {
-        color: #e2e8f0;
-        font-weight: bold;
-        font-size: 12px;
-        margin-top: 6px;
-    }
-
-    .type-desc {
-        color: #64748b;
-        font-size: 10px;
-        margin-top: 4px;
-    }
-
-    .gate-badge {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        font-size: 8px;
-        font-weight: bold;
-        font-family: 'Consolas', monospace;
-        padding: 2px 6px;
-        border-radius: 3px;
+        text-transform: uppercase;
         letter-spacing: 1px;
     }
 
-        .gate-badge.locked {
-            background: rgba(148,163,184,0.15);
-            color: #94a3b8;
-        }
-
-        .gate-badge.firstallowed {
-            background: rgba(16,185,129,0.15);
-            color: #10b981;
-        }
-
-        .gate-badge.blocked {
-            background: rgba(245,158,11,0.15);
-            color: #f59e0b;
-        }
-
-        .gate-badge.changeallowed {
-            background: rgba(6,182,212,0.15);
-            color: #06b6d4;
-        }
-    /* ── Context ── */
-    .ctx-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px 24px;
+    .target-input-group {
+        margin-bottom: 20px;
     }
 
-    .ctx-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid rgba(51,65,85,0.5);
-        padding: 8px 0;
-    }
-
-    .ctx-label {
-        color: #64748b;
-        font-size: 11px;
-        text-transform: uppercase;
-    }
-
-    .ctx-value {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-        font-weight: bold;
-        font-size: 12px;
-    }
-
-    .chip-row {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-
-    .chip {
-        background: transparent;
-        border: 1px solid #334155;
+    .target-label {
+        display: block;
         color: #94a3b8;
-        font-size: 10px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        cursor: pointer;
+        font-size: 13px;
+        margin-bottom: 8px;
+        font-weight: 500;
     }
 
-        .chip.active {
-            background: #06b6d4;
-            border-color: #06b6d4;
-            color: white;
-        }
-
-    .btn-edit {
-        background: #334155;
-        border: none;
-        color: #e2e8f0;
-        font-size: 11px;
-        font-weight: bold;
-        padding: 4px 14px;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    .sys-input {
+    .target-input {
+        width: 100%;
         background: #0f172a;
         border: 1px solid #334155;
         color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-        font-size: 12px;
-        padding: 4px 8px;
-        border-radius: 4px;
-        width: 60%;
-    }
-
-    .btn-save {
-        background: #10b981;
-        border: none;
-        color: white;
-        font-weight: bold;
-        font-size: 11px;
-        padding: 6px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-
-    .btn-cancel {
-        background: #475569;
-        border: none;
-        color: white;
-        font-weight: bold;
-        font-size: 11px;
-        padding: 6px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-    }
-    /* ── Sections / Options ── */
-    .sections-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px 24px;
-    }
-
-    .section-check {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 0;
-        border-bottom: 1px solid rgba(51,65,85,0.4);
-    }
-
-        .section-check input {
-            accent-color: #06b6d4;
-            width: 14px;
-            height: 14px;
-        }
-
-    .sc-title {
-        color: #e2e8f0;
-        font-size: 12px;
-        font-weight: bold;
-    }
-
-    .sc-desc {
-        color: #64748b;
-        font-size: 10px;
-    }
-
-    .link-btn {
-        background: none;
-        border: none;
-        color: #06b6d4;
-        font-size: 11px;
-        cursor: pointer;
-        font-weight: bold;
-    }
-
-    .sign-row {
-        display: flex;
-        gap: 24px;
-        margin-top: 12px;
-    }
-
-    .sign-item {
-        font-size: 11px;
-        color: #94a3b8;
-    }
-
-    .sign-ok {
-        color: #10b981;
-        font-weight: bold;
-    }
-
-    .sign-pending {
-        color: #f59e0b;
-        font-weight: bold;
-    }
-
-    .fmt-grid {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 10px;
-    }
-
-    .fmt-card {
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #334155;
+        font-size: 14px;
+        padding: 12px 16px;
         border-radius: 8px;
-        padding: 10px;
-        cursor: pointer;
-        text-align: center;
         transition: 0.2s;
     }
 
-        .fmt-card:hover {
-            border-color: #06b6d4;
-        }
-
-        .fmt-card.active {
-            border-color: #06b6d4;
-            background: rgba(6,182,212,0.08);
-        }
-
-    .fmt-name {
-        color: #e2e8f0;
-        font-weight: bold;
-        font-size: 11px;
-        margin-top: 4px;
+    .target-input:focus {
+        outline: none;
+        border-color: #06b6d4;
+        box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
     }
 
-    .fmt-desc {
-        color: #64748b;
-        font-size: 9px;
-        margin-top: 2px;
-    }
-
-    .opts-grid {
+    .report-types {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 6px 24px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
     }
 
-    .outline-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 12px 0;
+    .report-type-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 2px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        cursor: pointer;
+        transition: 0.3s;
+        text-align: center;
     }
 
-    .outline-pages {
-        color: #94a3b8;
+    .report-type-card:hover {
+        border-color: #06b6d4;
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(6, 182, 212, 0.2);
+    }
+
+    .report-type-card.active {
+        border-color: #06b6d4;
+        background: rgba(6, 182, 212, 0.1);
+        box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+    }
+
+    .report-type-icon {
+        font-size: 32px;
+        margin-bottom: 12px;
+    }
+
+    .report-type-name {
+        font-size: 15px;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 6px;
+    }
+
+    .report-type-desc {
         font-size: 12px;
+        color: #64748b;
     }
 
-    .action-row {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
+    .baseline-selector {
+        margin-bottom: 20px;
+    }
+
+    .baseline-select {
+        width: 100%;
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        font-size: 14px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .baseline-select:focus {
+        outline: none;
+        border-color: #06b6d4;
     }
 
     .btn-generate {
         background: linear-gradient(45deg, #06b6d4, #3b82f6);
         border: none;
+        padding: 14px 32px;
         color: white;
+        font-size: 15px;
         font-weight: bold;
-        padding: 10px 24px;
         border-radius: 8px;
         cursor: pointer;
+        transition: 0.3s;
+        box-shadow: 0 4px 16px rgba(6, 182, 212, 0.3);
+        width: 100%;
     }
 
-        .btn-generate:disabled {
-            background: #475569;
-            cursor: not-allowed;
-        }
+    .btn-generate:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+    }
 
-    .btn-secondary {
-        background: #1e293b;
+    .btn-generate:disabled {
+        background: #475569;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .report-preview {
+        background: rgba(15, 23, 42, 0.8);
         border: 1px solid #334155;
-        color: #e2e8f0;
-        font-size: 12px;
-        padding: 10px 18px;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-
-    .result-message {
-        margin-top: 14px;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        word-break: break-all;
-    }
-
-    .empty-state {
-        color: #64748b;
-        text-align: center;
-        padding: 40px;
-        font-size: 13px;
-    }
-    /* ── Snapshots / Evidence / Compliance (تب Before/After) ── */
-    .snapshots-row {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        gap: 16px;
-        align-items: center;
-        margin-top: 14px;
-    }
-
-    .snapshot-card {
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 16px;
-        position: relative;
-    }
-
-        .snapshot-card.before {
-            border-left: 3px solid #f59e0b;
-        }
-
-        .snapshot-card.after {
-            border-left: 3px solid #10b981;
-        }
-
-    .snap-dot {
-        position: absolute;
-        top: 14px;
-        right: 14px;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-    }
-
-    .before-dot {
-        background: #f59e0b;
-        box-shadow: 0 0 6px #f59e0b;
-    }
-
-    .after-dot {
-        background: #10b981;
-        box-shadow: 0 0 6px #10b981;
-    }
-
-    .snap-header {
-        color: #94a3b8;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .snap-date {
-        color: #64748b;
-        font-size: 10px;
-        font-family: 'Consolas', monospace;
-        margin-top: 4px;
-    }
-
-    .snap-score {
-        color: #e2e8f0;
-        font-size: 32px;
-        font-weight: 800;
-        font-family: 'Consolas', monospace;
-        margin-top: 10px;
-        line-height: 1;
-    }
-
-    .snap-grade {
-        color: #94a3b8;
-        font-size: 11px;
-        margin-top: 4px;
-    }
-
-    .snap-counts {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
-        font-size: 11px;
-        font-family: 'Consolas', monospace;
-    }
-
-    .snap-pass {
-        color: #10b981;
-    }
-
-    .snap-fail {
-        color: #ef4444;
-    }
-
-    .snap-warn {
-        color: #f59e0b;
-    }
-
-    .snap-meta {
-        margin-top: 12px;
-        border-top: 1px solid rgba(51,65,85,0.5);
-        padding-top: 10px;
-        font-size: 10px;
-    }
-
-        .snap-meta > div {
-            display: flex;
-            justify-content: space-between;
-            padding: 2px 0;
-        }
-
-    .meta-label {
-        color: #64748b;
-        text-transform: uppercase;
-    }
-
-    .meta-value {
-        color: #e2e8f0;
-        font-family: 'Consolas', monospace;
-    }
-
-    .snap-arrow {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        align-items: center;
-    }
-
-    .arrow-icon {
-        color: #06b6d4;
-        font-size: 24px;
-        font-weight: bold;
-    }
-
-    .delta-pill {
-        background: rgba(15,23,42,0.9);
-        border: 1px solid #334155;
-        color: #94a3b8;
-        font-size: 10px;
-        font-family: 'Consolas', monospace;
-        padding: 4px 10px;
         border-radius: 12px;
-        white-space: nowrap;
-    }
-
-        .delta-pill.up {
-            background: rgba(16,185,129,0.15);
-            border-color: rgba(16,185,129,0.4);
-            color: #10b981;
-        }
-
-        .delta-pill.warn {
-            background: rgba(245,158,11,0.15);
-            border-color: rgba(245,158,11,0.4);
-            color: #f59e0b;
-        }
-
-    .evidence-chips {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-top: 10px;
-    }
-
-    .ev-chip {
-        background: rgba(15,23,42,0.8);
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 6px 12px;
-        display: flex;
-        gap: 8px;
-        align-items: center;
-    }
-
-    .ev-name {
-        color: #e2e8f0;
-        font-size: 11px;
-        font-weight: bold;
-    }
-
-    .ev-count {
-        color: #06b6d4;
+        padding: 20px;
+        margin-top: 24px;
         font-family: 'Consolas', monospace;
-        font-weight: bold;
         font-size: 12px;
+        max-height: 500px;
+        overflow-y: auto;
     }
 
-    .evidence-files {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        margin-top: 14px;
+    .report-header {
+        border-bottom: 2px solid #06b6d4;
+        padding-bottom: 16px;
+        margin-bottom: 16px;
     }
 
-    .ev-file {
-        background: #0f172a;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        padding: 10px 14px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .ev-file-label {
-        color: #94a3b8;
-        font-size: 10px;
-        text-transform: uppercase;
+    .report-title {
+        font-size: 20px;
         font-weight: bold;
-    }
-
-    .ev-file-name {
         color: #06b6d4;
-        font-family: 'Consolas', monospace;
+        margin-bottom: 8px;
+    }
+
+    .report-meta {
+        color: #94a3b8;
         font-size: 11px;
+        line-height: 1.8;
     }
 
-    .compliance-table-wrap {
-        margin-top: 12px;
-        overflow-x: auto;
+    .report-summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 20px 0;
     }
 
-    .compliance-table {
+    .summary-box {
+        background: rgba(30, 41, 59, 0.6);
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+    }
+
+    .summary-value {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 4px;
+    }
+
+    .summary-value.pass { color: #10b981; }
+    .summary-value.fail { color: #ef4444; }
+    .summary-value.warning { color: #f59e0b; }
+    .summary-value.total { color: #06b6d4; }
+
+    .summary-label {
+        font-size: 11px;
+        color: #64748b;
+        text-transform: uppercase;
+    }
+
+    .findings-table {
         width: 100%;
         border-collapse: collapse;
+        margin-top: 16px;
+    }
+
+    .findings-table th {
+        background: rgba(30, 41, 59, 0.8);
+        color: #94a3b8;
         font-size: 11px;
+        text-transform: uppercase;
+        padding: 12px;
+        text-align: left;
+        border-bottom: 2px solid #334155;
     }
 
-        .compliance-table th {
-            background: #0f172a;
-            color: #94a3b8;
-            text-transform: uppercase;
-            font-size: 10px;
-            letter-spacing: 1px;
-            padding: 8px 10px;
-            text-align: left;
-            border-bottom: 1px solid #334155;
-        }
-
-        .compliance-table td {
-            padding: 8px 10px;
-            border-bottom: 1px solid rgba(51,65,85,0.4);
-            color: #e2e8f0;
-        }
-
-        .compliance-table code {
-            color: #06b6d4;
-            font-family: 'Consolas', monospace;
-            font-size: 10px;
-        }
-
-    .cis-inline {
-        color: #06b6d4;
-        border: 1px solid rgba(6,182,212,0.4);
-        background: rgba(6,182,212,0.08);
-        padding: 1px 6px;
-        border-radius: 3px;
-        font-family: 'Consolas', monospace;
-        font-size: 9px;
+    .findings-table td {
+        padding: 12px;
+        border-bottom: 1px solid #1e293b;
+        font-size: 12px;
+        color: #e2e8f0;
     }
 
-    .sev-inline {
-        font-size: 9px;
+    .findings-table tr:hover {
+        background: rgba(6, 182, 212, 0.05);
+    }
+
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 11px;
         font-weight: bold;
-        padding: 2px 6px;
-        border-radius: 3px;
         text-transform: uppercase;
     }
 
-    .sev-critical {
-        color: #ef4444;
-        background: rgba(239,68,68,0.15);
-    }
-
-    .sev-high {
-        color: #f59e0b;
-        background: rgba(245,158,11,0.15);
-    }
-
-    .sev-medium {
-        color: #e2e8f0;
-        background: rgba(226,232,240,0.1);
-    }
-
-    .sev-low {
-        color: #94a3b8;
-        background: rgba(148,163,184,0.15);
-    }
-
-    .st-p {
+    .status-badge.pass {
+        background: rgba(16, 185, 129, 0.2);
         color: #10b981;
-        font-weight: bold;
     }
 
-    .st-f {
+    .status-badge.fail {
+        background: rgba(239, 68, 68, 0.2);
         color: #ef4444;
-        font-weight: bold;
     }
 
-    .st-w {
+    .status-badge.warning {
+        background: rgba(245, 158, 11, 0.2);
         color: #f59e0b;
-        font-weight: bold;
-    }
-
-    .delta-ok {
-        color: #10b981;
-        font-weight: bold;
-    }
-
-    .delta-same {
-        color: #475569;
-    }
-
-    .delta-partial {
-        color: #f59e0b;
-    }
-
-    .src-cell {
-        color: #64748b;
-        font-family: 'Consolas', monospace;
-        font-size: 10px;
     }
 </style>
 
 <div class="glass-panel">
-    <div class="header-row">
-        <h2 style="color:#e2e8f0; margin:0;">Reports & Export Center</h2>
+    <div class="page-header">
+        <h1 class="page-title">📊 Reports & Export Center</h1>
         <a href="/" class="btn-back">← Back to Dashboard</a>
     </div>
 
-    @* ── نوار زیرتب‌ها ── *@
-    <div class="subtab-bar">
-        @foreach (var t in SubTabs)
-        {
-            <button class="subtab @(ActiveSubTab == t.Id ? "active" : "")" @onclick="() => ActiveSubTab = t.Id">
-                <span class="subtab-icon">@t.Icon</span> @t.Name
-            </button>
-        }
+    <div class="report-section">
+        <div class="section-title">Report Configuration</div>
+        
+        <!-- Target Name Input -->
+        <div class="target-input-group">
+            <label class="target-label">📍 Target System Name (نام سیستم هدف)</label>
+            <input type="text" 
+                   class="target-input" 
+                   @bind="TargetName" 
+                   @bind:event="oninput"
+                   placeholder="e.g., Mining Center Server 01 / سرور اصلی معدنچی" />
+        </div>
+
+        <!-- Baseline Selection -->
+        <div class="baseline-selector">
+            <label class="target-label"> Compliance Baseline (استاندارد انطباق)</label>
+            <select class="baseline-select" @bind="SelectedBaselineId">
+                @foreach (var baseline in AvailableBaselines)
+                {
+                    <option value="@baseline.BaselineId">
+                        @baseline.Name (v@baseline.Version)
+                    </option>
+                }
+            </select>
+        </div>
     </div>
 
-    @if (StateService.CurrentScanResult == null && ActiveSubTab != "baseline")
+    <div class="report-section">
+        <div class="section-title">Report Type</div>
+        <div class="report-types">
+            <div class="report-type-card @(ReportType == "Current" ? "active" : "")" 
+                 @onclick="() => ReportType = 'Current'">
+                <div class="report-type-icon">📄</div>
+                <div class="report-type-name">Current State</div>
+                <div class="report-type-desc">وضعیت فعلی سیستم بر اساس Baseline انتخابی</div>
+            </div>
+
+            <div class="report-type-card @(ReportType == "BeforeAfter" ? "active" : "")" 
+                 @onclick="() => ReportType = 'BeforeAfter'">
+                <div class="report-type-icon"></div>
+                <div class="report-type-name">Before/After</div>
+                <div class="report-type-desc">مقایسه وضعیت قبل و بعد از Hardening</div>
+            </div>
+
+            <div class="report-type-card @(ReportType == "Remediation" ? "active" : "")" 
+                 @onclick="() => ReportType = 'Remediation'">
+                <div class="report-type-icon">🔧</div>
+                <div class="report-type-name">Remediation</div>
+                <div class="report-type-desc">گزارش اقدامات اصلاحی انجام شده</div>
+            </div>
+        </div>
+    </div>
+
+    <button class="btn-generate" @onclick="GenerateReport" disabled="@(StateService.CurrentScanResult == null)">
+        📥 Generate Report
+    </button>
+
+    @if (ReportGenerated)
     {
-        <p class="empty-state">No scan data available for reporting. Please run a scan from the Dashboard first.</p>
-    }
-    else if (ActiveSubTab == "generator")
-    {
-        @* ── تب Generator ── *@
-        <div class="panel">
-            <div class="section-title">Report Type</div>
-            <div class="section-sub">نوع گزارش را انتخاب کنید</div>
-            <div class="type-grid">
-                <div class="type-card @(SelectedReportType == "current" ? "active" : "") @(CurrentGate.Kind == GateKind.Locked ? "disabled" : "")"
-                     @onclick="SelectCurrentType">
-                    <span class="gate-badge @CurrentGate.Kind.ToString().ToLower()">
-                        @(CurrentGate.Kind switch { GateKind.Locked => "LOCKED", GateKind.FirstAllowed => "READY", GateKind.Blocked => "NO CHANGE", _ => "CHANGED" })
-                    </span>
-                    <div class="type-icon">📸</div>
-                    <div class="type-name">Current State</div>
-                    <div class="type-desc">وضعیت فعلی سیستم (Baseline)</div>
-                </div>
-                <div class="type-card @(SelectedReportType == "beforeafter" ? "active" : "")" @onclick="SelectBeforeAfterType">
-                    <div class="type-icon">📋</div>
-                    <div class="type-name">Before/After</div>
-                    <div class="type-desc">مقایسه قبل و بعد هاردنینگ</div>
-                </div>
-                <div class="type-card @(SelectedReportType == "remediation" ? "active" : "")" @onclick="SelectRemediationType">
-                    <div class="type-icon">✅</div>
-                    <div class="type-name">Remediation</div>
-                    <div class="type-desc">گزارش اصلاح و بسترسازی</div>
+        <div class="report-preview">
+            <div class="report-header">
+                <div class="report-title">DefenDoor Security Compliance Report</div>
+                <div class="report-meta">
+                    <strong>Target:</strong> @TargetName<br/>
+                    <strong>Baseline:</strong> @SelectedBaselineName<br/>
+                    <strong>Generated:</strong> @DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")<br/>
+                    <strong>Hostname:</strong> @StateService.DisplayHostname<br/>
+                    <strong>IP Address:</strong> @StateService.DisplayIpAddress<br/>
+                    <strong>OS:</strong> @StateService.DisplayOsVersion
                 </div>
             </div>
-        </div>
 
-        <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div class="section-title" style="margin-bottom:2px;">Report Sections</div>
-                    <div class="section-sub">بخش‌های گزارش را انتخاب کنید</div>
+            <div class="report-summary">
+                <div class="summary-box">
+                    <div class="summary-value total">@StateService.CurrentScanResult?.Findings.Count</div>
+                    <div class="summary-label">Total Checks</div>
                 </div>
-                <span>
-                    <button class="link-btn" @onclick="SelectAllSections">Select All</button>
-                    <button class="link-btn" @onclick="DeselectAllSections">Deselect All</button>
-                </span>
-            </div>
-            <div class="sections-grid">
-                @foreach (var s in Sections)
-                {
-                    <label class="section-check">
-                        <input type="checkbox" @bind="s.Enabled" />
-                        <span><span class="sc-title">@s.TitleEn</span> <span class="sc-desc">— @s.DescFa</span></span>
-                    </label>
-                }
-            </div>
-            <div class="sign-row">
-                <span class="sign-item">Prepared By <span class="sign-ok">✓ Signed</span></span>
-                <span class="sign-item">Reviewed By <span class="sign-ok">✓ Signed</span></span>
-                <span class="sign-item">Approved By <span class="sign-pending">⏳ Pending</span></span>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="section-title">Export Format & Path</div>
-            <div class="fmt-grid">
-                @foreach (var f in ExportFormats)
-                {
-                    <div class="fmt-card @(SelectedFormat == f.Id ? "active" : "")" @onclick="() => SelectedFormat = f.Id">
-                        <div class="type-icon">@f.Icon</div>
-                        <div class="fmt-name">@f.Name</div>
-                        <div class="fmt-desc">@f.Desc</div>
-                    </div>
-                }
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="section-title">Export Options</div>
-            <div class="opts-grid">
-                <label class="section-check"><input type="checkbox" @bind="OptBeforeAfter" /><span><span class="sc-title">Include Before/After Comparison</span> <span class="sc-desc">— شامل مقایسه قبل و بعد</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptRawEvidence" /><span><span class="sc-title">Include Raw Evidence Files</span> <span class="sc-desc">— شامل فایل‌های خام شواهد</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptHashes" /><span><span class="sc-title">Include File Hashes (SHA-256)</span> <span class="sc-desc">— هش فایل‌ها برای یکپارچگی</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptBilingual" /><span><span class="sc-title">Bilingual (EN + FA)</span> <span class="sc-desc">— گزارش دو زبانه</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptScreenshots" /><span><span class="sc-title">Include Screenshots</span> <span class="sc-desc">— اسکرین‌شات از سیستم</span></span></label>
-                <label class="section-check"><input type="checkbox" @bind="OptEncrypt" /><span><span class="sc-title">Encrypt Report (Password)</span> <span class="sc-desc">— رمزنگاری خروجی</span></span></label>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="outline-row"><span class="outline-pages">Report Outline ~@(EstimatedPages) pages</span></div>
-            <div class="action-row">
-                <button class="btn-generate" @onclick="GenerateReportAsync" disabled="@_isExporting">@(_isExporting ? "Generating..." : "Generate Report")</button>
-                <button class="btn-secondary" @onclick="PreviewReport">Preview</button>
-                <button class="btn-secondary" @onclick="EmailReport">Email Report</button>
-                <button class="btn-secondary" @onclick="ScheduleReport">Schedule Recurring</button>
-            </div>
-            @if (_errorMessage != null)
-            {
-                <div class="result-message" style="background: rgba(239,68,68,0.1); color: #ef4444;">⚠️ @_errorMessage</div>
-            }
-            @if (_savedFilePath != null)
-            {
-                <div class="result-message" style="background: rgba(16,185,129,0.1); color: #10b981;">✅ Report saved at: <code style="color:#06b6d4;">@_savedFilePath</code></div>
-            }
-        </div>
-    }
-    else if (ActiveSubTab == "beforeafter")
-    {
-        @* ── تب Before/After ── *@
-        <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div class="section-title" style="margin-bottom:2px;">Before / After Hardening Snapshots</div>
-                    <div class="section-sub">مقایسه وضعیت سیستم قبل و بعد از هاردنینگ</div>
+                <div class="summary-box">
+                    <div class="summary-value pass">@StateService.CurrentScanResult?.PassCount</div>
+                    <div class="summary-label">Passed</div>
                 </div>
-                <button class="btn-edit" @onclick="RefreshSnapshots">Refresh Snapshots</button>
-            </div>
-            <div class="snapshots-row">
-                <div class="snapshot-card before">
-                    <div class="snap-dot before-dot"></div>
-                    <div class="snap-header">Before Hardening</div>
-                    <div class="snap-date">@BeforeScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
-                    <div class="snap-score">@BeforeScan.ComplianceScore%</div>
-                    <div class="snap-grade">Grade @BeforeScan.Grade</div>
-                    <div class="snap-counts"><span class="snap-pass">@BeforeScan.PassCount Pass</span><span class="snap-fail">@BeforeScan.FailCount Fail</span><span class="snap-warn">@BeforeScan.WarningCount Warn</span></div>
-                    <div class="snap-meta">
-                        <div><span class="meta-label">Baseline</span> <span class="meta-value">@BeforeBaselineName</span></div>
-                        <div><span class="meta-label">Output File</span> <span class="meta-value">@BeforeFileName</span></div>
-                    </div>
+                <div class="summary-box">
+                    <div class="summary-value fail">@StateService.CurrentScanResult?.FailCount</div>
+                    <div class="summary-label">Failed</div>
                 </div>
-                <div class="snap-arrow">
-                    <div class="arrow-icon">→</div>
-                    @if (ScoreDelta != 0)
+                <div class="summary-box">
+                    <div class="summary-value warning">@StateService.CurrentScanResult?.WarningCount</div>
+                    <div class="summary-label">Warnings</div>
+                </div>
+            </div>
+
+            <h3 style="color: #94a3b8; font-size: 14px; margin: 20px 0 12px 0;">Detailed Findings</h3>
+            <table class="findings-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Control Name</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Severity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var finding in StateService.CurrentScanResult?.Findings ?? new List<Finding>())
                     {
-                        <div class="delta-pill @(ScoreDelta > 0 ? "up" : "")">@(ScoreDelta > 0 ? "↑" : "↓") Score @Math.Abs(ScoreDelta)%</div>
+                        <tr>
+                            <td>@finding.CheckId</td>
+                            <td>@finding.Name</td>
+                            <td>@finding.Category</td>
+                            <td>
+                                <span class="status-badge @finding.Status.ToString().ToLower()">
+                                    @finding.Status
+                                </span>
+                            </td>
+                            <td>@finding.Severity</td>
+                        </tr>
                     }
-                    @if (IssuesFixed > 0)
-                    {
-                        <div class="delta-pill up">↑ @IssuesFixed Issues Fixed</div>
-                    }
-                    @if (BeforeScan.Grade != AfterScan.Grade)
-                    {
-                        <div class="delta-pill">Grade @BeforeScan.Grade → @AfterScan.Grade</div>
-                    }
-                    @if (AfterScan.WarningCount > 0)
-                    {
-                        <div class="delta-pill warn">@AfterScan.WarningCount Warnings Remaining</div>
-                    }
-                </div>
-                <div class="snapshot-card after">
-                    <div class="snap-dot after-dot"></div>
-                    <div class="snap-header">After Hardening</div>
-                    <div class="snap-date">@AfterScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
-                    <div class="snap-score">@AfterScan.ComplianceScore%</div>
-                    <div class="snap-grade">Grade @AfterScan.Grade</div>
-                    <div class="snap-counts"><span class="snap-pass">@AfterScan.PassCount Pass</span><span class="snap-fail">@AfterScan.FailCount Fail</span><span class="snap-warn">@AfterScan.WarningCount Warn</span></div>
-                    <div class="snap-meta">
-                        <div><span class="meta-label">Baseline</span> <span class="meta-value">@AfterBaselineName</span></div>
-                        <div><span class="meta-label">Output File</span> <span class="meta-value">@AfterFileName</span></div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                </tbody>
+            </table>
 
-        <div class="panel">
-            <div class="section-title">Output File Evidence</div>
-            <div class="section-sub">محتوای فایل‌های خروجی قبل و بعد — شواهد جمع‌آوری شده</div>
-            <div class="evidence-chips">
-                @foreach (var ev in EvidenceCounts)
-                {
-                    <div class="ev-chip"><span class="ev-name">@ev.Name</span><span class="ev-count">@ev.Count</span></div>
-                }
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #334155; color: #64748b; font-size: 11px;">
+                <strong>Compliance Score:</strong> @StateService.CurrentScanResult?.ComplianceScore% | 
+                <strong>Grade:</strong> @StateService.CurrentScanResult?.Grade
             </div>
-            <div class="evidence-files">
-                <div class="ev-file"><span class="ev-file-label">Before</span><span class="ev-file-name">@BeforeFileName</span></div>
-                <div class="ev-file"><span class="ev-file-label">After</span><span class="ev-file-name">@AfterFileName</span></div>
-            </div>
-        </div>
-
-        <div class="panel">
-            <div class="section-title">Compliance Mapping (Before → After)</div>
-            <div class="section-sub">انطباق کنترل‌های CIS — وضعیت قبل و بعد</div>
-            <div class="compliance-table-wrap">
-                <table class="compliance-table">
-                    <thead><tr><th>ID</th><th>Check</th><th>CIS Ref</th><th>Severity</th><th>Before</th><th>After</th><th>Delta</th><th>Source</th></tr></thead>
-                    <tbody>
-                        @foreach (var row in ComplianceRows)
-                        {
-                            <tr>
-                                <td><code>@row.Id</code></td>
-                                <td>@row.Name</td>
-                                <td><span class="cis-inline">@row.CisRef</span></td>
-                                <td><span class="sev-inline sev-@row.Severity.ToString().ToLower()">@row.Severity</span></td>
-                                <td class="st-@row.BeforeStatus.ToString().ToLower().Substring(0,1)">@row.BeforeStatus.ToString().Substring(0, 1)</td>
-                                <td class="st-@row.AfterStatus.ToString().ToLower().Substring(0,1)">@row.AfterStatus.ToString().Substring(0, 1)</td>
-                                <td>
-                                    @if (row.BeforeStatus == CheckStatus.Fail && row.AfterStatus == CheckStatus.Pass)
-                                    {
-                                        <span class="delta-ok">✓ Fixed</span>
-                                    }
-                                    else if (row.BeforeStatus == row.AfterStatus)
-                                    {
-                                        <span class="delta-same">—</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="delta-@(row.AfterStatus == CheckStatus.Pass ? "ok" : "partial")">@row.AfterStatus.ToString().Substring(0, 1)</span>
-                                    }
-                                </td>
-                                <td class="src-cell">@row.Source</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
-    else if (ActiveSubTab == "system")
-    {
-        @* ── تب System & Context ── *@
-        <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div class="section-title" style="margin-bottom:2px;">Target System & Context</div>
-                    <div class="section-sub">System details and operational context</div>
-                </div>
-                @if (!StateService.IsEditingSystemInfo)
-                {
-                    <button class="btn-edit" @onclick="StateService.StartEditingSystemInfo">Edit System Details</button>
-                }
-            </div>
-            <div class="ctx-grid">
-                <div class="ctx-row"><span class="ctx-label">Scan Date Gregorian</span><span class="ctx-value">@DateTime.Now.ToString("yyyy-MM-dd")</span></div>
-                <div class="ctx-row"><span class="ctx-label">Persian (شمسی)</span><span class="ctx-value">@PersianDate</span></div>
-                @if (StateService.IsEditingSystemInfo)
-                {
-                    <div class="ctx-row"><span class="ctx-label">Hostname</span><input class="sys-input" @bind="StateService.DraftHostname" /></div>
-                    <div class="ctx-row"><span class="ctx-label">IP Address</span><input class="sys-input" @bind="StateService.DraftIpAddress" /></div>
-                    <div class="ctx-row"><span class="ctx-label">OS Build</span><input class="sys-input" @bind="StateService.DraftOsBuild" /></div>
-                    <div class="ctx-row"><span></span><span><button class="btn-save" @onclick="StateService.SaveSystemInfoEdits">Save</button> <button class="btn-cancel" @onclick="StateService.CancelSystemInfoEdits">Cancel</button></span></div>
-                }
-                else
-                {
-                    <div class="ctx-row"><span class="ctx-label">Hostname</span><span class="ctx-value">@StateService.DisplayHostname</span></div>
-                    <div class="ctx-row"><span class="ctx-label">IP Address</span><span class="ctx-value">@StateService.DisplayIpAddress</span></div>
-                    <div class="ctx-row"><span class="ctx-label">OS Build</span><span class="ctx-value">@StateService.DisplayOsBuild</span></div>
-                }
-                <div class="ctx-row">
-                    <span class="ctx-label">Operational Context Zone</span>
-                    <span class="chip-row">@foreach (var z in Zones)
-                        {
-                            <button class="chip @(StateService.SelectedZone == z ? "active" : "")" @onclick="() => StateService.SelectedZone = z">@z</button>
-                        }</span>
-                </div>
-                <div class="ctx-row">
-                    <span class="ctx-label">System Role</span>
-                    <span class="chip-row">@foreach (var r in Roles)
-                        {
-                            <button class="chip @(StateService.SelectedSystem == r ? "active" : "")" @onclick="() => StateService.SelectedSystem = r">@r</button>
-                        }</span>
-                </div>
-                <div class="ctx-row"><span class="ctx-label">Context Hostname</span><span class="ctx-value" style="color:#06b6d4;">@StateService.HostnameContext</span></div>
-            </div>
-        </div>
-    }
-    else if (ActiveSubTab == "baseline")
-    {
-        @* ── تب Baseline (مرحله ۳) ── *@
-        <div class="panel">
-            <div class="section-title">Baseline Configuration</div>
-            <div class="section-sub">ویرایش مقادیر Expected و فعال/غیرفعال کردن چک‌ها — به نام Madanchi</div>
-            <p class="empty-state">🚧 This tab will be implemented in Stage 3 (Madanchi baseline: ASR / AppLocker / Windows Security / Audit Logs).</p>
-        </div>
-    }
-    else if (ActiveSubTab == "ledger")
-    {
-        @* ── تب Report Ledger ── *@
-        <div class="panel">
-            <div class="section-title">Report Ledger</div>
-            <div class="section-sub">بایگانی گزارش‌های تولیدشده توسط کنترلر Gate</div>
-            @if (GateService.Ledger.Count == 0)
-            {
-                <p class="empty-state">No reports generated yet.</p>
-            }
-            else
-            {
-                <div class="compliance-table-wrap">
-                    <table class="compliance-table">
-                        <thead><tr><th>#</th><th>Type</th><th>Format</th><th>File Name</th><th>Generated At</th><th>State Signature</th></tr></thead>
-                        <tbody>
-                            @foreach (var e in GateService.Ledger)
-                            {
-                                <tr>
-                                    <td><code>R-@e.Seq.ToString("D3")</code></td>
-                                    <td>@e.ReportType</td>
-                                    <td>@e.Format.ToUpper()</td>
-                                    <td class="src-cell">@e.FileName</td>
-                                    <td class="src-cell">@e.GeneratedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</td>
-                                    <td class="src-cell">@e.StateSignature.Substring(0, 8)…</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
         </div>
     }
 </div>
 
 @code {
-    private string ActiveSubTab = "generator";
-    private string SelectedReportType = "current";
-    private string SelectedFormat = "html";
-    private bool _isExporting;
-    private string? _savedFilePath;
-    private string? _errorMessage;
-
-    private bool OptBeforeAfter = true;
-    private bool OptRawEvidence = true;
-    private bool OptHashes = false;
-    private bool OptBilingual = true;
-    private bool OptScreenshots = false;
-    private bool OptEncrypt = false;
-
-    private static readonly string[] Zones = { "MRDC", "AOC", "ERDC", "SRDC", "NRDC" };
-    private static readonly string[] Roles = { "Shift Supervisor", "Shift Expert" };
-
-    private static readonly List<(string Id, string Icon, string Name)> SubTabs = new()
-    {
-        ("generator", "⚙", "Generator"),
-        ("beforeafter", "📈", "Before/After"),
-        ("system", "🖥", "System & Context"),
-        ("baseline", "📚", "Baseline"),
-        ("ledger", "🗂", "Report Ledger")
-    };
-
-    private static readonly List<(string Id, string Icon, string Name, string Desc)> ExportFormats = new()
-    {
-        ("html", "📄", "HTML", "Interactive"),
-        ("pdf", "📕", "PDF", "Printable"),
-        ("excel", "📊", "Excel", "Spreadsheet"),
-        ("json", "🧩", "JSON", "Machine-readable"),
-        ("zip", "📦", "ZIP", "Bundle All + evidence"),
-        ("csv", "✍", "CSV", "Findings only")
-    };
-
-    private class ReportSection { public string TitleEn { get; set; } = ""; public string DescFa { get; set; } = ""; public bool Enabled { get; set; } = true; }
-
-    private List<ReportSection> Sections { get; set; } = new()
-    {
-        new() { TitleEn = "Executive", DescFa = "خلاصه مدیریتی و امتیاز کلی" },
-        new() { TitleEn = "Score & Grade", DescFa = "امتیاز، گرید و نمودار" },
-        new() { TitleEn = "Risk Assessment", DescFa = "ارزیابی ریسک و سطح بحرانی" },
-        new() { TitleEn = "Technical Findings Table", DescFa = "جدول کامل یافته‌ها" },
-        new() { TitleEn = "Current vs Expected", DescFa = "مقایسه مقدار فعلی و مورد انتظار" },
-        new() { TitleEn = "Registry Snapshots", DescFa = "Snapshot کلیدهای رجیستری" },
-        new() { TitleEn = "Evidence Before/After Diff", DescFa = "تفاوت خروجی قبل و بعد" },
-        new() { TitleEn = "Command Outputs", DescFa = "خروجی دستورات جمع‌آوری" },
-        new() { TitleEn = "Raw Scan Logs", DescFa = "لاگ خام اسکن" },
-        new() { TitleEn = "File Hashes (SHA-256)", DescFa = "هش فایل‌های خروجی" },
-        new() { TitleEn = "Compliance CIS Mapping", DescFa = "انطباق با CIS Benchmark" },
-        new() { TitleEn = "SLA Status", DescFa = "وضعیت SLA و مهلت اصلاح" },
-        new() { TitleEn = "Exception/Waiver Record", DescFa = "استثنائات و معافیت‌ها" },
-        new() { TitleEn = "Remediation Actions Applied", DescFa = "اقدامات اصلاحی انجام شده" },
-        new() { TitleEn = "Remaining Risks", DescFa = "ریسک‌های باقی‌مانده" },
-        new() { TitleEn = "Recommendations", DescFa = "پیشنهادات و راهکارها" },
-        new() { TitleEn = "Attachments Screenshots", DescFa = "اسکرین‌شات از سیستم" },
-        new() { TitleEn = "Baseline Config", DescFa = "فایل پیکربندی بیس‌لاین" },
-        new() { TitleEn = "Activity Log", DescFa = "لاگ فعالیت‌های انجام شده" },
-        new() { TitleEn = "Approval & Sign-off", DescFa = "تأیید و امضای گزارش" }
-    };
-
-    private void SelectAllSections() => Sections.ForEach(s => s.Enabled = true);
-    private void DeselectAllSections() => Sections.ForEach(s => s.Enabled = false);
-
-    private string PersianDate
-    {
-        get
-        {
-            var pc = new PersianCalendar();
-            var now = DateTime.Now;
-            return $"{pc.GetYear(now)}/{pc.GetMonth(now):00}/{pc.GetDayOfMonth(now):00}";
-        }
-    }
-
-    private int EstimatedPages => 4 + Sections.Count(s => s.Enabled) / 2;
-
-    // ── Gate: وضعیت فعلی کنترلر برای کارت Current State ──
-    private GateDecision CurrentGate => GateService.EvaluateCurrentState(StateService.CurrentScanResult);
-
-    private void SelectCurrentType()
-    {
-        if (CurrentGate.Kind != GateKind.Locked)
-            SelectedReportType = "current";
-    }
-    private void SelectBeforeAfterType() => SelectedReportType = "beforeafter";
-    private void SelectRemediationType() => SelectedReportType = "remediation";
-    // ── Snapshots ──
-    private ScanResult BeforeScan { get; set; } = EmptyScan();
-    private ScanResult AfterScan { get; set; } = EmptyScan();
-    private string BeforeBaselineName = "win11-pro-hardening.json";
-    private string AfterBaselineName = "win11-pro-hardening.json";
-    private string BeforeFileName = "scan_before_001.json";
-    private string AfterFileName = "scan_after_002.json";
-
-    private static ScanResult EmptyScan() => new ScanResult("N/A", "N/A", "N/A", "N/A", "N/A", ScanMode.Full);
-
-    private void RefreshSnapshots()
-    {
-        var current = StateService.CurrentScanResult;
-        var history = HistoryService?.History.ToList() ?? new List<ScanHistoryEntry>();
-
-        if (history.Count >= 2)
-        {
-            BeforeFileName = $"scan_before_{history.Count:D3}.json";
-            AfterFileName = $"scan_after_{history.Count + 1:D3}.json";
-        }
-
-        BeforeScan = current ?? EmptyScan();
-        AfterScan = current ?? EmptyScan();
-    }
-
-    private int ScoreDelta => (AfterScan?.ComplianceScore ?? 0) - (BeforeScan?.ComplianceScore ?? 0);
-    private int IssuesFixed => (BeforeScan == null || AfterScan == null) ? 0 : Math.Max(0, BeforeScan.FailCount - AfterScan.FailCount);
-
-    private class EvidenceCount { public string Name { get; set; } = ""; public int Count { get; set; } }
-
-    private List<EvidenceCount> EvidenceCounts
-    {
-        get
-        {
-            var scan = AfterScan ?? StateService.CurrentScanResult;
-            if (scan?.Findings == null) return new List<EvidenceCount>();
-            var findings = scan.Findings;
-            return new List<EvidenceCount>
-            {
-                new() { Name = "Registry", Count = findings.Count(f => !string.IsNullOrEmpty(f.RegistryPath)) },
-                new() { Name = "PowerShell", Count = findings.Count(f => f.FixTools.Any(t => t.Contains("powershell", StringComparison.OrdinalIgnoreCase)) || f.CheckId.StartsWith("FW")) },
-                new() { Name = "Local Policy", Count = findings.Count(f => f.FixTools.Any(t => t.Contains("secpol", StringComparison.OrdinalIgnoreCase)) || f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD")) },
-                new() { Name = "Services", Count = findings.Count(f => f.CheckId.StartsWith("USB") || f.CheckId.StartsWith("WUP")) },
-                new() { Name = "Firewall", Count = findings.Count(f => f.CheckId.StartsWith("FW")) },
-                new() { Name = "Audit Policy", Count = findings.Count(f => f.CheckId.StartsWith("AUD")) }
-            };
-        }
-    }
-
-    private class ComplianceRow
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string CisRef { get; set; } = "";
-        public CheckSeverity Severity { get; set; }
-        public CheckStatus BeforeStatus { get; set; }
-        public CheckStatus AfterStatus { get; set; }
-        public string Source { get; set; } = "";
-    }
-
-    private List<ComplianceRow> ComplianceRows
-    {
-        get
-        {
-            if (AfterScan?.Findings == null) return new List<ComplianceRow>();
-            var before = BeforeScan?.Findings ?? new List<Finding>();
-            return AfterScan.Findings.Select(f =>
-            {
-                var bf = before.FirstOrDefault(x => x.CheckId == f.CheckId);
-                var source = !string.IsNullOrEmpty(f.SourceType) ? f.SourceType :
-                             f.CheckId.StartsWith("PWD") || f.CheckId.StartsWith("AUD") ? "secedit" :
-                             f.CheckId.StartsWith("GUEST") || f.CheckId.StartsWith("ADM") ? "net.exe" : "RegistryReader";
-                return new ComplianceRow
-                    {
-                        Id = f.CheckId,
-                        Name = f.Name,
-                        CisRef = f.CisReference ?? "—",
-                        Severity = f.Severity,
-                        BeforeStatus = bf?.Status ?? CheckStatus.Pass,
-                        AfterStatus = f.Status,
-                        Source = source
-                    };
-            }).ToList();
-        }
-    }
-
-    // ── تولید گزارش با کنترلر Gate ──
-    private async Task GenerateReportAsync()
-    {
-        var scan = StateService.CurrentScanResult;
-        if (scan == null) { _errorMessage = "No scan data available."; return; }
-
-        // Gate برای Current State
-        if (SelectedReportType == "current")
-        {
-            var decision = GateService.EvaluateCurrentState(scan);
-            if (decision.Kind == GateKind.Locked || decision.Kind == GateKind.Blocked)
-            {
-                _errorMessage = decision.Message;
-                _savedFilePath = null;
-                return;
-            }
-        }
-
-        // Before/After نیاز به ≥۲ اسکن
-        if (SelectedReportType == "beforeafter")
-        {
-            var history = HistoryService?.History.ToList() ?? new List<ScanHistoryEntry>();
-            if (history.Count < 2)
-            {
-                _errorMessage = "Before/After report requires at least 2 scans in history. Run another scan after making changes.";
-                _savedFilePath = null;
-                return;
-            }
-        }
-
-        _isExporting = true;
-        _errorMessage = null;
-        _savedFilePath = null;
-
-        try
-        {
-            string outputDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Reports");
-            var fullName = GateService.BuildFileName(scan, SelectedReportType, SelectedFormat);
-            var baseNoExt = System.IO.Path.GetFileNameWithoutExtension(fullName);
-
-            _savedFilePath = SelectedFormat switch
-            {
-                "html" => await ReportService.GenerateAndSaveReportAsync(scan, outputDir, baseNoExt),
-                "json" => await ReportService.GenerateAndSaveJsonReportAsync(scan, outputDir, baseNoExt),
-                "csv" => await ReportService.GenerateAndSaveCsvReportAsync(scan, outputDir, baseNoExt),
-                _ => null
-            };
-
-            if (_savedFilePath == null)
-            {
-                _errorMessage = $"{SelectedFormat.ToUpper()} export (PDF/Excel/ZIP) will be implemented in a future stage.";
-            }
-            else
-            {
-                // ثبت در Ledger + فعال‌سازی چک تغییر پس از اولین گزارش (هر فرمتی)
-                GateService.RecordReport(scan, SelectedReportType, SelectedFormat, _savedFilePath);
-                StateService.LogAction($"Report generated: type={SelectedReportType}, format={SelectedFormat}, file={System.IO.Path.GetFileName(_savedFilePath)}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = $"Failed to generate report: {ex.Message}";
-        }
-        finally
-        {
-            _isExporting = false;
-        }
-    }
-
-    private void PreviewReport() => StateService.LogAction($"Report preview requested: type={SelectedReportType}");
-    private void EmailReport() => StateService.LogAction("Email report: planned for a future step.");
-    private void ScheduleReport() => StateService.LogAction("Schedule recurring report: planned for a future step.");
+    private string TargetName { get; set; } = "";
+    private string ReportType { get; set; } = "Current";
+    private string SelectedBaselineId { get; set; } = "HOSSEINI-V1";
+    private string SelectedBaselineName { get; set; } = "Hosseini Windows 11 Hardening Standard";
+    private List<BaselineDefinition> AvailableBaselines { get; set; } = new();
+    private bool ReportGenerated { get; set; } = false;
 
     protected override void OnInitialized()
     {
-        StateService.OnChange += HandleStateChanged;
-        RefreshSnapshots();
+        AvailableBaselines = BaselineService.GetAllBaselines();
+        
+        // Set default baseline name
+        var defaultBaseline = BaselineService.GetBaselineById(SelectedBaselineId);
+        if (defaultBaseline != null)
+        {
+            SelectedBaselineName = defaultBaseline.Name;
+        }
     }
 
-    private void HandleStateChanged()
+    private void OnBaselineChanged(ChangeEventArgs e)
     {
-        RefreshSnapshots();
-        InvokeAsync(StateHasChanged);
+        SelectedBaselineId = e.Value?.ToString() ?? "HOSSEINI-V1";
+        var baseline = BaselineService.GetBaselineById(SelectedBaselineId);
+        if (baseline != null)
+        {
+            SelectedBaselineName = baseline.Name;
+        }
     }
 
-    public void Dispose()
+    private void GenerateReport()
     {
-        StateService.OnChange -= HandleStateChanged;
+        // Update ScanStateService with target name
+        StateService.SetReportTargetName(TargetName);
+        
+        ReportGenerated = true;
+        StateHasChanged();
     }
 }

@@ -60,6 +60,16 @@ public class ScanStateService
 
     // --- Baseline Info (Phase 3.2) ---
     public string BaselineName { get; private set; } = "Hosseini Standard v1.0";
+    // در بخش Properties، بعد از BaselineName:
+    public string SelectedBaselineId { get; set; } = "HOSSEINI-V1";
+    public string SelectedBaselineName { get; set; } = "Hosseini Standard v1.0";
+
+    public void SetSelectedBaseline(string baselineId, string baselineName)
+    {
+        SelectedBaselineId = baselineId;
+        SelectedBaselineName = baselineName;
+        NotifyStateChanged();
+    }
 
     public ScanStateService(IServiceProvider? serviceProvider = null)
     {
