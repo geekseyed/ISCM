@@ -92,7 +92,8 @@ public class CatalogCoverageService : ICatalogCoverageService
                     Severity = "Critical",
                     Category = "OrphanSubControl",
                     Description = $"SubControl {sub.SubControlId} has invalid ParentControlId: {sub.ParentControlId}",
-                    AffectedSubControlId = sub.SubControlId
+                    AffectedSubControlId = sub.SubControlId,
+                    AffectedParentControlId = sub.ParentControlId
                 });
             }
         }
