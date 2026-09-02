@@ -67,8 +67,8 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var validator = scope.ServiceProvider.GetRequiredService<ICatalogValidator>();
-    validator.Validate();
-    Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
+    var result = validator.ValidateCatalog();
+    Console.WriteLine($"[INFO] Catalog Integrity Validation: {(result.IsValid ? "PASSED" : $"FAILED ({result.CriticalIssues} critical, {result.HighIssues} high issues)")}"); Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
 }
 
 if (!app.Environment.IsDevelopment())
