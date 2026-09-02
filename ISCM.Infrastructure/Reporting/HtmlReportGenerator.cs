@@ -40,7 +40,7 @@ td{padding:10px;border-bottom:1px solid #334155;}
         sb.AppendLine(SummaryItem("Hostname", scanResult.Hostname));
         sb.AppendLine(SummaryItem("IP Address", scanResult.IpAddress));
         sb.AppendLine(SummaryItem("OS Version", $"{scanResult.OsVersion} (Build {scanResult.OsBuild})"));
-        sb.AppendLine(SummaryItem("Scan Time", scanResult.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")));
+        sb.AppendLine(SummaryItem("Scan Time", scanResult.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")));
         var scoreColor = scanResult.ComplianceScore >= 70 ? "#10b981" : "#ef4444";
         sb.AppendLine($"<div class=\"summary-item\"><div class=\"label\">Compliance Score</div><div class=\"value\" style=\"color:{scoreColor}\">{scanResult.ComplianceScore}%</div></div>");
         sb.AppendLine(SummaryItem("Grade", scanResult.Grade));
@@ -107,7 +107,7 @@ td{padding:10px;border-bottom:1px solid #334155;}
             IpAddress = scanResult.IpAddress,
             OsVersion = scanResult.OsVersion,
             OsBuild = scanResult.OsBuild,
-            ScanTime = scanResult.StartedAtUtc,   // ✅ DateTimeOffset
+            ScanTime = scanResult.StartedAtUtc,
             ComplianceScore = scanResult.ComplianceScore,
             Grade = scanResult.Grade,
             Summary = new SummaryDto
@@ -157,8 +157,6 @@ td{padding:10px;border-bottom:1px solid #334155;}
         return filePath;
     }
 
-    // ── Helpers ──
-
     private static string SummaryItem(string label, string value) =>
         $"<div class=\"summary-item\"><div class=\"label\">{Escape(label)}</div><div class=\"value\">{Escape(value)}</div></div>";
 
@@ -171,7 +169,6 @@ td{padding:10px;border-bottom:1px solid #334155;}
         return $"\"{v.Replace("\"", "\"\"")}\"";
     }
 
-    // DTOs — explicit types, no null inference
     private sealed class ReportDto
     {
         public string ReportType { get; set; } = string.Empty;
@@ -179,8 +176,8 @@ td{padding:10px;border-bottom:1px solid #334155;}
         public string Hostname { get; set; } = string.Empty;
         public string IpAddress { get; set; } = string.Empty;
         public string OsVersion { get; set; } = string.Empty;
-        public string OsBuild { get; set; } = string.Empty;
-        public DateTimeOffset ScanTime { get; set; }   
+        public int OsBuild { get; set; }
+        public DateTime ScanTime { get; set; }
         public int ComplianceScore { get; set; }
         public string Grade { get; set; } = string.Empty;
         public SummaryDto Summary { get; set; } = new();

@@ -894,7 +894,7 @@
                 <div class="snapshot-card before">
                     <div class="snap-dot before-dot"></div>
                     <div class="snap-header">Before Hardening</div>
-                    <div class="snap-date">@BeforeScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    <div class="snap-date">@BeforeScan.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
                     <div class="snap-score">@BeforeScan.ComplianceScore%</div>
                     <div class="snap-grade">Grade @BeforeScan.Grade</div>
                     <div class="snap-counts"><span class="snap-pass">@BeforeScan.PassCount Pass</span><span class="snap-fail">@BeforeScan.FailCount Fail</span><span class="snap-warn">@BeforeScan.WarningCount Warn</span></div>
@@ -925,7 +925,7 @@
                 <div class="snapshot-card after">
                     <div class="snap-dot after-dot"></div>
                     <div class="snap-header">After Hardening</div>
-                    <div class="snap-date">@AfterScan.StartedAtUtc.LocalDateTime.ToString("yyyy-MM-dd HH:mm")</div>
+                    <div class="snap-date">@AfterScan.StartedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
                     <div class="snap-score">@AfterScan.ComplianceScore%</div>
                     <div class="snap-grade">Grade @AfterScan.Grade</div>
                     <div class="snap-counts"><span class="snap-pass">@AfterScan.PassCount Pass</span><span class="snap-fail">@AfterScan.FailCount Fail</span><span class="snap-warn">@AfterScan.WarningCount Warn</span></div>

@@ -74,7 +74,6 @@ public class ScanStateService
         _currentScanResult = result;
         UpdateDisplayInfo();
 
-        // ✅ Phase 3.2: به‌روزرسانی نام Baseline
         if (!string.IsNullOrEmpty(result.BaselineId))
         {
             var baselineService = _serviceProvider?.GetService<IBaselineService>();
@@ -120,7 +119,7 @@ public class ScanStateService
             DisplayHostname = _currentScanResult.Hostname ?? "Unknown";
             DisplayIpAddress = _currentScanResult.IpAddress ?? "0.0.0.0";
             DisplayOsVersion = _currentScanResult.OsVersion ?? "Unknown";
-            DisplayOsBuild = _currentScanResult.OsBuild ?? "Unknown";
+            DisplayOsBuild = _currentScanResult.OsBuild.ToString();
             HostnameContext = DisplayHostname;
         }
     }
@@ -132,7 +131,7 @@ public class ScanStateService
         DraftHostname = _currentScanResult.Hostname ?? "";
         DraftIpAddress = _currentScanResult.IpAddress ?? "";
         DraftOsVersion = _currentScanResult.OsVersion ?? "";
-        DraftOsBuild = _currentScanResult.OsBuild ?? "";
+        DraftOsBuild = _currentScanResult.OsBuild.ToString();
         NotifyStateChanged();
     }
 
@@ -143,7 +142,7 @@ public class ScanStateService
         _currentScanResult.Hostname = DraftHostname;
         _currentScanResult.IpAddress = DraftIpAddress;
         _currentScanResult.OsVersion = DraftOsVersion;
-        _currentScanResult.OsBuild = DraftOsBuild;
+        _currentScanResult.OsBuild = int.TryParse(DraftOsBuild, out var build) ? build : 0;
 
         UpdateDisplayInfo();
         IsEditingSystemInfo = false;
@@ -171,7 +170,6 @@ public class ScanStateService
 
         LogConsole("Initializing scan...", "status-info");
         LogAction("Scan started.");
-
 
         try
         {
@@ -262,9 +260,6 @@ public class ScanStateService
         }
     }
 
-    /// <summary>
-    /// Phase 2.5: SubControl-aware Rescan
-    /// </summary>
     public async Task RescanSubControlAsync(string checkId, string subControlId)
     {
         if (_currentScanResult == null) return;
