@@ -1,79 +1,201 @@
-﻿using ISCM.Application.Interfaces;
-using ISCM.Domain.Entities;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using ISCM.Domain.Entities;
+using ISCM.Domain.Enums;
 
 namespace ISCM.Application.Validators;
 
 public class CatalogValidator : ICatalogValidator
 {
-    private readonly IEnumerable<IHardeningCheck> _checks;
-
-    public CatalogValidator(IEnumerable<IHardeningCheck> checks)
+    public CatalogValidationResult ValidateCatalog()
     {
-        _checks = checks;
+        var result = new CatalogValidationResult();
+
+        result.Issues.AddRange(FindDuplicateParentIds());
+        result.Issues.AddRange(FindDuplicateSubControlIds());
+        result.Issues.AddRange(FindOrphanSubControls());
+        result.Issues.AddRange(FindMissingTechnicalCheckMappings());
+        result.Issues.AddRange(FindInvalidEvidenceSources());
+        result.Issues.AddRange(FindInvalidValueTypeOperatorCombinations());
+
+        result.IsValid = !result.Issues.Any(i => i.Severity == "Critical");
+
+        return result;
     }
 
-    public void Validate()
+    public List<CatalogIntegrityIssue> FindDuplicateParentIds()
     {
-        var errors = new List<string>();
-        var controls = ControlCatalog.GetAll().ToList();
+        var issues = new List<CatalogIntegrityIssue>();
+        var controls = ControlCatalog.GetAll();
 
-        // 1. بررسی تعداد کنترل‌های Baseline (باید دقیقاً 17 باشد)
-        var baselineCount = controls.Count(c => c.IsBaseline);
-        if (baselineCount != 17)
-        {
-            errors.Add($"[CRITICAL] Baseline control count is {baselineCount}, expected 17.");
-        }
-
-        // 2. بررسی تکراری نبودن ControlIdها
-        var duplicateControlIds = controls
+        var duplicates = controls
             .GroupBy(c => c.ControlId)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToList();
 
-        if (duplicateControlIds.Any())
+        foreach (var id in duplicates)
         {
-            errors.Add($"[CRITICAL] Duplicate ControlIds found: {string.Join(", ", duplicateControlIds)}");
+            issues.Add(new CatalogIntegrityIssue
+            {
+                IssueId = $"DUP-PARENT-{id}",
+                Severity = "Critical",
+                Category = "DuplicateParentId",
+                Description = $"Duplicate ParentControlId: {id}",
+                AffectedParentControlId = id
+            });
         }
 
-        // 3. بررسی تکراری نبودن TechnicalCheckIdها در کل کاتالوگ
-        var allTechIds = controls.SelectMany(c => c.TechnicalCheckIds).ToList();
-        var duplicateTechIds = allTechIds
-            .GroupBy(id => id)
+        return issues;
+    }
+
+    public List<CatalogIntegrityIssue> FindDuplicateSubControlIds()
+    {
+        var issues = new List<CatalogIntegrityIssue>();
+        var allSubControls = GetAllSubControls();
+
+        var duplicates = allSubControls
+            .GroupBy(s => s.SubControlId)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToList();
 
-        if (duplicateTechIds.Any())
+        foreach (var id in duplicates)
         {
-            errors.Add($"[CRITICAL] Duplicate TechnicalCheckIds found: {string.Join(", ", duplicateTechIds)}");
+            issues.Add(new CatalogIntegrityIssue
+            {
+                IssueId = $"DUP-SUB-{id}",
+                Severity = "Critical",
+                Category = "DuplicateSubControlId",
+                Description = $"Duplicate SubControlId: {id}",
+                AffectedSubControlId = id
+            });
         }
 
-        // 4. بررسی چک‌های یتیم (Orphan): چک‌هایی که در DI ثبت شده‌اند اما در کاتالوگ نیستند
-        var registeredCheckIds = _checks.Select(c => c.CheckId).ToHashSet();
-        var mappedCheckIds = allTechIds.ToHashSet();
+        return issues;
+    }
 
-        var orphans = registeredCheckIds.Except(mappedCheckIds).ToList();
-        if (orphans.Any())
+    public List<CatalogIntegrityIssue> FindOrphanSubControls()
+    {
+        var issues = new List<CatalogIntegrityIssue>();
+        var allSubControls = GetAllSubControls();
+        var parentIds = ControlCatalog.GetAll().Select(c => c.ControlId).ToHashSet();
+
+        foreach (var sub in allSubControls)
         {
-            errors.Add($"[WARNING] Orphan checks (Registered in DI but not in Catalog): {string.Join(", ", orphans)}");
+            if (!parentIds.Contains(sub.ParentControlId))
+            {
+                issues.Add(new CatalogIntegrityIssue
+                {
+                    IssueId = $"ORPHAN-{sub.SubControlId}",
+                    Severity = "Critical",
+                    Category = "OrphanSubControl",
+                    Description = $"SubControl {sub.SubControlId} references non-existent ParentControlId: {sub.ParentControlId}",
+                    AffectedSubControlId = sub.SubControlId,
+                    AffectedParentControlId = sub.ParentControlId
+                });
+            }
         }
 
-        // 5. بررسی معکوس: IDهایی که در کاتالوگ هستند اما چکشان در DI ثبت نشده
-        var unmapped = mappedCheckIds.Except(registeredCheckIds).ToList();
-        if (unmapped.Any())
+        return issues;
+    }
+
+    public List<CatalogIntegrityIssue> FindMissingTechnicalCheckMappings()
+    {
+        var issues = new List<CatalogIntegrityIssue>();
+        var controls = ControlCatalog.GetAll();
+
+        foreach (var control in controls)
         {
-            errors.Add($"[WARNING] Catalog IDs not found in DI registration: {string.Join(", ", unmapped)}");
+            if (control.TechnicalCheckIds == null || !control.TechnicalCheckIds.Any())
+            {
+                issues.Add(new CatalogIntegrityIssue
+                {
+                    IssueId = $"NO-TECH-{control.ControlId}",
+                    Severity = "High",
+                    Category = "MissingTechnicalCheckMapping",
+                    Description = $"Control {control.ControlId} has no TechnicalCheckIds defined",
+                    AffectedParentControlId = control.ControlId
+                });
+            }
         }
 
-        // اگر خطایی وجود داشت، برنامه با خطا متوقف شود
-        if (errors.Any())
+        return issues;
+    }
+
+    public List<CatalogIntegrityIssue> FindInvalidEvidenceSources()
+    {
+        var issues = new List<CatalogIntegrityIssue>();
+        var allSubControls = GetAllSubControls();
+
+        foreach (var sub in allSubControls)
         {
-            var msg = "=== CATALOG INTEGRITY VALIDATION FAILED ===\n" + string.Join("\n", errors);
-            throw new InvalidOperationException(msg);
+            if (sub.EvidenceSources == null || !sub.EvidenceSources.Any())
+            {
+                issues.Add(new CatalogIntegrityIssue
+                {
+                    IssueId = $"NO-EVIDENCE-{sub.SubControlId}",
+                    Severity = "High",
+                    Category = "MissingEvidenceSource",
+                    Description = $"SubControl {sub.SubControlId} has no EvidenceSource defined",
+                    AffectedSubControlId = sub.SubControlId
+                });
+            }
         }
+
+        return issues;
+    }
+
+    public List<CatalogIntegrityIssue> FindInvalidValueTypeOperatorCombinations()
+    {
+        var issues = new List<CatalogIntegrityIssue>();
+        var allSubControls = GetAllSubControls();
+
+        foreach (var sub in allSubControls)
+        {
+            var isValid = IsValidValueTypeOperatorCombination(sub.ExpectedValueType, sub.Operator);
+            if (!isValid)
+            {
+                issues.Add(new CatalogIntegrityIssue
+                {
+                    IssueId = $"INVALID-COMBO-{sub.SubControlId}",
+                    Severity = "High",
+                    Category = "InvalidValueTypeOperator",
+                    Description = $"SubControl {sub.SubControlId} has invalid ValueType/Operator combination: {sub.ExpectedValueType}/{sub.Operator}",
+                    AffectedSubControlId = sub.SubControlId
+                });
+            }
+        }
+
+        return issues;
+    }
+
+    private bool IsValidValueTypeOperatorCombination(ExpectedValueType valueType, Operator op)
+    {
+        return valueType switch
+        {
+            ExpectedValueType.Integer => op is Operator.Equals or Operator.NotEquals or Operator.GreaterThan
+                or Operator.GreaterOrEqual or Operator.LessThan or Operator.LessOrEqual,
+            ExpectedValueType.Duration => op is Operator.Equals or Operator.NotEquals or Operator.GreaterThan
+                or Operator.GreaterOrEqual or Operator.LessThan or Operator.LessOrEqual,
+            ExpectedValueType.Boolean => op is Operator.Equals or Operator.NotEquals,
+            ExpectedValueType.String => op is Operator.Equals or Operator.NotEquals or Operator.Contains,
+            ExpectedValueType.Enum => op is Operator.Equals or Operator.NotEquals or Operator.SetMembership,
+            ExpectedValueType.RegistryValue => op is Operator.Equals or Operator.NotEquals,
+            ExpectedValueType.PolicyValue => op is Operator.Equals or Operator.NotEquals,
+            ExpectedValueType.Collection => op is Operator.Contains or Operator.SetMembership,
+            _ => true
+        };
+    }
+
+    private List<SubControlDefinition> GetAllSubControls()
+    {
+        var allSubControls = new List<SubControlDefinition>();
+        foreach (var control in ControlCatalog.GetAll())
+        {
+            if (control.SubControls != null)
+            {
+                allSubControls.AddRange(control.SubControls);
+            }
+        }
+        return allSubControls;
     }
 }
