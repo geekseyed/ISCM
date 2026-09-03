@@ -6,14 +6,16 @@ namespace ISCM.Domain.Entities;
 public class ScanResult : BaseEntity
 {
     public string ScanId { get; set; }
-    public string Hostname { get; set; }
-    public string IpAddress { get; set; }
-    public string MacAddress { get; set; }
-    public string OsVersion { get; set; }
+    public string TargetId { get; set; } = string.Empty;
+    public string Hostname { get; set; } = string.Empty;
+    public string IpAddress { get; set; } = string.Empty;
+    public string MacAddress { get; set; } = string.Empty;
+    public string OsVersion { get; set; } = string.Empty;
     public int OsBuild { get; set; }
     public ScanMode Mode { get; set; }
     public DateTime StartedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public string ScannerVersion { get; set; } = "1.0.0";
     public string? BaselineId { get; set; }
     public BaselineDefinition? Baseline { get; set; }
     public List<Finding> Findings { get; set; } = new();
@@ -24,15 +26,29 @@ public class ScanResult : BaseEntity
     public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)
     {
         ScanId = Guid.NewGuid().ToString("N");
+        TargetId = hostname;
         Hostname = hostname;
         IpAddress = ipAddress;
         MacAddress = macAddress;
         OsVersion = osVersion;
         OsBuild = int.TryParse(osBuild, out var build) ? build : 0;
         Mode = mode;
+        ScannerVersion = "1.0.0";
         StartedAtUtc = DateTime.UtcNow;
-        Findings = new List<Finding>();
-        ControlResults = new List<ControlResult>();
+    }
+
+    public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode, string targetId, string scannerVersion = "1.0.0")
+    {
+        ScanId = Guid.NewGuid().ToString("N");
+        TargetId = targetId;
+        Hostname = hostname;
+        IpAddress = ipAddress;
+        MacAddress = macAddress;
+        OsVersion = osVersion;
+        OsBuild = int.TryParse(osBuild, out var build) ? build : 0;
+        Mode = mode;
+        ScannerVersion = scannerVersion;
+        StartedAtUtc = DateTime.UtcNow;
     }
 
     public void AddFinding(Finding finding)
