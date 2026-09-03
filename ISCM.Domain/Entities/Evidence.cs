@@ -66,13 +66,11 @@ public class Evidence : BaseEntity
 
     public string Fingerprint { get; set; } = string.Empty;
 
-    public bool IsLive { get; set; } = true;
-
-    public bool IsRemediationGenerated { get; set; } = false;
-
     // === LIFECYCLE ===
 
     public EvidenceLifecycleState LifecycleState { get; set; } = EvidenceLifecycleState.Live;
+
+    public DateTime? StateChangedAtUtc { get; set; }
 
     // === PROVENANCE (Phase 3.3) ===
 
@@ -81,6 +79,20 @@ public class Evidence : BaseEntity
     // === TYPED VALUE (Phase 3.2) ===
 
     public EvidenceValue? TypedValue { get; set; }
+
+    // === LIFECYCLE PROPERTIES ===
+
+    public bool IsLive => LifecycleState == EvidenceLifecycleState.Live;
+
+    public bool IsCached => LifecycleState == EvidenceLifecycleState.Cached;
+
+    public bool IsHistorical => LifecycleState == EvidenceLifecycleState.Historical;
+
+    public bool IsRemediationGenerated => LifecycleState == EvidenceLifecycleState.RemediationGenerated;
+
+    public bool IsInvalidated => LifecycleState == EvidenceLifecycleState.Invalidated;
+
+    public bool IsUsable => !IsInvalidated && (IsLive || IsRemediationGenerated);
 
     // === COMPUTED ===
 
@@ -100,9 +112,29 @@ public class Evidence : BaseEntity
         return true;
     }
 
+    // === LIFECYCLE TRANSITIONS ===
+
+    public void MarkAsCached()
+    {
+        LifecycleState = EvidenceLifecycleState.Cached;
+        StateChangedAtUtc = DateTime.UtcNow;
+    }
+
+    public void MarkAsHistorical()
+    {
+        LifecycleState = EvidenceLifecycleState.Historical;
+        StateChangedAtUtc = DateTime.UtcNow;
+    }
+
+    public void MarkAsRemediationGenerated()
+    {
+        LifecycleState = EvidenceLifecycleState.RemediationGenerated;
+        StateChangedAtUtc = DateTime.UtcNow;
+    }
+
     public void Invalidate()
     {
         LifecycleState = EvidenceLifecycleState.Invalidated;
-        IsLive = false;
+        StateChangedAtUtc = DateTime.UtcNow;
     }
 }
