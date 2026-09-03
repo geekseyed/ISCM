@@ -39,22 +39,33 @@ builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
 
-// ✅ Phase 2.5: ثبت IControlEvaluator
+// Phase 2.5: ثبت IControlEvaluator
 builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
-// ✅ Phase 3.3: ثبت IBaselineService
+// Phase 3.3: ثبت IBaselineService
 builder.Services.AddSingleton<IBaselineService, BaselineService>();
 
 builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
 builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
 
+// Phase 4: سرویس‌های Freshness & Cache Control
+builder.Services.AddSingleton<IEvidenceFingerprintGenerator, EvidenceFingerprintGenerator>();
+builder.Services.AddSingleton<IEvidenceCacheService, EvidenceCacheService>();
+builder.Services.AddSingleton<IEvidenceLifecycleService, EvidenceLifecycleService>();
+builder.Services.AddSingleton<IScanFreshnessPolicy, ScanFreshnessPolicy>();
+builder.Services.AddSingleton<IEvidenceAcquisitionService, EvidenceAcquisitionService>();
+builder.Services.AddSingleton<IScanInvalidationService, ScanInvalidationService>();
+builder.Services.AddSingleton<IRemediationVerificationService, RemediationVerificationService>();
+builder.Services.AddSingleton<IScanFingerprintGenerator, ScanFingerprintGenerator>();
+builder.Services.AddSingleton<IFingerprintValidationService, FingerprintValidationService>();
+builder.Services.AddTransient<IScanContext, ScanContext>(sp =>
+    new ScanContext("default", ISCM.Domain.Enums.ScanMode.Full));
+
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
-// ✅ Phase 4.2: ثبت سرویس Remediation
-builder.Services.AddSingleton<IRemediationService, RemediationService>();
-// ✅ Phase 4.4: ثبت RemediationService
+// Phase 4.2: ثبت سرویس Remediation
 builder.Services.AddSingleton<IRemediationService, RemediationService>();
 
-// ✅ Phase 2.5: ثبت ScanStateService با ServiceProvider injection
+// Phase 2.5: ثبت ScanStateService با ServiceProvider injection
 builder.Services.AddScoped<ScanStateService>(sp => new ScanStateService(sp));
 
 builder.Services.AddScoped<ScanHistoryService>();
@@ -68,7 +79,8 @@ using (var scope = app.Services.CreateScope())
 {
     var validator = scope.ServiceProvider.GetRequiredService<ICatalogValidator>();
     var result = validator.ValidateCatalog();
-    Console.WriteLine($"[INFO] Catalog Integrity Validation: {(result.IsValid ? "PASSED" : $"FAILED ({result.CriticalIssues} critical, {result.HighIssues} high issues)")}"); Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
+    Console.WriteLine($"[INFO] Catalog Integrity Validation: {(result.IsValid ? "PASSED" : $"FAILED ({result.CriticalIssues} critical, {result.HighIssues} high issues)")}");
+    Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
 }
 
 if (!app.Environment.IsDevelopment())

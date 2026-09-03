@@ -1,4 +1,5 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Services;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -16,19 +17,31 @@ public class WindowsHardeningScanner : IScanService
     private readonly IMultiPathCheckValidator _multiPathValidator;
     private readonly IControlEvaluator _controlEvaluator;
     private readonly IBaselineService _baselineService;
+    private readonly IEvidenceAcquisitionService _acquisitionService;
+    private readonly IScanFreshnessPolicy _freshnessPolicy;
+    private readonly IFingerprintValidationService _fingerprintService;
+    private readonly IScanInvalidationService _invalidationService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
         IEnumerable<IHardeningCheck> checks,
         IMultiPathCheckValidator multiPathValidator,
         IControlEvaluator controlEvaluator,
-        IBaselineService baselineService)
+        IBaselineService baselineService,
+        IEvidenceAcquisitionService acquisitionService,
+        IScanFreshnessPolicy freshnessPolicy,
+        IFingerprintValidationService fingerprintService,
+        IScanInvalidationService invalidationService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
         _multiPathValidator = multiPathValidator ?? throw new ArgumentNullException(nameof(multiPathValidator));
         _controlEvaluator = controlEvaluator ?? throw new ArgumentNullException(nameof(controlEvaluator));
         _baselineService = baselineService ?? throw new ArgumentNullException(nameof(baselineService));
+        _acquisitionService = acquisitionService ?? throw new ArgumentNullException(nameof(acquisitionService));
+        _freshnessPolicy = freshnessPolicy ?? throw new ArgumentNullException(nameof(freshnessPolicy));
+        _fingerprintService = fingerprintService ?? throw new ArgumentNullException(nameof(fingerprintService));
+        _invalidationService = invalidationService ?? throw new ArgumentNullException(nameof(invalidationService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -43,11 +56,17 @@ public class WindowsHardeningScanner : IScanService
         await Task.Delay(50);
 
         var (hostname, ipAddress, macAddress, osVersion, osBuild) = _systemInfoCollector.Collect();
-        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode)
+
+        // Phase 4: Create new ScanContext with new ScanId
+        var scanContext = new ScanContext(hostname, mode);
+
+        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode, hostname)
         {
-            BaselineId = defaultBaseline.BaselineId
+            BaselineId = defaultBaseline.BaselineId,
+            ScannerVersion = scanContext.ScannerVersion
         };
 
+        progress?.Report($"[INFO] Scan started: ScanId={scanContext.ScanId}");
         progress?.Report($"[INFO] Collecting system info... Hostname: {hostname}, IP: {ipAddress}");
         progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
         await Task.Delay(100);
@@ -70,14 +89,35 @@ public class WindowsHardeningScanner : IScanService
 
                         foreach (var subResult in subControlResults)
                         {
-                            subResult.EvidenceItems.Add(new Evidence
+                            // Phase 4: Use acquisition service for live evidence
+                            var evidence = new Evidence
                             {
+                                ScanId = scanContext.ScanId,
+                                ParentControlId = check.CheckId,
+                                SubControlId = subResult.SubControlId ?? string.Empty,
+                                TechnicalCheckId = check.CheckId,
                                 SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
                                 SourceName = result.TestName,
                                 RawOutput = result.Details,
                                 Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
-                                CollectedAtUtc = DateTime.UtcNow
-                            });
+                                CollectedAtUtc = DateTime.UtcNow,
+                                MachineIdentity = hostname
+                            };
+
+                            // Phase 4: Assign fingerprint and validate
+                            _fingerprintService.AssignFingerprint(evidence);
+
+                            // Phase 4: Apply freshness policy
+                            if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
+                            {
+                                evidence.LifecycleState = EvidenceLifecycleState.Cached;
+                            }
+                            else
+                            {
+                                evidence.LifecycleState = EvidenceLifecycleState.Live;
+                            }
+
+                            subResult.EvidenceItems.Add(evidence);
                         }
                     }
 
@@ -153,6 +193,7 @@ public class WindowsHardeningScanner : IScanService
         await Task.Delay(100);
 
         scanResult.CompleteScan();
+        scanContext.MarkCompleted();
         return scanResult;
     }
 
@@ -160,6 +201,12 @@ public class WindowsHardeningScanner : IScanService
     {
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
+
+        // Phase 4: Invalidate old evidence for this check
+        _invalidationService.InvalidateForRemediation("rescan", checkId);
+
+        // Phase 4: Create new ScanContext for rescan
+        var scanContext = new ScanContext(checkId, ScanMode.Rescan);
 
         var subControlResults = await check.EvaluateSubControlsAsync();
         var controlDefinition = ControlCatalog.GetByCheckId(checkId);
@@ -187,6 +234,9 @@ public class WindowsHardeningScanner : IScanService
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
 
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
+
+        // Phase 4: Invalidate old evidence for this subcontrol
+        _invalidationService.InvalidateForRemediation("rescan", subControlId);
 
         return await RescanCheckAsync(checkId);
     }
