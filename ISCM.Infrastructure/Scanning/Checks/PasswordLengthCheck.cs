@@ -33,7 +33,6 @@ public class PasswordLengthCheck : BaseHardeningCheck
 
     public override async Task<Finding> EvaluateAsync()
     {
-        // Legacy method: delegate to EvaluateSubControlsAsync and aggregate
         var subControlResults = await EvaluateSubControlsAsync();
         var controlDefinition = ControlCatalog.GetByCheckId(CheckId);
 
@@ -55,31 +54,15 @@ public class PasswordLengthCheck : BaseHardeningCheck
         return evaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
     }
 
-    /// <summary>
-    /// Phase 2.5: Evaluates all 6 password policy settings independently.
-    /// </summary>
     public override async Task<List<SubControlResult>> EvaluateSubControlsAsync()
     {
         var results = new List<SubControlResult>();
-
-        // 1. Minimum Password Length (from registry or net accounts)
         results.Add(await EvaluateMinimumPasswordLength());
-
-        // 2. Password History
         results.Add(await EvaluatePasswordHistory());
-
-        // 3. Maximum Password Age
         results.Add(await EvaluateMaximumPasswordAge());
-
-        // 4. Minimum Password Age
         results.Add(await EvaluateMinimumPasswordAge());
-
-        // 5. Password Complexity
         results.Add(await EvaluatePasswordComplexity());
-
-        // 6. Reversible Encryption
         results.Add(await EvaluateReversibleEncryption());
-
         return results;
     }
 
@@ -91,7 +74,6 @@ public class PasswordLengthCheck : BaseHardeningCheck
 
         try
         {
-            // Try registry first
             string rawOutput;
             using (var key = Registry.LocalMachine.OpenSubKey(PasswordPolicyPath))
             {
@@ -99,7 +81,6 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 rawOutput = value?.ToString() ?? "Not configured";
             }
 
-            // Fallback to net accounts
             if (rawOutput == "Not configured")
             {
                 rawOutput = await RunCommandAsync("net", "accounts");
@@ -116,16 +97,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "Registry",
+                        SourceType = EvidenceSourceType.Registry,
                         SourceName = "MinimumPasswordLength",
-                        Command = $"reg query HKLM\\{PasswordPolicyPath} /v MinimumPasswordLength",
+                        AcquisitionCommand = $"reg query HKLM\\{PasswordPolicyPath} /v MinimumPasswordLength",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -141,13 +122,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "Registry",
+                        SourceType = EvidenceSourceType.Registry,
                         SourceName = "MinimumPasswordLength",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },
@@ -165,7 +146,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
-            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
             var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, ">=");
 
             return new SubControlResult
@@ -176,16 +157,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
-                        Command = "net accounts",
+                        AcquisitionCommand = "net accounts",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -201,13 +182,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },
@@ -225,7 +206,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
-            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
             var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "<=");
 
             return new SubControlResult
@@ -236,16 +217,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
-                        Command = "net accounts",
+                        AcquisitionCommand = "net accounts",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -261,13 +242,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },
@@ -285,7 +266,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
-            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
             var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, ">=");
 
             return new SubControlResult
@@ -296,16 +277,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
-                        Command = "net accounts",
+                        AcquisitionCommand = "net accounts",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -321,13 +302,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },
@@ -345,7 +326,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
-            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
             var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "BOOLEAN_TRUE");
 
             return new SubControlResult
@@ -356,16 +337,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
-                        Command = "net accounts",
+                        AcquisitionCommand = "net accounts",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -381,13 +362,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },
@@ -405,7 +386,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
-            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
             var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "BOOLEAN_FALSE");
 
             return new SubControlResult
@@ -416,16 +397,16 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
-                        Command = "net accounts",
+                        AcquisitionCommand = "net accounts",
                         RawOutput = rawOutput,
                         ParsedValue = parsedValue,
                         ExpectedValue = expectedValue,
                         Evaluation = status,
                         EvaluationReason = reason,
-                        Timestamp = DateTime.UtcNow,
-                        DurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                        CollectedAtUtc = DateTime.UtcNow,
+                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
                     }
                 },
                 EvaluatedAt = DateTime.UtcNow
@@ -441,13 +422,13 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 {
                     new Evidence
                     {
-                        SourceType = "PowerShell",
+                        SourceType = EvidenceSourceType.NetAccounts,
                         SourceName = "net accounts",
                         RawOutput = ex.Message,
                         ExpectedValue = expectedValue,
                         Evaluation = CheckStatus.Error,
                         EvaluationReason = $"Exception: {ex.Message}",
-                        Timestamp = DateTime.UtcNow,
+                        CollectedAtUtc = DateTime.UtcNow,
                         Error = ex.Message
                     }
                 },

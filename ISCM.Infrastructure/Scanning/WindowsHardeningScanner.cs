@@ -58,25 +58,25 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
-                // Phase 2.5: ارزیابی دقیق هر SubControl
                 var subControlResults = await check.EvaluateSubControlsAsync();
 
-                // اعتبارسنجی چندمسیره در صورت پشتیبانی چک
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
 
                     foreach (var result in testResults)
                     {
+                        Enum.TryParse<EvidenceSourceType>(result.TestMethod, true, out var parsedSourceType);
+
                         foreach (var subResult in subControlResults)
                         {
                             subResult.EvidenceItems.Add(new Evidence
                             {
-                                SourceType = result.TestMethod,
+                                SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
                                 SourceName = result.TestName,
                                 RawOutput = result.Details,
                                 Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
-                                Timestamp = DateTime.UtcNow
+                                CollectedAtUtc = DateTime.UtcNow
                             });
                         }
                     }
@@ -117,7 +117,6 @@ public class WindowsHardeningScanner : IScanService
                     };
                 }
 
-                // ✅ اصلاح فاز 4: عبور check.CheckId تا UAC/LM/ADM روی هم بازنویسی نشوند
                 var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
 
                 scanResult.AddFinding(finding);
@@ -179,7 +178,6 @@ public class WindowsHardeningScanner : IScanService
             };
         }
 
-        // ✅ عبور checkId در Rescan هم
         return _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, checkId);
     }
 
@@ -190,7 +188,6 @@ public class WindowsHardeningScanner : IScanService
 
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
 
-        // فعلاً کل چک اسکن مجدد می‌شود
         return await RescanCheckAsync(checkId);
     }
 
