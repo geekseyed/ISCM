@@ -63,13 +63,11 @@ public class ControlEvaluator : IControlEvaluator
         return controlResult;
     }
 
-    // ✅ امضای جدید با پارامتر اختیاری checkId - باید دقیقاً با اینترفیس یکی باشد
     public Finding EvaluateFromSubControls(ControlDefinition controlDefinition, List<SubControlResult> subControlResults, string? checkId = null)
     {
         var controlResult = Evaluate(controlDefinition, subControlResults);
         var allEvidence = subControlResults.SelectMany(s => s.EvidenceItems).ToList();
 
-        // ✅ اصلاح فاز 4: اگر اسکنر CheckId چکِ اجراشده را بفرستد، همان استفاده شود
         var primaryCheckId = checkId
             ?? controlDefinition.TechnicalCheckIds.FirstOrDefault()
             ?? controlDefinition.ControlId;
@@ -97,7 +95,7 @@ public class ControlEvaluator : IControlEvaluator
         foreach (var evidence in allEvidence)
         {
             finding.AddTestResult(new TestResult(
-                evidence.SourceType,
+                evidence.SourceType.ToString(), // ✅ اصلاح: تبدیل Enum به string
                 evidence.SourceName,
                 evidence.Evaluation == CheckStatus.Pass,
                 evidence.RawOutput
@@ -111,23 +109,28 @@ public class ControlEvaluator : IControlEvaluator
     {
         var findingsList = findings?.ToList() ?? new List<Finding>();
 
-        var subControlResults = findingsList.Select(f => new SubControlResult
+        var subControlResults = findingsList.Select(f =>
         {
-            SubControlId = f.CheckId,
-            Status = f.Status,
-            EvidenceItems = new List<Evidence>
+            Enum.TryParse<EvidenceSourceType>(f.SourceType, true, out var parsedSourceType); // ✅ اصلاح: تبدیل امن string به Enum
+
+            return new SubControlResult
             {
-                new Evidence
+                SubControlId = f.CheckId,
+                Status = f.Status,
+                EvidenceItems = new List<Evidence>
                 {
-                    SourceType = f.SourceType,
-                    SourceName = f.SourceCommand,
-                    RawOutput = f.CurrentValue,
-                    ExpectedValue = f.ExpectedValue,
-                    Evaluation = f.Status,
-                    Timestamp = DateTime.UtcNow
-                }
-            },
-            EvaluatedAt = DateTime.UtcNow
+                    new Evidence
+                    {
+                        SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Unknown,
+                        SourceName = f.SourceCommand,
+                        RawOutput = f.CurrentValue,
+                        ExpectedValue = f.ExpectedValue,
+                        Evaluation = f.Status,
+                        CollectedAtUtc = DateTime.UtcNow // ✅ اصلاح: تغییر نام فیلد
+                    }
+                },
+                EvaluatedAt = DateTime.UtcNow
+            };
         }).ToList();
 
         return Evaluate(controlDefinition, subControlResults);

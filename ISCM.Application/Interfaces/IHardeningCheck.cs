@@ -1,5 +1,6 @@
 ﻿using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -25,6 +26,8 @@ public interface IHardeningCheck
     {
         var finding = await EvaluateAsync();
 
+        Enum.TryParse<EvidenceSourceType>(finding.SourceType, true, out var parsedSourceType);
+
         var subControlResult = new SubControlResult
         {
             SubControlId = CheckId,
@@ -33,16 +36,16 @@ public interface IHardeningCheck
             {
                 new Evidence
                 {
-                    SourceType = finding.SourceType,
+                    SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Unknown,
                     SourceName = finding.SourceCommand,
                     RawOutput = finding.CurrentValue,
                     ExpectedValue = finding.ExpectedValue,
                     Evaluation = finding.Status,
                     EvaluationReason = finding.Description,
-                    Timestamp = System.DateTime.UtcNow
+                    CollectedAtUtc = DateTime.UtcNow
                 }
             },
-            EvaluatedAt = System.DateTime.UtcNow
+            EvaluatedAt = DateTime.UtcNow
         };
 
         return new List<SubControlResult> { subControlResult };
