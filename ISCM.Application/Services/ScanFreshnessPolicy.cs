@@ -7,10 +7,14 @@ namespace ISCM.Application.Services;
 public class ScanFreshnessPolicy : IScanFreshnessPolicy
 {
     private readonly IEvidenceLifecycleService _lifecycleService;
+    private readonly IScannerConfigurationService _configurationService;
 
-    public ScanFreshnessPolicy(IEvidenceLifecycleService lifecycleService)
+    public ScanFreshnessPolicy(
+        IEvidenceLifecycleService lifecycleService,
+        IScannerConfigurationService configurationService)
     {
         _lifecycleService = lifecycleService ?? throw new ArgumentNullException(nameof(lifecycleService));
+        _configurationService = configurationService ?? throw new ArgumentNullException(nameof(configurationService));
     }
 
     public bool ShouldAcquireLiveEvidence(IScanContext context, string subControlId)
@@ -40,8 +44,13 @@ public class ScanFreshnessPolicy : IScanFreshnessPolicy
         if (context.IsRescan)
             return false;
 
+        // Check if cache is enabled in configuration
+        if (!_configurationService.IsCacheEnabled())
+            return false;
+
         // Normal scan: only allow cached if explicit cache contract exists
-        return evidence.IsCached && _lifecycleService.IsFresh(evidence);
+        var maxAge = _configurationService.GetCacheMaxAge();
+        return evidence.IsCached && _lifecycleService.IsFresh(evidence, maxAge);
     }
 
     public void ValidateEvidenceFreshness(IScanContext context, List<Evidence> evidenceList)
@@ -67,12 +76,14 @@ public class ScanFreshnessPolicy : IScanFreshnessPolicy
 
         ValidateEvidenceFreshness(context, evidenceList);
 
+        var maxAge = _configurationService.GetCacheMaxAge();
+
         return evidenceList.Where(e =>
         {
             if (context.IsRemediationVerification || context.IsRescan)
                 return e.IsLive || e.IsRemediationGenerated;
 
-            return e.IsUsable && _lifecycleService.IsFresh(e);
+            return e.IsUsable && _lifecycleService.IsFresh(e, maxAge);
         }).ToList();
     }
 }
