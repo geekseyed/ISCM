@@ -11,6 +11,8 @@ public interface IScanContext
     ScanMode ScanMode { get; }
     string ScannerVersion { get; }
     bool IsCompleted { get; }
+    bool IsRemediationVerification { get; }
+    bool IsRescan { get; }
 
     void MarkCompleted();
     void MarkFailed(string error);

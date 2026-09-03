@@ -21,6 +21,9 @@ public class ScanContext : IScanContext
         ScannerVersion = scannerVersion;
     }
 
+    public bool IsRemediationVerification => ScanMode == ScanMode.RemediationVerification;
+    public bool IsRescan => ScanMode == ScanMode.Rescan;
+
     public void MarkCompleted()
     {
         CompletedAtUtc = DateTime.UtcNow;
