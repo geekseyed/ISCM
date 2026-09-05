@@ -1,7 +1,10 @@
 ﻿using ISCM.Application.Evaluators;
 using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Application.Services;
 using ISCM.Application.Validators;
+using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using ISCM.Infrastructure.Reporting;
 using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
@@ -59,6 +62,47 @@ builder.Services.AddSingleton<IScanFingerprintGenerator, ScanFingerprintGenerato
 builder.Services.AddSingleton<IFingerprintValidationService, FingerprintValidationService>();
 builder.Services.AddTransient<IScanContext, ScanContext>(sp =>
     new ScanContext("default", ISCM.Domain.Enums.ScanMode.Full));
+
+// Phase 5: Parsers
+builder.Services.AddSingleton<RegistryParser>();
+builder.Services.AddSingleton<SeceditParser>();
+builder.Services.AddSingleton<NetAccountsParser>();
+builder.Services.AddSingleton<AuditpolParser>();
+builder.Services.AddSingleton<PowerShellParser>();
+builder.Services.AddSingleton<IParserRegistry, ParserRegistry>();
+builder.Services.AddSingleton<IParserService, ParserService>();
+
+// Phase 5: Parser Registration
+builder.Services.AddSingleton(sp =>
+{
+    var registry = sp.GetRequiredService<IParserRegistry>();
+
+    // Registry Parser
+    var registryParser = sp.GetRequiredService<RegistryParser>();
+    registry.RegisterParser<string, RegistryValueData>(EvidenceSourceType.Registry, registryParser);
+    registry.RegisterParser<string, RegistryValueData>(EvidenceSourceType.Other, registryParser);
+
+    // Secedit Parser
+    var seceditParser = sp.GetRequiredService<SeceditParser>();
+    registry.RegisterParser<string, SeceditPolicyData>(EvidenceSourceType.Secedit, seceditParser);
+
+    // NetAccounts Parser
+    var netAccountsParser = sp.GetRequiredService<NetAccountsParser>();
+    registry.RegisterParser<string, NetAccountsData>(EvidenceSourceType.NetAccounts, netAccountsParser);
+
+    // Auditpol Parser
+    var auditpolParser = sp.GetRequiredService<AuditpolParser>();
+    registry.RegisterParser<string, AuditpolData>(EvidenceSourceType.Auditpol, auditpolParser);
+
+    // PowerShell Parser
+    var powerShellParser = sp.GetRequiredService<PowerShellParser>();
+    registry.RegisterParser<string, PowerShellData>(EvidenceSourceType.PowerShell, powerShellParser);
+
+    return registry;
+});
+
+// Phase 5: Scanner Configuration
+builder.Services.AddSingleton<IScannerConfigurationService, ScannerConfigurationService>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
