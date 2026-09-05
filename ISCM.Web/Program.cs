@@ -1,5 +1,6 @@
 ﻿using ISCM.Application.Evaluators;
 using ISCM.Application.Interfaces;
+using ISCM.Application.Normalizers;
 using ISCM.Application.Parsers;
 using ISCM.Application.Services;
 using ISCM.Application.Validators;
@@ -69,13 +70,12 @@ builder.Services.AddSingleton<SeceditParser>();
 builder.Services.AddSingleton<NetAccountsParser>();
 builder.Services.AddSingleton<AuditpolParser>();
 builder.Services.AddSingleton<PowerShellParser>();
-builder.Services.AddSingleton<IParserRegistry, ParserRegistry>();
 builder.Services.AddSingleton<IParserService, ParserService>();
 
 // Phase 5: Parser Registration
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton<IParserRegistry>(sp =>
 {
-    var registry = sp.GetRequiredService<IParserRegistry>();
+    var registry = new ParserRegistry();
 
     // Registry Parser
     var registryParser = sp.GetRequiredService<RegistryParser>();
@@ -97,9 +97,35 @@ builder.Services.AddSingleton(sp =>
     // PowerShell Parser
     var powerShellParser = sp.GetRequiredService<PowerShellParser>();
     registry.RegisterParser<string, PowerShellData>(EvidenceSourceType.PowerShell, powerShellParser);
+    registry.RegisterParser<string, PowerShellData>(EvidenceSourceType.Other, powerShellParser);
 
     return registry;
 });
+
+// Phase 6: Normalizers
+builder.Services.AddSingleton<RegistryNormalizer>();
+builder.Services.AddSingleton<SeceditNormalizer>();
+builder.Services.AddSingleton<NetAccountsNormalizer>();
+builder.Services.AddSingleton<AuditpolNormalizer>();
+builder.Services.AddSingleton<PowerShellNormalizer>();
+
+// Phase 6: Normalizer Registration
+builder.Services.AddSingleton<INormalizerRegistry>(sp =>
+{
+    var registry = new NormalizerRegistry();
+
+    registry.RegisterNormalizer<RegistryValueData>(EvidenceSourceType.Registry, sp.GetRequiredService<RegistryNormalizer>());
+    registry.RegisterNormalizer<SeceditPolicyData>(EvidenceSourceType.Secedit, sp.GetRequiredService<SeceditNormalizer>());
+    registry.RegisterNormalizer<NetAccountsData>(EvidenceSourceType.NetAccounts, sp.GetRequiredService<NetAccountsNormalizer>());
+    registry.RegisterNormalizer<AuditpolData>(EvidenceSourceType.Auditpol, sp.GetRequiredService<AuditpolNormalizer>());
+    registry.RegisterNormalizer<PowerShellData>(EvidenceSourceType.PowerShell, sp.GetRequiredService<PowerShellNormalizer>());
+    registry.RegisterNormalizer<PowerShellData>(EvidenceSourceType.Other, sp.GetRequiredService<PowerShellNormalizer>());
+
+    return registry;
+});
+
+// Phase 6: Normalization Service (parser → normalizer pipeline)
+builder.Services.AddSingleton<INormalizationService, NormalizationService>();
 
 // Phase 5: Scanner Configuration
 builder.Services.AddSingleton<IScannerConfigurationService, ScannerConfigurationService>();

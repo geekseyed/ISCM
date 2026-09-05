@@ -2,7 +2,6 @@
 using ISCM.Application.Services;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
-using ISCM.Domain.ValueObjects;
 using ISCM.Infrastructure.Scanning.Collectors;
 using System;
 using System.Collections.Generic;
@@ -22,7 +21,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly IScanFreshnessPolicy _freshnessPolicy;
     private readonly IFingerprintValidationService _fingerprintService;
     private readonly IScanInvalidationService _invalidationService;
-    private readonly IParserService _parserService;
+    private readonly INormalizationService _normalizationService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -34,7 +33,7 @@ public class WindowsHardeningScanner : IScanService
         IScanFreshnessPolicy freshnessPolicy,
         IFingerprintValidationService fingerprintService,
         IScanInvalidationService invalidationService,
-        IParserService parserService)
+        INormalizationService normalizationService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -45,7 +44,7 @@ public class WindowsHardeningScanner : IScanService
         _freshnessPolicy = freshnessPolicy ?? throw new ArgumentNullException(nameof(freshnessPolicy));
         _fingerprintService = fingerprintService ?? throw new ArgumentNullException(nameof(fingerprintService));
         _invalidationService = invalidationService ?? throw new ArgumentNullException(nameof(invalidationService));
-        _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
+        _normalizationService = normalizationService ?? throw new ArgumentNullException(nameof(normalizationService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -108,9 +107,8 @@ public class WindowsHardeningScanner : IScanService
                                 MachineIdentity = hostname
                             };
 
-                            // Phase 5: Parse raw output using typed parser
-                            var parsedValue = ParseEvidenceValue(evidence);
-                            evidence.ParsedValue = parsedValue;
+                            // Phase 6: Normalize raw output into typed EvidenceValue
+                            NormalizeEvidence(evidence);
 
                             // Phase 4: Assign fingerprint and validate
                             _fingerprintService.AssignFingerprint(evidence);
@@ -206,45 +204,30 @@ public class WindowsHardeningScanner : IScanService
     }
 
     /// <summary>
-    /// Phase 5: Parse raw evidence output using the appropriate typed parser.
-    /// Returns string representation of parsed value.
+    /// Phase 6: Normalize raw evidence output via parser → normalizer pipeline.
+    /// On success: evidence.TypedValue is set to typed EvidenceValue.
+    /// On failure: TypedValue stays null; raw kept only for legacy evaluation.
     /// </summary>
-    private string ParseEvidenceValue(Evidence evidence)
+    private void NormalizeEvidence(Evidence evidence)
     {
         if (string.IsNullOrWhiteSpace(evidence.RawOutput))
-            return string.Empty;
-
-        try
         {
-            // Try Registry parser first
-            if (evidence.SourceType == EvidenceSourceType.Registry ||
-                evidence.SourceName.Contains("Registry", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = _parserService.Parse<string, RegistryValueData>(evidence.RawOutput, EvidenceSourceType.Registry);
-                if (result.IsSuccess && result.Value != null)
-                {
-                    return result.Value.ToString();
-                }
-            }
-
-            // Try PowerShell parser
-            if (evidence.SourceType == EvidenceSourceType.PowerShell ||
-                evidence.SourceName.Contains("PowerShell", StringComparison.OrdinalIgnoreCase))
-            {
-                var result = _parserService.Parse<string, PowerShellData>(evidence.RawOutput, EvidenceSourceType.PowerShell);
-                if (result.IsSuccess && result.Value != null)
-                {
-                    return result.Value.GetStringValue();
-                }
-            }
-
-            // Fallback: return raw output trimmed
-            return evidence.RawOutput.Trim();
+            evidence.ParsedValue = string.Empty;
+            return;
         }
-        catch
+
+        var normalized = _normalizationService.NormalizeRaw(evidence.RawOutput, evidence.SourceType);
+
+        if (normalized.IsSuccess && normalized.Value != null)
         {
-            // If parsing fails, return raw output
-            return evidence.RawOutput.Trim();
+            evidence.TypedValue = normalized.Value;
+            evidence.ParsedValue = normalized.Value.RawString;
+        }
+        else
+        {
+            // Normalization failed explicitly: TypedValue remains null.
+            // Legacy string evaluation may still use ParsedValue during migration.
+            evidence.ParsedValue = evidence.RawOutput.Trim();
         }
     }
 
