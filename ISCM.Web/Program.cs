@@ -1,4 +1,5 @@
 ﻿using ISCM.Application.Evaluators;
+using ISCM.Application.Evaluators.Typed;
 using ISCM.Application.Interfaces;
 using ISCM.Application.Normalizers;
 using ISCM.Application.Parsers;
@@ -43,8 +44,13 @@ builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
 
-// Phase 2.5: ثبت IControlEvaluator
-builder.Services.AddSingleton<IControlEvaluator, ControlEvaluator>();
+// Phase 2.5: ثبت IControlEvaluator (Phase 7.6: با constructor typed evaluator)
+builder.Services.AddSingleton<IControlEvaluator>(sp =>
+{
+    var typedEvaluator = sp.GetRequiredService<ITypedEvidenceEvaluator>();
+    return new ControlEvaluator(typedEvaluator);
+});
+
 // Phase 3.3: ثبت IBaselineService
 builder.Services.AddSingleton<IBaselineService, BaselineService>();
 
@@ -127,11 +133,31 @@ builder.Services.AddSingleton<INormalizerRegistry>(sp =>
 // Phase 6: Normalization Service (parser → normalizer pipeline)
 builder.Services.AddSingleton<INormalizationService, NormalizationService>();
 
+// Phase 7: Typed Evaluation
+// 7.1: ExpectedValueParser
+builder.Services.AddSingleton<ExpectedValueParser>();
+
+// 7.3: Type-specific evaluators
+builder.Services.AddSingleton<IntegerEvaluator>();
+builder.Services.AddSingleton<LongEvaluator>();
+builder.Services.AddSingleton<BooleanEvaluator>();
+builder.Services.AddSingleton<StringEvaluator>();
+builder.Services.AddSingleton<DurationEvaluator>();
+builder.Services.AddSingleton<SizeEvaluator>();
+builder.Services.AddSingleton<EnumEvaluator>();
+builder.Services.AddSingleton<CollectionEvaluator>();
+builder.Services.AddSingleton<RegistryValueEvaluator>();
+builder.Services.AddSingleton<PolicyValueEvaluator>();
+
+// 7.4: TypedEvidenceEvaluator (dispatcher)
+builder.Services.AddSingleton<ITypedEvidenceEvaluator, TypedEvidenceEvaluator>();
+
 // Phase 5: Scanner Configuration
 builder.Services.AddSingleton<IScannerConfigurationService, ScannerConfigurationService>();
 
 builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
+
 // Phase 4.2: ثبت سرویس Remediation
 builder.Services.AddSingleton<IRemediationService, RemediationService>();
 

@@ -10,6 +10,15 @@ using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning;
 
+/// <summary>
+/// Windows hardening scanner — orchestrates check execution, evidence collection,
+/// normalization (Phase 6), and evaluation.
+/// 
+/// Phase 7.6: Typed evaluation pipeline is registered in DI and available via
+/// IControlEvaluator.EvaluateSubControlTyped(). Migration from legacy string-based
+/// evaluation to typed evaluation will be completed in Phase 10 (Scanner Execution)
+/// when SubControlDefinition has ValueType and Operator fields populated in the catalog.
+/// </summary>
 public class WindowsHardeningScanner : IScanService
 {
     private readonly WindowsSystemInfoCollector _systemInfoCollector;
@@ -110,6 +119,13 @@ public class WindowsHardeningScanner : IScanService
                             // Phase 6: Normalize raw output into typed EvidenceValue
                             NormalizeEvidence(evidence);
 
+                            // Phase 7.6: Typed evaluation pipeline is now available via DI.
+                            // TypedValue is populated by NormalizeEvidence (Phase 6).
+                            // TODO (Phase 10+): Migrate scanner to use _controlEvaluator.EvaluateSubControlTyped()
+                            // when SubControlDefinition has ValueType and Operator fields.
+                            // Currently, legacy string-based evaluation via EvaluateFromSubControls is used
+                            // for backward compatibility during the migration period.
+
                             // Phase 4: Assign fingerprint and validate
                             _fingerprintService.AssignFingerprint(evidence);
 
@@ -207,6 +223,8 @@ public class WindowsHardeningScanner : IScanService
     /// Phase 6: Normalize raw evidence output via parser → normalizer pipeline.
     /// On success: evidence.TypedValue is set to typed EvidenceValue.
     /// On failure: TypedValue stays null; raw kept only for legacy evaluation.
+    /// 
+    /// Phase 7.6: TypedValue is now consumed by typed evaluation pipeline (when available).
     /// </summary>
     private void NormalizeEvidence(Evidence evidence)
     {
