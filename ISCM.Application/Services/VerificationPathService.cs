@@ -19,14 +19,8 @@ namespace ISCM.Application.Services;
 ///   3. Check independence requirement compliance
 ///   4. Produce PathCapabilityReport for audit/UI
 /// 
-/// Contract (from Final Engineering Specification, Section 8.3):
-///   - Not every SubControl necessarily has three genuinely independent mechanisms.
-///   - Catalog must record: ThreePathRequired, ThreePathAvailable, PathCount, IndependenceClass.
-///   - A missing technically possible required path is a verification failure,
-///     not an invisible omission.
-/// 
-/// This service does NOT execute paths. Execution is done by the scanner (Phase 10).
-/// This service only validates and reports path capability.
+/// Note: PathCapabilityReport is now in Domain.ValueObjects
+/// (moved in 8.4 to avoid circular dependency with SubControlResult).
 /// </summary>
 public class VerificationPathService
 {
@@ -218,88 +212,4 @@ public class VerificationPathService
                 "Scanner will produce explicit ERROR for these paths.");
         }
     }
-}
-
-// =========================================================================
-// PathCapabilityReport — result VO for path capability validation
-// =========================================================================
-
-/// <summary>
-/// Report describing the path capability of a SubControl.
-/// 
-/// Phase 8.3 — Sub-Phase 8.3.2
-/// 
-/// Used by:
-///   - Scanner (to decide ERROR vs continue)
-///   - UI (to show path capability details)
-///   - Audit (to track capability compliance)
-/// </summary>
-public class PathCapabilityReport
-{
-    public string SubControlId { get; set; } = string.Empty;
-
-    public int RequiredPathCount { get; set; }
-
-    public IndependenceClass RequiredIndependenceClass { get; set; } = IndependenceClass.Undeclared;
-
-    public int DeclaredPathCount { get; set; }
-
-    public int AvailablePathCount { get; set; }
-
-    public int CountedPathCount { get; set; }
-
-    public int IndependentPathCount { get; set; }
-
-    public bool MeetsPathCountRequirement { get; set; }
-
-    public bool MeetsIndependenceRequirement { get; set; }
-
-    public bool IsValid { get; set; }
-
-    public List<string> Errors { get; set; } = new();
-
-    public List<string> Warnings { get; set; } = new();
-
-    public DateTime EvaluatedAtUtc { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
-    /// Overall capability status.
-    /// </summary>
-    public PathCapabilityStatus Status
-    {
-        get
-        {
-            if (!IsValid || Errors.Count > 0)
-                return PathCapabilityStatus.Invalid;
-
-            if (!MeetsPathCountRequirement)
-                return PathCapabilityStatus.InsufficientPaths;
-
-            if (!MeetsIndependenceRequirement)
-                return PathCapabilityStatus.InsufficientIndependence;
-
-            return PathCapabilityStatus.Satisfied;
-        }
-    }
-
-    public override string ToString()
-        => $"[SubControl={SubControlId}, Status={Status}, Counted={CountedPathCount}/{RequiredPathCount}, Independence={MeetsIndependenceRequirement}]";
-}
-
-/// <summary>
-/// Overall status of path capability for a SubControl.
-/// </summary>
-public enum PathCapabilityStatus
-{
-    /// <summary>Path capability is satisfied (all requirements met).</summary>
-    Satisfied = 0,
-
-    /// <summary>Path configuration is invalid (errors present).</summary>
-    Invalid = 1,
-
-    /// <summary>Not enough counted paths to meet RequiredPathCount.</summary>
-    InsufficientPaths = 2,
-
-    /// <summary>Counted paths do not meet RequiredIndependenceClass.</summary>
-    InsufficientIndependence = 3
 }

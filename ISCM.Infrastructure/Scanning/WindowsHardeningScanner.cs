@@ -3,21 +3,16 @@ using ISCM.Application.Services;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace ISCM.Infrastructure.Scanning;
 
 /// <summary>
 /// Windows hardening scanner — orchestrates check execution, evidence collection,
-/// normalization (Phase 6), and evaluation.
+/// normalization (Phase 6), evaluation, and verification path tracking (Phase 8).
 /// 
-/// Phase 7.6: Typed evaluation pipeline is registered in DI and available via
-/// IControlEvaluator.EvaluateSubControlTyped(). Migration from legacy string-based
-/// evaluation to typed evaluation will be completed in Phase 10 (Scanner Execution)
-/// when SubControlDefinition has ValueType and Operator fields populated in the catalog.
+/// Phase 8.4: Integrated VerificationPath and PathResult into scan pipeline.
+/// Each IMultiPathCheck test now produces a PathResult with independent evidence.
 /// </summary>
 public class WindowsHardeningScanner : IScanService
 {
@@ -31,6 +26,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly IFingerprintValidationService _fingerprintService;
     private readonly IScanInvalidationService _invalidationService;
     private readonly INormalizationService _normalizationService;
+    private readonly VerificationPathService _verificationPathService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -42,7 +38,8 @@ public class WindowsHardeningScanner : IScanService
         IScanFreshnessPolicy freshnessPolicy,
         IFingerprintValidationService fingerprintService,
         IScanInvalidationService invalidationService,
-        INormalizationService normalizationService)
+        INormalizationService normalizationService,
+        VerificationPathService verificationPathService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -54,6 +51,7 @@ public class WindowsHardeningScanner : IScanService
         _fingerprintService = fingerprintService ?? throw new ArgumentNullException(nameof(fingerprintService));
         _invalidationService = invalidationService ?? throw new ArgumentNullException(nameof(invalidationService));
         _normalizationService = normalizationService ?? throw new ArgumentNullException(nameof(normalizationService));
+        _verificationPathService = verificationPathService ?? throw new ArgumentNullException(nameof(verificationPathService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -91,79 +89,7 @@ public class WindowsHardeningScanner : IScanService
             {
                 var subControlResults = await check.EvaluateSubControlsAsync();
 
-                if (check is IMultiPathCheck multiPathCheck)
-                {
-                    var testResults = await multiPathCheck.RunMultipleTestsAsync();
-
-                    foreach (var result in testResults)
-                    {
-                        Enum.TryParse<EvidenceSourceType>(result.TestMethod, true, out var parsedSourceType);
-
-                        foreach (var subResult in subControlResults)
-                        {
-                            // Phase 4: Use acquisition service for live evidence
-                            var evidence = new Evidence
-                            {
-                                ScanId = scanContext.ScanId,
-                                ParentControlId = check.CheckId,
-                                SubControlId = subResult.SubControlId ?? string.Empty,
-                                TechnicalCheckId = check.CheckId,
-                                SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
-                                SourceName = result.TestName,
-                                RawOutput = result.Details,
-                                Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
-                                CollectedAtUtc = DateTime.UtcNow,
-                                MachineIdentity = hostname
-                            };
-
-                            // Phase 6: Normalize raw output into typed EvidenceValue
-                            NormalizeEvidence(evidence);
-
-                            // Phase 7.6: Typed evaluation pipeline is now available via DI.
-                            // TypedValue is populated by NormalizeEvidence (Phase 6).
-                            // TODO (Phase 10+): Migrate scanner to use _controlEvaluator.EvaluateSubControlTyped()
-                            // when SubControlDefinition has ValueType and Operator fields.
-                            // Currently, legacy string-based evaluation via EvaluateFromSubControls is used
-                            // for backward compatibility during the migration period.
-
-                            // Phase 4: Assign fingerprint and validate
-                            _fingerprintService.AssignFingerprint(evidence);
-
-                            // Phase 4: Apply freshness policy
-                            if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
-                            {
-                                evidence.LifecycleState = EvidenceLifecycleState.Cached;
-                            }
-                            else
-                            {
-                                evidence.LifecycleState = EvidenceLifecycleState.Live;
-                            }
-
-                            subResult.EvidenceItems.Add(evidence);
-                        }
-                    }
-
-                    if (testResults.Count >= 3)
-                    {
-                        progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
-                        await Task.Delay(30);
-                        progress?.Report($"  ├─ Test 2 ({testResults[1].TestMethod}): {(testResults[1].Passed ? "Pass ✓" : "Fail ✗")}");
-                        await Task.Delay(30);
-                        progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
-                        await Task.Delay(30);
-                    }
-
-                    var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
-                    if (!validationResult.IsValid)
-                    {
-                        progress?.Report($"[WARNING] {check.CheckId}: MultiPath validation failed: {string.Join(", ", validationResult.Errors)}");
-                    }
-                    else if (validationResult.Warnings.Any())
-                    {
-                        progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
-                    }
-                }
-
+                // Phase 8.4: Get ControlDefinition for path capability validation
                 var controlDefinition = ControlCatalog.GetByCheckId(check.CheckId);
                 if (controlDefinition == null)
                 {
@@ -179,10 +105,139 @@ public class WindowsHardeningScanner : IScanService
                     };
                 }
 
-                var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
+                // Phase 8.4: Validate path capability for each SubControl
+                foreach (var subResult in subControlResults)
+                {
+                    var subControlDef = controlDefinition.SubControls
+                        .FirstOrDefault(s => s.SubControlId == subResult.SubControlId);
 
-                scanResult.AddFinding(finding);
-                progress?.Report(BuildResultLine(finding));
+                    if (subControlDef != null)
+                    {
+                        var capabilityReport = _verificationPathService.ValidatePathCapability(subControlDef);
+                        subResult.PathCapabilityReport = capabilityReport;
+
+                        if (!capabilityReport.IsValid)
+                        {
+                            progress?.Report($"[WARNING] {subResult.SubControlId}: Path capability issues: {string.Join(", ", capabilityReport.Errors)}");
+                        }
+                    }
+                }
+
+                if (check is IMultiPathCheck multiPathCheck)
+                {
+                    var testResults = await multiPathCheck.RunMultipleTestsAsync();
+                    var pathIndex = 0;
+
+                    foreach (var result in testResults)
+                    {
+                        pathIndex++;
+                        Enum.TryParse<EvidenceSourceType>(result.TestMethod, true, out var parsedSourceType);
+
+                        foreach (var subResult in subControlResults)
+                        {
+                            // Phase 8.4: Generate unique PathId for this path
+                            var pathId = $"{subResult.SubControlId}-path-{pathIndex}";
+
+                            var pathStopwatch = Stopwatch.StartNew();
+
+                            // Phase 4: Use acquisition service for live evidence
+                            var evidence = new Evidence
+                            {
+                                ScanId = scanContext.ScanId,
+                                ParentControlId = check.CheckId,
+                                SubControlId = subResult.SubControlId ?? string.Empty,
+                                TechnicalCheckId = check.CheckId,
+                                PathId = pathId,
+                                SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
+                                SourceName = result.TestName,
+                                AcquisitionCommand = result.TestMethod,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
+                                RawOutput = result.Details,
+                                Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
+                                CollectedAtUtc = DateTime.UtcNow,
+                                MachineIdentity = hostname
+                            };
+
+                            // Phase 6: Normalize raw output into typed EvidenceValue
+                            NormalizeEvidence(evidence);
+
+                            // Phase 4: Assign fingerprint and validate
+                            _fingerprintService.AssignFingerprint(evidence);
+
+                            // Phase 4: Apply freshness policy
+                            if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
+                            {
+                                evidence.LifecycleState = EvidenceLifecycleState.Cached;
+                            }
+                            else
+                            {
+                                evidence.LifecycleState = EvidenceLifecycleState.Live;
+                            }
+
+                            pathStopwatch.Stop();
+
+                            // Phase 8.4: Create PathResult for this path
+                            var pathResult = PathResult.FromTypedEvaluation(
+    pathId: pathId,
+    source: evidence.SourceName,
+    mechanism: evidence.AcquisitionCommand,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
+    typedEvaluation: Domain.ValueObjects.EvaluationResult.Pass(
+        reason: $"Path {pathIndex} passed: {result.Details}",
+        details: Domain.ValueObjects.EvaluationResult.BuildDetails(
+            actual: evidence.TypedValue?.RawString ?? evidence.RawOutput ?? "(no value)",
+            expected: subResult.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
+            op: Operator.Equals,
+            valueType: evidence.TypedValue?.ValueType.ToString() ?? "Unknown"
+        )),
+    evidenceId: evidence.EvidenceId,
+    collectorName: "WindowsHardeningScanner",
+    parserName: "Normalized via INormalizationService",
+    normalizerName: "Phase 6 Normalizer",
+    evaluatorName: "IMultiPathCheck direct",
+    durationMs: (int)pathStopwatch.ElapsedMilliseconds
+);
+
+                            // If the path failed, override with Fail result
+                            if (!result.Passed)
+                            {
+                                pathResult = PathResult.Fail(
+                                    pathId: pathId,
+                                    source: evidence.SourceName,
+                                    mechanism: evidence.AcquisitionCommand,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
+                                    reason: $"Path {pathIndex} failed: {result.Details}",
+                                    evidenceId: evidence.EvidenceId
+                                );
+                                pathResult.DurationMs = (int)pathStopwatch.ElapsedMilliseconds;
+                                pathResult.CollectorName = "WindowsHardeningScanner";
+                                pathResult.EvaluatorName = "IMultiPathCheck direct";
+                            }
+                        }
+
+                        if (testResults.Count >= 3)
+                        {
+                            progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
+                            await Task.Delay(30);
+                            progress?.Report($"  ├─ Test 2 ({testResults[1].TestMethod}): {(testResults[1].Passed ? "Pass ✓" : "Fail ✗")}");
+                            await Task.Delay(30);
+                            progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
+                            await Task.Delay(30);
+                        }
+
+                        var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
+                        if (!validationResult.IsValid)
+                        {
+                            progress?.Report($"[WARNING] {check.CheckId}: MultiPath validation failed: {string.Join(", ", validationResult.Errors)}");
+                        }
+                        else if (validationResult.Warnings.Any())
+                        {
+                            progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
+                        }
+                    }
+
+                    var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
+
+                    scanResult.AddFinding(finding);
+                    progress?.Report(BuildResultLine(finding));
+                }
             }
             catch (Exception ex)
             {
