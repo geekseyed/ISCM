@@ -1,5 +1,6 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Application.Services;
+using ISCM.Application.Services.Agreement;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -9,10 +10,15 @@ namespace ISCM.Infrastructure.Scanning;
 
 /// <summary>
 /// Windows hardening scanner — orchestrates check execution, evidence collection,
-/// normalization (Phase 6), evaluation, and verification path tracking (Phase 8).
+/// normalization (Phase 6), evaluation, verification path tracking (Phase 8),
+/// and agreement/disagreement analysis (Phase 9).
 /// 
-/// Phase 8.4: Integrated VerificationPath and PathResult into scan pipeline.
-/// Each IMultiPathCheck test now produces a PathResult with independent evidence.
+/// Phase 9.4: Integrated SubControlAggregationService for agreement analysis.
+/// Each IMultiPathCheck test produces PathResults that are aggregated into
+/// AgreementDecision for each SubControl.
+/// 
+/// Phase 9.4 fix: PathResult is now properly added to subResult.VerificationResults.
+/// Phase 9.4 fix: Finding is now produced for all checks, not just MultiPathCheck.
 /// </summary>
 public class WindowsHardeningScanner : IScanService
 {
@@ -27,6 +33,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly IScanInvalidationService _invalidationService;
     private readonly INormalizationService _normalizationService;
     private readonly VerificationPathService _verificationPathService;
+    private readonly SubControlAggregationService _aggregationService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -39,7 +46,8 @@ public class WindowsHardeningScanner : IScanService
         IFingerprintValidationService fingerprintService,
         IScanInvalidationService invalidationService,
         INormalizationService normalizationService,
-        VerificationPathService verificationPathService)
+        VerificationPathService verificationPathService,
+        SubControlAggregationService aggregationService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -52,6 +60,7 @@ public class WindowsHardeningScanner : IScanService
         _invalidationService = invalidationService ?? throw new ArgumentNullException(nameof(invalidationService));
         _normalizationService = normalizationService ?? throw new ArgumentNullException(nameof(normalizationService));
         _verificationPathService = verificationPathService ?? throw new ArgumentNullException(nameof(verificationPathService));
+        _aggregationService = aggregationService ?? throw new ArgumentNullException(nameof(aggregationService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -123,6 +132,7 @@ public class WindowsHardeningScanner : IScanService
                     }
                 }
 
+                // Phase 8.4 + Phase 9.4: Multi-path verification with agreement
                 if (check is IMultiPathCheck multiPathCheck)
                 {
                     var testResults = await multiPathCheck.RunMultipleTestsAsync();
@@ -150,7 +160,7 @@ public class WindowsHardeningScanner : IScanService
                                 PathId = pathId,
                                 SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
                                 SourceName = result.TestName,
-                                AcquisitionCommand = result.TestMethod,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
+                                AcquisitionCommand = result.TestMethod,
                                 RawOutput = result.Details,
                                 Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
                                 CollectedAtUtc = DateTime.UtcNow,
@@ -177,24 +187,24 @@ public class WindowsHardeningScanner : IScanService
 
                             // Phase 8.4: Create PathResult for this path
                             var pathResult = PathResult.FromTypedEvaluation(
-    pathId: pathId,
-    source: evidence.SourceName,
-    mechanism: evidence.AcquisitionCommand,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
-    typedEvaluation: Domain.ValueObjects.EvaluationResult.Pass(
-        reason: $"Path {pathIndex} passed: {result.Details}",
-        details: Domain.ValueObjects.EvaluationResult.BuildDetails(
-            actual: evidence.TypedValue?.RawString ?? evidence.RawOutput ?? "(no value)",
-            expected: subResult.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
-            op: Operator.Equals,
-            valueType: evidence.TypedValue?.ValueType.ToString() ?? "Unknown"
-        )),
-    evidenceId: evidence.EvidenceId,
-    collectorName: "WindowsHardeningScanner",
-    parserName: "Normalized via INormalizationService",
-    normalizerName: "Phase 6 Normalizer",
-    evaluatorName: "IMultiPathCheck direct",
-    durationMs: (int)pathStopwatch.ElapsedMilliseconds
-);
+                                pathId: pathId,
+                                source: evidence.SourceName,
+                                mechanism: evidence.AcquisitionCommand,
+                                typedEvaluation: Domain.ValueObjects.EvaluationResult.Pass(
+                                    reason: $"Path {pathIndex} passed: {result.Details}",
+                                    details: Domain.ValueObjects.EvaluationResult.BuildDetails(
+                                        actual: evidence.TypedValue?.RawString ?? evidence.RawOutput ?? "(no value)",
+                                        expected: subResult.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
+                                        op: Operator.Equals,
+                                        valueType: evidence.TypedValue?.ValueType.ToString() ?? "Unknown"
+                                    )),
+                                evidenceId: evidence.EvidenceId,
+                                collectorName: "WindowsHardeningScanner",
+                                parserName: "Normalized via INormalizationService",
+                                normalizerName: "Phase 6 Normalizer",
+                                evaluatorName: "IMultiPathCheck direct",
+                                durationMs: (int)pathStopwatch.ElapsedMilliseconds
+                            );
 
                             // If the path failed, override with Fail result
                             if (!result.Passed)
@@ -202,7 +212,7 @@ public class WindowsHardeningScanner : IScanService
                                 pathResult = PathResult.Fail(
                                     pathId: pathId,
                                     source: evidence.SourceName,
-                                    mechanism: evidence.AcquisitionCommand,  // ← FIX: AcquisitionMechanism → AcquisitionCommand
+                                    mechanism: evidence.AcquisitionCommand,
                                     reason: $"Path {pathIndex} failed: {result.Details}",
                                     evidenceId: evidence.EvidenceId
                                 );
@@ -210,6 +220,10 @@ public class WindowsHardeningScanner : IScanService
                                 pathResult.CollectorName = "WindowsHardeningScanner";
                                 pathResult.EvaluatorName = "IMultiPathCheck direct";
                             }
+
+                            // Phase 9.4 FIX: Add PathResult to SubControlResult (was missing in 8.4)
+                            subResult.AddPathResult(pathResult);
+                            subResult.EvidenceItems.Add(evidence);
                         }
 
                         if (testResults.Count >= 3)
@@ -233,11 +247,26 @@ public class WindowsHardeningScanner : IScanService
                         }
                     }
 
-                    var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
+                    // Phase 9.4: Apply agreement/disagreement analysis to all SubControls
+                    _aggregationService.AggregateAll(subControlResults);
 
-                    scanResult.AddFinding(finding);
-                    progress?.Report(BuildResultLine(finding));
+                    // Phase 9.4: Report agreement results
+                    var agreementSummary = _aggregationService.GetSummary(subControlResults);
+                    if (agreementSummary.HasDisagreement)
+                    {
+                        progress?.Report($"[WARNING] {check.CheckId}: Agreement analysis found {agreementSummary.DisagreementCount} disagreement(s).");
+                    }
+                    if (agreementSummary.HasIncompleteVerification)
+                    {
+                        progress?.Report($"[INFO] {check.CheckId}: Agreement analysis found {agreementSummary.IncompleteCount} incomplete verification(s).");
+                    }
                 }
+
+                // Phase 9.4 FIX: Finding is produced for ALL checks, not just MultiPathCheck
+                var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
+
+                scanResult.AddFinding(finding);
+                progress?.Report(BuildResultLine(finding));
             }
             catch (Exception ex)
             {

@@ -4,6 +4,7 @@ using ISCM.Application.Interfaces;
 using ISCM.Application.Normalizers;
 using ISCM.Application.Parsers;
 using ISCM.Application.Services;
+using ISCM.Application.Services.Agreement;
 using ISCM.Application.Validators;
 using ISCM.Domain.Enums;
 using ISCM.Domain.ValueObjects;
@@ -151,6 +152,16 @@ builder.Services.AddSingleton<PolicyValueEvaluator>();
 
 // 7.4: TypedEvidenceEvaluator (dispatcher)
 builder.Services.AddSingleton<ITypedEvidenceEvaluator, TypedEvidenceEvaluator>();
+
+// Phase 8: Verification Architecture
+builder.Services.AddSingleton<VerificationPathService>();
+
+// Phase 9: Agreement Engine
+// 9.2: IAgreementPolicy → DefaultAgreementPolicy
+builder.Services.AddSingleton<IAgreementPolicy, DefaultAgreementPolicy>();
+
+// 9.3: SubControlAggregationService
+builder.Services.AddSingleton<SubControlAggregationService>();
 
 // Phase 5: Scanner Configuration
 builder.Services.AddSingleton<IScannerConfigurationService, ScannerConfigurationService>();
