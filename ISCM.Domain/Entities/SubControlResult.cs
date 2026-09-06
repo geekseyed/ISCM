@@ -9,14 +9,13 @@ namespace ISCM.Domain.Entities;
 /// <summary>
 /// Result of evaluating a single SubControl.
 /// 
-/// Phase 8.4: Added path integration support:
-///   - PathCapabilityReport: stores capability validation result
-///   - Helper methods for PathResult management
-///   - VerificationResults (List<PathResult>) stores per-path execution results
+/// Phase 9.3: Added Agreement Decision support:
+///   - AgreementDecision: stores the outcome of agreement/disagreement analysis
+///   - ApplyAgreementDecision(): applies decision to Status and metadata
 /// 
 /// Backward compatibility:
 ///   - All existing properties preserved
-///   - New properties have safe defaults
+///   - AgreementDecision is nullable (null when agreement not performed)
 /// </summary>
 public class SubControlResult
 {
@@ -51,6 +50,22 @@ public class SubControlResult
     /// Null if capability validation was not performed.
     /// </summary>
     public PathCapabilityReport? PathCapabilityReport { get; set; }
+
+    // =========================================================================
+    // Phase 9.3 — NEW: Agreement Decision
+    // =========================================================================
+
+    /// <summary>
+    /// The outcome of agreement/disagreement analysis on VerificationResults.
+    /// Null when agreement analysis has not been performed
+    /// (e.g., legacy single-path checks, or pre-Phase-9 scans).
+    /// </summary>
+    public AgreementDecision? AgreementDecision { get; set; }
+
+    /// <summary>
+    /// Whether agreement analysis has been performed on this SubControl.
+    /// </summary>
+    public bool HasAgreementDecision => AgreementDecision != null;
 
     // =========================================================================
     // Timing
@@ -114,4 +129,33 @@ public class SubControlResult
     /// </summary>
     public PathResult? GetPathResult(string pathId)
         => VerificationResults.FirstOrDefault(p => p.PathId == pathId);
+
+    // =========================================================================
+    // Phase 9.3 — NEW: Agreement Application
+    // =========================================================================
+
+    /// <summary>
+    /// Applies an AgreementDecision to this SubControlResult.
+    /// 
+    /// This method:
+    ///   1. Stores the AgreementDecision
+    ///   2. Updates Status from SelectedVerdict
+    ///   3. Updates EvaluatedAt
+    ///   4. PRESERVES all VerificationResults (no deletion)
+    /// 
+    /// Hard rule: VerificationResults are NEVER cleared.
+    /// The agreement decision references them via PathContributions.
+    /// </summary>
+    public void ApplyAgreementDecision(AgreementDecision decision)
+    {
+        if (decision == null)
+            throw new ArgumentNullException(nameof(decision));
+
+        AgreementDecision = decision;
+        Status = decision.SelectedVerdict;
+        EvaluatedAt = DateTime.UtcNow;
+
+        // IMPORTANT: VerificationResults are NOT cleared.
+        // All path results remain preserved for audit/UI consumption.
+    }
 }
