@@ -1,8 +1,8 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Application.Parsers;
-using ISCM.Application.Evaluators;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
@@ -12,11 +12,18 @@ using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 10.3: Password Policy Check (Collector-only pattern).
+/// 
+/// این چک **فقط Collector** است:
+/// - Evidence تولید می‌کند (RawOutput + TypedValue)
+/// - Evidence.Evaluation = NotScanned (ارزیابی نمی‌کند)
+/// - Scanner مسئول ارزیابی تایپ‌شده با استفاده از کاتالوگ است
+/// </summary>
 [SupportedOSPlatform("windows")]
 public class PasswordLengthCheck : BaseHardeningCheck
 {
     private readonly IEvidenceParser _registryParser;
-    private readonly IEvidenceEvaluator _evaluator;
 
     public override string CheckId => "PWD-001";
     public override string Name => "Password Policy";
@@ -28,48 +35,34 @@ public class PasswordLengthCheck : BaseHardeningCheck
     public PasswordLengthCheck()
     {
         _registryParser = new RegistryParser();
-        _evaluator = new DefaultEvidenceEvaluator();
+        // NO _evaluator field - Check should not evaluate!
     }
 
-    public override async Task<Finding> EvaluateAsync()
+    /// <summary>
+    /// Phase 10.3: Collects evidence for all 6 password policy SubControls.
+    /// 
+    /// Contract:
+    /// - Returns 6 Evidence items (one per SubControl)
+    /// - Each Evidence has RawOutput and TypedValue populated
+    /// - Evidence.Evaluation = NotScanned (Scanner will evaluate)
+    /// </summary>
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
-        var subControlResults = await EvaluateSubControlsAsync();
-        var controlDefinition = ControlCatalog.GetByCheckId(CheckId);
+        var evidenceList = new List<Evidence>();
 
-        if (controlDefinition == null)
-        {
-            controlDefinition = new ControlDefinition
-            {
-                ControlId = CheckId,
-                Title = Name,
-                Category = Category,
-                Severity = Severity,
-                IsBaseline = true,
-                TechnicalCheckIds = new() { CheckId },
-                SubControls = new()
-            };
-        }
+        evidenceList.Add(await CollectMinimumPasswordLength());
+        evidenceList.Add(await CollectPasswordHistory());
+        evidenceList.Add(await CollectMaximumPasswordAge());
+        evidenceList.Add(await CollectMinimumPasswordAge());
+        evidenceList.Add(await CollectPasswordComplexity());
+        evidenceList.Add(await CollectReversibleEncryption());
 
-        var evaluator = new ControlEvaluator();
-        return evaluator.EvaluateFromSubControls(controlDefinition, subControlResults);
+        return evidenceList;
     }
 
-    public override async Task<List<SubControlResult>> EvaluateSubControlsAsync()
-    {
-        var results = new List<SubControlResult>();
-        results.Add(await EvaluateMinimumPasswordLength());
-        results.Add(await EvaluatePasswordHistory());
-        results.Add(await EvaluateMaximumPasswordAge());
-        results.Add(await EvaluateMinimumPasswordAge());
-        results.Add(await EvaluatePasswordComplexity());
-        results.Add(await EvaluateReversibleEncryption());
-        return results;
-    }
-
-    private async Task<SubControlResult> EvaluateMinimumPasswordLength()
+    private async Task<Evidence> CollectMinimumPasswordLength()
     {
         var subControlId = "PWD-001.4";
-        var expectedValue = "14 characters";
         var startTime = DateTime.UtcNow;
 
         try
@@ -87,354 +80,323 @@ public class PasswordLengthCheck : BaseHardeningCheck
             }
 
             var parsedValue = _registryParser.Parse(rawOutput, "Registry");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, ">=");
 
-            return new SubControlResult
+            // Phase 10.3: Create Evidence with TypedValue
+            var typedValue = ExtractIntegerFromOutput(rawOutput);
+
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.Registry,
-                        SourceName = "MinimumPasswordLength",
-                        AcquisitionCommand = $"reg query HKLM\\{PasswordPolicyPath} /v MinimumPasswordLength",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "MinimumPasswordLength",
+                AcquisitionCommand = $"reg query HKLM\\{PasswordPolicyPath} /v MinimumPasswordLength",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned, // Check does NOT evaluate
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.Registry,
-                        SourceName = "MinimumPasswordLength",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "MinimumPasswordLength",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
     }
 
-    private async Task<SubControlResult> EvaluatePasswordHistory()
+    private async Task<Evidence> CollectPasswordHistory()
     {
         var subControlId = "PWD-001.1";
-        var expectedValue = "24 passwords remembered";
         var startTime = DateTime.UtcNow;
 
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, ">=");
+            var typedValue = ExtractIntegerFromOutput(rawOutput);
 
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        AcquisitionCommand = "net accounts",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
     }
 
-    private async Task<SubControlResult> EvaluateMaximumPasswordAge()
+    private async Task<Evidence> CollectMaximumPasswordAge()
     {
         var subControlId = "PWD-001.2";
-        var expectedValue = "60 days";
         var startTime = DateTime.UtcNow;
 
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "<=");
+            var typedValue = ExtractDurationFromOutput(rawOutput, "days");
 
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        AcquisitionCommand = "net accounts",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
     }
 
-    private async Task<SubControlResult> EvaluateMinimumPasswordAge()
+    private async Task<Evidence> CollectMinimumPasswordAge()
     {
         var subControlId = "PWD-001.3";
-        var expectedValue = "1 day";
         var startTime = DateTime.UtcNow;
 
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, ">=");
+            var typedValue = ExtractDurationFromOutput(rawOutput, "days");
 
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        AcquisitionCommand = "net accounts",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
     }
 
-    private async Task<SubControlResult> EvaluatePasswordComplexity()
+    private async Task<Evidence> CollectPasswordComplexity()
     {
         var subControlId = "PWD-001.5";
-        var expectedValue = "Enabled";
         var startTime = DateTime.UtcNow;
 
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "BOOLEAN_TRUE");
+            var typedValue = ExtractBooleanFromOutput(rawOutput, "complexity");
 
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        AcquisitionCommand = "net accounts",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
     }
 
-    private async Task<SubControlResult> EvaluateReversibleEncryption()
+    private async Task<Evidence> CollectReversibleEncryption()
     {
         var subControlId = "PWD-001.6";
-        var expectedValue = "Disabled";
         var startTime = DateTime.UtcNow;
 
         try
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var (status, reason) = _evaluator.Evaluate(parsedValue, expectedValue, "BOOLEAN_FALSE");
+            var typedValue = ExtractBooleanFromOutput(rawOutput, "reversible");
 
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = status,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        AcquisitionCommand = "net accounts",
-                        RawOutput = rawOutput,
-                        ParsedValue = parsedValue,
-                        ExpectedValue = expectedValue,
-                        Evaluation = status,
-                        EvaluationReason = reason,
-                        CollectedAtUtc = DateTime.UtcNow,
-                        CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
         }
         catch (Exception ex)
         {
-            return new SubControlResult
+            return new Evidence
             {
+                EvidenceId = $"{CheckId}-{subControlId}",
                 SubControlId = subControlId,
-                Status = CheckStatus.Error,
-                EvidenceItems = new List<Evidence>
-                {
-                    new Evidence
-                    {
-                        SourceType = EvidenceSourceType.NetAccounts,
-                        SourceName = "net accounts",
-                        RawOutput = ex.Message,
-                        ExpectedValue = expectedValue,
-                        Evaluation = CheckStatus.Error,
-                        EvaluationReason = $"Exception: {ex.Message}",
-                        CollectedAtUtc = DateTime.UtcNow,
-                        Error = ex.Message
-                    }
-                },
-                EvaluatedAt = DateTime.UtcNow
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                RawOutput = ex.Message,
+                TypedValue = null,
+                Evaluation = CheckStatus.Error,
+                Error = ex.Message,
+                CollectedAtUtc = DateTime.UtcNow
             };
         }
+    }
+
+    // Helper methods to extract typed values from raw output
+    private static EvidenceValue ExtractIntegerFromOutput(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromInteger(0);
+
+        // Try to parse as direct integer
+        if (int.TryParse(rawOutput.Trim(), out var intValue))
+            return EvidenceValue.FromInteger(intValue);
+
+        // Try to extract number from text like "14 characters" or "24 passwords remembered"
+        var match = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)");
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var extractedInt))
+            return EvidenceValue.FromInteger(extractedInt);
+
+        // Fallback: return as string if extraction fails
+        return EvidenceValue.FromString(rawOutput);
+    }
+
+    private static EvidenceValue ExtractDurationFromOutput(string rawOutput, string unit)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromDuration(new DurationValue(0, DurationUnit.Days));
+
+        // Try to extract duration from text like "60 days", "15 minutes"
+        var match = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)\s*(days?|hours?|minutes?|seconds?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var durationValue))
+        {
+            var durationUnit = match.Groups[2].Value.ToLower() switch
+            {
+                "day" or "days" => DurationUnit.Days,
+                "hour" or "hours" => DurationUnit.Hours,
+                "minute" or "minutes" => DurationUnit.Minutes,
+                "second" or "seconds" => DurationUnit.Seconds,
+                _ => DurationUnit.Days
+            };
+            return EvidenceValue.FromDuration(new DurationValue(durationValue, durationUnit));
+        }
+
+        // Fallback: try to extract any number and assume days
+        var numMatch = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)");
+        if (numMatch.Success && int.TryParse(numMatch.Groups[1].Value, out var numValue))
+            return EvidenceValue.FromDuration(new DurationValue(numValue, DurationUnit.Days));
+
+        // Fallback: return as string if extraction fails
+        return EvidenceValue.FromString(rawOutput);
+    }
+
+    private static EvidenceValue ExtractBooleanFromOutput(string rawOutput, string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromBoolean(false);
+
+        // Try to extract boolean from text
+        if (rawOutput.Contains("Enabled", StringComparison.OrdinalIgnoreCase) ||
+            rawOutput.Contains("Yes", StringComparison.OrdinalIgnoreCase) ||
+            rawOutput.Contains("True", StringComparison.OrdinalIgnoreCase))
+            return EvidenceValue.FromBoolean(true);
+
+        if (rawOutput.Contains("Disabled", StringComparison.OrdinalIgnoreCase) ||
+            rawOutput.Contains("No", StringComparison.OrdinalIgnoreCase) ||
+            rawOutput.Contains("False", StringComparison.OrdinalIgnoreCase))
+            return EvidenceValue.FromBoolean(false);
+
+        // Fallback: return as string if extraction fails
+        return EvidenceValue.FromString(rawOutput);
     }
 
     private static async Task<string> RunCommandAsync(string cmd, string args)
