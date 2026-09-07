@@ -11,14 +11,12 @@ namespace ISCM.Infrastructure.Scanning;
 /// <summary>
 /// Windows hardening scanner — orchestrates check execution, evidence collection,
 /// normalization (Phase 6), evaluation, verification path tracking (Phase 8),
-/// and agreement/disagreement analysis (Phase 9).
+/// agreement/disagreement analysis (Phase 9), and typed pipeline (Phase 10).
 /// 
 /// Phase 9.4: Integrated SubControlAggregationService for agreement analysis.
-/// Each IMultiPathCheck test produces PathResults that are aggregated into
-/// AgreementDecision for each SubControl.
-/// 
-/// Phase 9.4 fix: PathResult is now properly added to subResult.VerificationResults.
-/// Phase 9.4 fix: Finding is now produced for all checks, not just MultiPathCheck.
+/// Phase 10.4: Supports both collector-only pattern (IEvidenceCollector) and legacy pattern.
+///   - Collector-only: calls CollectEvidenceAsync, then EvaluateSubControlTyped with catalog metadata
+///   - Legacy: calls EvaluateSubControlsAsync (backward compatibility)
 /// </summary>
 public class WindowsHardeningScanner : IScanService
 {
@@ -96,8 +94,6 @@ public class WindowsHardeningScanner : IScanService
 
             try
             {
-                var subControlResults = await check.EvaluateSubControlsAsync();
-
                 // Phase 8.4: Get ControlDefinition for path capability validation
                 var controlDefinition = ControlCatalog.GetByCheckId(check.CheckId);
                 if (controlDefinition == null)
@@ -114,143 +110,32 @@ public class WindowsHardeningScanner : IScanService
                     };
                 }
 
-                // Phase 8.4: Validate path capability for each SubControl
-                foreach (var subResult in subControlResults)
+                // Phase 10.4: Branch based on check type
+                List<SubControlResult> subControlResults;
+
+                if (check is IEvidenceCollector collector)
                 {
-                    var subControlDef = controlDefinition.SubControls
-                        .FirstOrDefault(s => s.SubControlId == subResult.SubControlId);
-
-                    if (subControlDef != null)
-                    {
-                        var capabilityReport = _verificationPathService.ValidatePathCapability(subControlDef);
-                        subResult.PathCapabilityReport = capabilityReport;
-
-                        if (!capabilityReport.IsValid)
-                        {
-                            progress?.Report($"[WARNING] {subResult.SubControlId}: Path capability issues: {string.Join(", ", capabilityReport.Errors)}");
-                        }
-                    }
+                    // ═══════════════════════════════════════════════════════════════
+                    // NEW: Collector-only path (Phase 10.4)
+                    // ═══════════════════════════════════════════════════════════════
+                    subControlResults = await RunCollectorOnlyPath(
+                        collector, controlDefinition, scanContext, hostname, progress);
+                }
+                else
+                {
+                    // ═══════════════════════════════════════════════════════════════
+                    // LEGACY: Old-style check that still uses EvaluateSubControlsAsync
+                    // Will be migrated in subsequent phases (10.5-10.8)
+                    // ═══════════════════════════════════════════════════════════════
+                    subControlResults = await RunLegacyPath(
+                        check, controlDefinition, scanContext, hostname, progress);
                 }
 
-                // Phase 8.4 + Phase 9.4: Multi-path verification with agreement
-                if (check is IMultiPathCheck multiPathCheck)
+                // Phase 9.4: Apply agreement/disagreement analysis (if MultiPathCheck)
+                if (check is IMultiPathCheck)
                 {
-                    var testResults = await multiPathCheck.RunMultipleTestsAsync();
-                    var pathIndex = 0;
-
-                    foreach (var result in testResults)
-                    {
-                        pathIndex++;
-                        Enum.TryParse<EvidenceSourceType>(result.TestMethod, true, out var parsedSourceType);
-
-                        foreach (var subResult in subControlResults)
-                        {
-                            // Phase 8.4: Generate unique PathId for this path
-                            var pathId = $"{subResult.SubControlId}-path-{pathIndex}";
-
-                            var pathStopwatch = Stopwatch.StartNew();
-
-                            // Phase 4: Use acquisition service for live evidence
-                            var evidence = new Evidence
-                            {
-                                ScanId = scanContext.ScanId,
-                                ParentControlId = check.CheckId,
-                                SubControlId = subResult.SubControlId ?? string.Empty,
-                                TechnicalCheckId = check.CheckId,
-                                PathId = pathId,
-                                SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
-                                SourceName = result.TestName,
-                                AcquisitionCommand = result.TestMethod,
-                                RawOutput = result.Details,
-                                Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
-                                CollectedAtUtc = DateTime.UtcNow,
-                                MachineIdentity = hostname
-                            };
-
-                            // Phase 6: Normalize raw output into typed EvidenceValue
-                            NormalizeEvidence(evidence);
-
-                            // Phase 4: Assign fingerprint and validate
-                            _fingerprintService.AssignFingerprint(evidence);
-
-                            // Phase 4: Apply freshness policy
-                            if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
-                            {
-                                evidence.LifecycleState = EvidenceLifecycleState.Cached;
-                            }
-                            else
-                            {
-                                evidence.LifecycleState = EvidenceLifecycleState.Live;
-                            }
-
-                            pathStopwatch.Stop();
-
-                            // Phase 8.4: Create PathResult for this path
-                            var pathResult = PathResult.FromTypedEvaluation(
-                                pathId: pathId,
-                                source: evidence.SourceName,
-                                mechanism: evidence.AcquisitionCommand,
-                                typedEvaluation: Domain.ValueObjects.EvaluationResult.Pass(
-                                    reason: $"Path {pathIndex} passed: {result.Details}",
-                                    details: Domain.ValueObjects.EvaluationResult.BuildDetails(
-                                        actual: evidence.TypedValue?.RawString ?? evidence.RawOutput ?? "(no value)",
-                                        expected: subResult.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
-                                        op: Operator.Equals,
-                                        valueType: evidence.TypedValue?.ValueType.ToString() ?? "Unknown"
-                                    )),
-                                evidenceId: evidence.EvidenceId,
-                                collectorName: "WindowsHardeningScanner",
-                                parserName: "Normalized via INormalizationService",
-                                normalizerName: "Phase 6 Normalizer",
-                                evaluatorName: "IMultiPathCheck direct",
-                                durationMs: (int)pathStopwatch.ElapsedMilliseconds
-                            );
-
-                            // If the path failed, override with Fail result
-                            if (!result.Passed)
-                            {
-                                pathResult = PathResult.Fail(
-                                    pathId: pathId,
-                                    source: evidence.SourceName,
-                                    mechanism: evidence.AcquisitionCommand,
-                                    reason: $"Path {pathIndex} failed: {result.Details}",
-                                    evidenceId: evidence.EvidenceId
-                                );
-                                pathResult.DurationMs = (int)pathStopwatch.ElapsedMilliseconds;
-                                pathResult.CollectorName = "WindowsHardeningScanner";
-                                pathResult.EvaluatorName = "IMultiPathCheck direct";
-                            }
-
-                            // Phase 9.4 FIX: Add PathResult to SubControlResult (was missing in 8.4)
-                            subResult.AddPathResult(pathResult);
-                            subResult.EvidenceItems.Add(evidence);
-                        }
-
-                        if (testResults.Count >= 3)
-                        {
-                            progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
-                            await Task.Delay(30);
-                            progress?.Report($"  ├─ Test 2 ({testResults[1].TestMethod}): {(testResults[1].Passed ? "Pass ✓" : "Fail ✗")}");
-                            await Task.Delay(30);
-                            progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
-                            await Task.Delay(30);
-                        }
-
-                        var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
-                        if (!validationResult.IsValid)
-                        {
-                            progress?.Report($"[WARNING] {check.CheckId}: MultiPath validation failed: {string.Join(", ", validationResult.Errors)}");
-                        }
-                        else if (validationResult.Warnings.Any())
-                        {
-                            progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
-                        }
-                    }
-
-                    // Phase 9.4: Apply agreement/disagreement analysis to all SubControls
                     _aggregationService.AggregateAll(subControlResults);
 
-                    // Phase 9.4: Report agreement results
                     var agreementSummary = _aggregationService.GetSummary(subControlResults);
                     if (agreementSummary.HasDisagreement)
                     {
@@ -262,9 +147,8 @@ public class WindowsHardeningScanner : IScanService
                     }
                 }
 
-                // Phase 9.4 FIX: Finding is produced for ALL checks, not just MultiPathCheck
+                // Produce Finding
                 var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
-
                 scanResult.AddFinding(finding);
                 progress?.Report(BuildResultLine(finding));
             }
@@ -304,6 +188,261 @@ public class WindowsHardeningScanner : IScanService
     }
 
     /// <summary>
+    /// Phase 10.4: Runs the collector-only path for IEvidenceCollector checks.
+    /// 
+    /// Flow:
+    ///   1. Call CollectEvidenceAsync() to get raw Evidence list
+    ///   2. Group evidence by SubControlId
+    ///   3. Convert each group to SubControlResult
+    ///   4. Validate path capability
+    ///   5. Call EvaluateSubControlTyped with catalog metadata
+    /// </summary>
+    private async Task<List<SubControlResult>> RunCollectorOnlyPath(
+        IEvidenceCollector collector,
+        ControlDefinition controlDefinition,
+        ScanContext scanContext,
+        string hostname,
+        IProgress<string>? progress)
+    {
+        var checkId = collector.CollectorId;
+
+        // Step 1: Collect evidence (check does NOT evaluate)
+        var evidenceList = await collector.CollectEvidenceAsync();
+
+        if (evidenceList == null || evidenceList.Count == 0)
+        {
+            progress?.Report($"[WARNING] {checkId}: Collector returned no evidence");
+            return new List<SubControlResult>();
+        }
+
+        // Step 2-5: Group by SubControlId and build SubControlResults
+        var subControlResults = evidenceList
+            .GroupBy(e => e.SubControlId ?? checkId)
+            .Select(g =>
+            {
+                var subControlId = g.Key;
+                var subControlDef = controlDefinition.SubControls
+                    .FirstOrDefault(s => s.SubControlId == subControlId);
+
+                var subResult = new SubControlResult
+                {
+                    SubControlId = subControlId,
+                    Status = CheckStatus.NotScanned,
+                    EvidenceItems = g.ToList(),
+                    EvaluatedAt = DateTime.UtcNow
+                };
+
+                // Enrich evidence with scan context
+                foreach (var evidence in subResult.EvidenceItems)
+                {
+                    if (string.IsNullOrEmpty(evidence.ScanId))
+                        evidence.ScanId = scanContext.ScanId;
+
+                    if (string.IsNullOrEmpty(evidence.ParentControlId))
+                        evidence.ParentControlId = checkId;
+
+                    if (string.IsNullOrEmpty(evidence.MachineIdentity))
+                        evidence.MachineIdentity = hostname;
+
+                    // Phase 4: Assign fingerprint and validate
+                    _fingerprintService.AssignFingerprint(evidence);
+
+                    // Phase 4: Apply freshness policy
+                    if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
+                    {
+                        evidence.LifecycleState = EvidenceLifecycleState.Cached;
+                    }
+                    else
+                    {
+                        evidence.LifecycleState = EvidenceLifecycleState.Live;
+                    }
+                }
+
+                // Validate path capability
+                if (subControlDef != null)
+                {
+                    var capabilityReport = _verificationPathService.ValidatePathCapability(subControlDef);
+                    subResult.PathCapabilityReport = capabilityReport;
+
+                    if (!capabilityReport.IsValid)
+                    {
+                        progress?.Report($"[WARNING] {subControlId}: Path capability issues: {string.Join(", ", capabilityReport.Errors)}");
+                    }
+                }
+
+                // Step 5: Evaluate using typed pipeline with catalog metadata
+                if (subControlDef != null && !string.IsNullOrWhiteSpace(subControlDef.ExpectedValue))
+                {
+                    try
+                    {
+                        _controlEvaluator.EvaluateSubControlTyped(
+                            subResult,
+                            subControlDef.ExpectedValue,
+                            subControlDef.ExpectedValueType,
+                            subControlDef.Operator
+                        );
+                    }
+                    catch (Exception evalEx)
+                    {
+                        subResult.Status = CheckStatus.Error;
+                        progress?.Report($"[ERROR] {subControlId}: Typed evaluation failed: {evalEx.Message}");
+                    }
+                }
+                else
+                {
+                    // No catalog metadata - fallback to Unknown
+                    subResult.Status = CheckStatus.Unknown;
+                }
+
+                return subResult;
+            })
+            .ToList();
+
+        return subControlResults;
+    }
+
+    /// <summary>
+    /// LEGACY path for checks that still use EvaluateSubControlsAsync.
+    /// Backward compatibility for checks not yet migrated to collector-only pattern.
+    /// </summary>
+    private async Task<List<SubControlResult>> RunLegacyPath(
+        IHardeningCheck check,
+        ControlDefinition controlDefinition,
+        ScanContext scanContext,
+        string hostname,
+        IProgress<string>? progress)
+    {
+        var subControlResults = await check.EvaluateSubControlsAsync();
+
+        // Validate path capability for each SubControl
+        foreach (var subResult in subControlResults)
+        {
+            var subControlDef = controlDefinition.SubControls
+                .FirstOrDefault(s => s.SubControlId == subResult.SubControlId);
+
+            if (subControlDef != null)
+            {
+                var capabilityReport = _verificationPathService.ValidatePathCapability(subControlDef);
+                subResult.PathCapabilityReport = capabilityReport;
+
+                if (!capabilityReport.IsValid)
+                {
+                    progress?.Report($"[WARNING] {subResult.SubControlId}: Path capability issues: {string.Join(", ", capabilityReport.Errors)}");
+                }
+            }
+        }
+
+        // Multi-path verification with agreement (legacy)
+        if (check is IMultiPathCheck multiPathCheck)
+        {
+            var testResults = await multiPathCheck.RunMultipleTestsAsync();
+            var pathIndex = 0;
+
+            foreach (var result in testResults)
+            {
+                pathIndex++;
+                Enum.TryParse<EvidenceSourceType>(result.TestMethod, true, out var parsedSourceType);
+
+                foreach (var subResult in subControlResults)
+                {
+                    var pathId = $"{subResult.SubControlId}-path-{pathIndex}";
+                    var pathStopwatch = Stopwatch.StartNew();
+
+                    var evidence = new Evidence
+                    {
+                        ScanId = scanContext.ScanId,
+                        ParentControlId = check.CheckId,
+                        SubControlId = subResult.SubControlId ?? string.Empty,
+                        TechnicalCheckId = check.CheckId,
+                        PathId = pathId,
+                        SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Other,
+                        SourceName = result.TestName,
+                        AcquisitionCommand = result.TestMethod,
+                        RawOutput = result.Details,
+                        Evaluation = result.Passed ? CheckStatus.Pass : CheckStatus.Fail,
+                        CollectedAtUtc = DateTime.UtcNow,
+                        MachineIdentity = hostname
+                    };
+
+                    NormalizeEvidence(evidence);
+                    _fingerprintService.AssignFingerprint(evidence);
+
+                    if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
+                    {
+                        evidence.LifecycleState = EvidenceLifecycleState.Cached;
+                    }
+                    else
+                    {
+                        evidence.LifecycleState = EvidenceLifecycleState.Live;
+                    }
+
+                    pathStopwatch.Stop();
+
+                    var pathResult = result.Passed
+                        ? PathResult.FromTypedEvaluation(
+                            pathId: pathId,
+                            source: evidence.SourceName,
+                            mechanism: evidence.AcquisitionCommand,
+                            typedEvaluation: Domain.ValueObjects.EvaluationResult.Pass(
+                                reason: $"Path {pathIndex} passed: {result.Details}",
+                                details: Domain.ValueObjects.EvaluationResult.BuildDetails(
+                                    actual: evidence.TypedValue?.RawString ?? evidence.RawOutput ?? "(no value)",
+                                    expected: subResult.EvidenceItems.FirstOrDefault()?.ExpectedValue ?? "N/A",
+                                    op: Operator.Equals,
+                                    valueType: evidence.TypedValue?.ValueType.ToString() ?? "Unknown"
+                                )),
+                            evidenceId: evidence.EvidenceId,
+                            collectorName: "WindowsHardeningScanner",
+                            parserName: "Normalized via INormalizationService",
+                            normalizerName: "Phase 6 Normalizer",
+                            evaluatorName: "IMultiPathCheck direct",
+                            durationMs: (int)pathStopwatch.ElapsedMilliseconds
+                        )
+                        : PathResult.Fail(
+                            pathId: pathId,
+                            source: evidence.SourceName,
+                            mechanism: evidence.AcquisitionCommand,
+                            reason: $"Path {pathIndex} failed: {result.Details}",
+                            evidenceId: evidence.EvidenceId
+                        );
+
+                    if (!result.Passed)
+                    {
+                        pathResult.DurationMs = (int)pathStopwatch.ElapsedMilliseconds;
+                        pathResult.CollectorName = "WindowsHardeningScanner";
+                        pathResult.EvaluatorName = "IMultiPathCheck direct";
+                    }
+
+                    subResult.AddPathResult(pathResult);
+                    subResult.EvidenceItems.Add(evidence);
+                }
+
+                if (testResults.Count >= 3)
+                {
+                    progress?.Report($"  ├─ Test 1 ({testResults[0].TestMethod}): {(testResults[0].Passed ? "Pass ✓" : "Fail ✗")}");
+                    await Task.Delay(30);
+                    progress?.Report($"  ├─ Test 2 ({testResults[1].TestMethod}): {(testResults[1].Passed ? "Pass ✓" : "Fail ✗")}");
+                    await Task.Delay(30);
+                    progress?.Report($"  └─ Test 3 ({testResults[2].TestMethod}): {(testResults[2].Passed ? "Pass ✓" : "Fail ✗")}");
+                    await Task.Delay(30);
+                }
+
+                var validationResult = _multiPathValidator.Validate(check.CheckId, testResults);
+                if (!validationResult.IsValid)
+                {
+                    progress?.Report($"[WARNING] {check.CheckId}: MultiPath validation failed: {string.Join(", ", validationResult.Errors)}");
+                }
+                else if (validationResult.Warnings.Any())
+                {
+                    progress?.Report($"[INFO] {check.CheckId}: {string.Join(", ", validationResult.Warnings)}");
+                }
+            }
+        }
+
+        return subControlResults;
+    }
+
+    /// <summary>
     /// Phase 6: Normalize raw evidence output via parser → normalizer pipeline.
     /// On success: evidence.TypedValue is set to typed EvidenceValue.
     /// On failure: TypedValue stays null; raw kept only for legacy evaluation.
@@ -327,8 +466,6 @@ public class WindowsHardeningScanner : IScanService
         }
         else
         {
-            // Normalization failed explicitly: TypedValue remains null.
-            // Legacy string evaluation may still use ParsedValue during migration.
             evidence.ParsedValue = evidence.RawOutput.Trim();
         }
     }
@@ -344,7 +481,6 @@ public class WindowsHardeningScanner : IScanService
         // Phase 4: Create new ScanContext for rescan
         var scanContext = new ScanContext(checkId, ScanMode.Rescan);
 
-        var subControlResults = await check.EvaluateSubControlsAsync();
         var controlDefinition = ControlCatalog.GetByCheckId(checkId);
 
         if (controlDefinition == null)
@@ -359,6 +495,20 @@ public class WindowsHardeningScanner : IScanService
                 TechnicalCheckIds = new() { checkId },
                 SubControls = new()
             };
+        }
+
+        List<SubControlResult> subControlResults;
+
+        // Phase 10.4: Use collector-only path if available
+        if (check is IEvidenceCollector collector)
+        {
+            subControlResults = await RunCollectorOnlyPath(
+                collector, controlDefinition, scanContext, "rescan-host", null);
+        }
+        else
+        {
+            // Legacy path
+            subControlResults = await check.EvaluateSubControlsAsync();
         }
 
         return _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, checkId);

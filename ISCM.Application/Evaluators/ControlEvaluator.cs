@@ -18,11 +18,6 @@ public class ControlEvaluator : IControlEvaluator
 
     /// <summary>
     /// Constructor with typed evidence evaluator injection (Phase 7.5).
-    /// 
-    /// The typed evaluator enables typed, unit-aware evaluation of Evidence items
-    /// via ITypedEvidenceEvaluator. Legacy callers that do not need typed evaluation
-    /// can still use the parameterless constructor (kept for backward compatibility
-    /// during the migration period).
     /// </summary>
     public ControlEvaluator(ITypedEvidenceEvaluator typedEvidenceEvaluator)
     {
@@ -32,8 +27,6 @@ public class ControlEvaluator : IControlEvaluator
 
     /// <summary>
     /// Backward-compatible parameterless constructor.
-    /// Used by legacy code paths that do not need typed evaluation.
-    /// Typed evaluation methods will throw if called on an instance created this way.
     /// </summary>
     public ControlEvaluator()
     {
@@ -41,7 +34,7 @@ public class ControlEvaluator : IControlEvaluator
     }
 
     // =========================================================================
-    // Legacy methods (UNCHANGED from pre-Phase-7 code)
+    // Legacy methods
     // =========================================================================
 
     public ControlResult Evaluate(ControlDefinition controlDefinition, IEnumerable<SubControlResult> subControlResults)
@@ -70,21 +63,41 @@ public class ControlEvaluator : IControlEvaluator
             return controlResult;
         }
 
+        // =====================================================================
+        // Phase 10.4 fix: Corrected precedence for all statuses.
+        // Precedence order (highest to lowest):
+        //   Error > Disagreement > Unknown > Fail > Pass
+        //
+        // Rationale:
+        //   - Error: technical failure (overrides everything)
+        //   - Disagreement: multi-path produced conflicting verdicts
+        //     (more informative than Unknown, so ranks above it)
+        //   - Unknown: insufficient or ambiguous evidence
+        //   - Fail: at least one required SubControl failed
+        //   - Pass: all applicable SubControls passed
+        // =====================================================================
+
         if (applicable.Any(r => r.Status == CheckStatus.Error))
         {
             controlResult.Status = CheckStatus.Error;
             return controlResult;
         }
 
-        if (applicable.Any(r => r.Status == CheckStatus.Fail))
+        if (applicable.Any(r => r.Status == CheckStatus.Disagreement))
         {
-            controlResult.Status = CheckStatus.Fail;
+            controlResult.Status = CheckStatus.Disagreement;
             return controlResult;
         }
 
         if (applicable.Any(r => r.Status == CheckStatus.Unknown))
         {
             controlResult.Status = CheckStatus.Unknown;
+            return controlResult;
+        }
+
+        if (applicable.Any(r => r.Status == CheckStatus.Fail))
+        {
+            controlResult.Status = CheckStatus.Fail;
             return controlResult;
         }
 
@@ -175,47 +188,6 @@ public class ControlEvaluator : IControlEvaluator
     // Phase 7.5 — NEW: Typed SubControl evaluation
     // =========================================================================
 
-    /// <summary>
-    /// Evaluates a single SubControl using the typed evidence evaluator.
-    /// 
-    /// This is the NEW typed evaluation path introduced in Phase 7.5.
-    /// It is intended to replace legacy string-based evaluation during the migration
-    /// period (Phase 7.6 onwards, where the scanner will call this method directly).
-    /// 
-    /// Flow:
-    ///   1. Validate SubControlResult and its EvidenceItems are not empty.
-    ///   2. For each Evidence item:
-    ///      a. Call ITypedEvidenceEvaluator.Evaluate(evidence, expectedString, expectedType, op)
-    ///      b. Collect the EvaluationResult
-    ///      c. Update Evidence.Evaluation and Evidence.EvaluationReason based on the result
-    ///   3. Aggregate all per-Evidence results into a SubControl-level CheckStatus:
-    ///      - Any Error       → Error (precedence)
-    ///      - Any Unknown     → Unknown
-    ///      - Any Fail        → Fail
-    ///      - All Pass        → Pass
-    ///      - No evidence     → Unknown
-    ///   4. Update SubControlResult.Status with the aggregated status.
-    ///   5. Return a SubControlEvaluationSummary with details for audit/UI.
-    /// 
-    /// Hard rules:
-    ///   - If an Evidence item has TypedValue == null, ITypedEvidenceEvaluator returns Error
-    ///     (normalization failure, not silent fallback). This Error propagates to the SubControl.
-    ///   - If _typedEvidenceEvaluator is null (parameterless constructor used), throws.
-    ///     Callers must use the DI-injected constructor to access typed evaluation.
-    /// 
-    /// Phase 7 — Typed Evaluation, Sub-Phase 7.5
-    /// </summary>
-    /// <param name="subControlResult">The SubControlResult to evaluate. Must have EvidenceItems.</param>
-    /// <param name="expectedValueString">The expected value string from the catalog (e.g., "14 characters").</param>
-    /// <param name="expectedType">The declared type from the catalog.</param>
-    /// <param name="op">The declared operator from the catalog.</param>
-    /// <returns>
-    /// SubControlEvaluationSummary containing:
-    ///   - AggregatedStatus (the final SubControl verdict)
-    ///   - AggregatedReason (human-readable summary)
-    ///   - PerEvidenceResults (list of EvaluationResult for each Evidence item)
-    /// The SubControlResult.Status is ALSO updated in place for consistency.
-    /// </returns>
     public SubControlEvaluationSummary EvaluateSubControlTyped(
         SubControlResult subControlResult,
         string expectedValueString,
@@ -255,7 +227,6 @@ public class ControlEvaluator : IControlEvaluator
                 perEvidenceResults: new List<EvaluationResult> { noEvidenceResult });
         }
 
-        // Evaluate each Evidence item
         var perEvidenceResults = new List<EvaluationResult>(evidenceItems.Count);
 
         foreach (var evidence in evidenceItems)
@@ -266,18 +237,15 @@ public class ControlEvaluator : IControlEvaluator
                 expectedType,
                 op);
 
-            // Propagate result back to Evidence entity for audit/UI consumption
             evidence.Evaluation = result.Status;
             evidence.EvaluationReason = result.Reason;
 
             perEvidenceResults.Add(result);
         }
 
-        // Aggregate per-Evidence results into SubControl-level status
         var aggregatedStatus = AggregateStatuses(perEvidenceResults);
         var aggregatedReason = BuildAggregatedReason(perEvidenceResults, aggregatedStatus);
 
-        // Update SubControlResult in place
         subControlResult.Status = aggregatedStatus;
         subControlResult.EvaluatedAt = DateTime.UtcNow;
 
@@ -287,19 +255,6 @@ public class ControlEvaluator : IControlEvaluator
             perEvidenceResults: perEvidenceResults);
     }
 
-    /// <summary>
-    /// Aggregates per-Evidence EvaluationResults into a single SubControl CheckStatus.
-    /// 
-    /// Precedence (highest to lowest):
-    ///   Error > Unknown > Fail > Pass
-    /// 
-    /// This matches the contract defined in the Final Engineering Specification (Section 2.5):
-    ///   Required ERROR > Required UNKNOWN > Required FAIL > Required PASS
-    /// 
-    /// The SubControl does not know Required/Optional (that is a Parent-level concern),
-    /// so we apply raw precedence here. Parent aggregation (Phase 13) will apply the
-    /// Required/Optional policy on top.
-    /// </summary>
     private static CheckStatus AggregateStatuses(IReadOnlyList<EvaluationResult> results)
     {
         if (results.Count == 0)
@@ -317,14 +272,9 @@ public class ControlEvaluator : IControlEvaluator
         if (results.All(r => r.Status == CheckStatus.Pass))
             return CheckStatus.Pass;
 
-        // Defensive fallback — should not be reachable given EvaluationResult only produces
-        // Pass/Fail/Error/Unknown. Returns Unknown to be conservative (never silent Pass).
         return CheckStatus.Unknown;
     }
 
-    /// <summary>
-    /// Builds a human-readable aggregated reason from the per-Evidence results.
-    /// </summary>
     private static string BuildAggregatedReason(IReadOnlyList<EvaluationResult> results, CheckStatus aggregated)
     {
         var passCount = results.Count(r => r.Status == CheckStatus.Pass);
@@ -342,20 +292,6 @@ public class ControlEvaluator : IControlEvaluator
 // Sub-Phase 7.5 — SubControl evaluation summary value object
 // =========================================================================
 
-/// <summary>
-/// Immutable value object returned by ControlEvaluator.EvaluateSubControlTyped.
-/// 
-/// Contains:
-///   - AggregatedStatus: the SubControl-level verdict (also applied to SubControlResult.Status)
-///   - AggregatedReason: human-readable summary of the aggregation
-///   - PerEvidenceResults: list of EvaluationResult for each Evidence item (for audit/UI)
-/// 
-/// Defined as a nested-free class next to ControlEvaluator to keep the evaluation
-/// output type close to its producer. Could be moved to Domain/ValueObjects in a
-/// future refactor if needed by other layers.
-/// 
-/// Phase 7 — Typed Evaluation, Sub-Phase 7.5
-/// </summary>
 public sealed class SubControlEvaluationSummary
 {
     public CheckStatus AggregatedStatus { get; }

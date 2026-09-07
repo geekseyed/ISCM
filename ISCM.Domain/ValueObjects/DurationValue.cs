@@ -1,4 +1,5 @@
 ﻿using ISCM.Domain.Enums;
+using System;
 
 namespace ISCM.Domain.ValueObjects;
 
@@ -33,6 +34,14 @@ public class DurationValue
     public double ToMinutes() => ToSeconds() / 60;
     public double ToHours() => ToSeconds() / 3600;
     public double ToDays() => ToSeconds() / 86400;
+
+    /// <summary>
+    /// Converts this DurationValue to a .NET TimeSpan for typed pipeline comparison.
+    /// 
+    /// Phase 10.4 fix: bridges Domain ValueObject (DurationValue) to CLR TimeSpan
+    /// required by DurationEvaluator, so typed evaluation can compare durations correctly.
+    /// </summary>
+    public TimeSpan ToTimeSpan() => TimeSpan.FromSeconds(ToSeconds());
 
     public static DurationValue FromDays(long days) => new(days, DurationUnit.Days);
     public static DurationValue FromHours(long hours) => new(hours, DurationUnit.Hours);

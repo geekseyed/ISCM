@@ -32,6 +32,7 @@ namespace ISCM.Application.Evaluators;
 ///     and Enum/RegistryValue/PolicyValue share CLR type 'object'.
 /// 
 /// Phase 7 — Typed Evaluation, Sub-Phase 7.4
+/// Phase 10.4 — DurationValue → TimeSpan bridge in DispatchDuration
 /// </summary>
 public sealed class TypedEvidenceEvaluator : ITypedEvidenceEvaluator
 {
@@ -145,10 +146,6 @@ public sealed class TypedEvidenceEvaluator : ITypedEvidenceEvaluator
     // ITypedEvidenceEvaluator: entity-based overload (migration convenience)
     // =========================================================================
 
-    // =========================================================================
-    // ITypedEvidenceEvaluator: entity-based overload (migration convenience)
-    // =========================================================================
-
     public EvaluationResult Evaluate(
         Evidence evidence,
         string expectedValueString,
@@ -251,6 +248,21 @@ public sealed class TypedEvidenceEvaluator : ITypedEvidenceEvaluator
     private EvaluationResult DispatchDuration(
         object actual, object expected, Operator op, string expectedString)
     {
+        // =====================================================================
+        // Phase 10.4 fix: Convert DurationValue to TimeSpan
+        // =====================================================================
+        // Evidence.TypedValue stores DurationValue (Domain ValueObject), but
+        // DurationEvaluator expects TimeSpan (CLR type). Bridge them here,
+        // BEFORE the TimeSpan type-check below.
+        //
+        // Example: actual=DurationValue(30, Days) → TimeSpan.FromDays(30)
+        //          expected=TimeSpan.FromDays(60) (from ExpectedValueParser)
+        //          Both are now TimeSpan → DurationEvaluator.Compare works.
+        if (actual is DurationValue durationValue)
+        {
+            actual = durationValue.ToTimeSpan();
+        }
+
         if (actual is TimeSpan actualTs && expected is TimeSpan expectedTs)
         {
             return _durEval.Compare(actualTs, expectedTs, op);
