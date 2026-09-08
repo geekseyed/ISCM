@@ -1,248 +1,194 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 10.9: User Rights Assignment Check (Collector-only pattern).
+/// 
+/// SubControls (9 migrated, all Collection with SetMembership):
+///   - URA-001.1: SeNetworkLogonRight → Collection (Administrators, Remote Desktop Users)
+///   - URA-001.2: SeDenyNetworkLogonRight → Collection (Guests, Local account)
+///   - URA-001.3: SeDenyBatchLogonRight → Collection (Guests)
+///   - URA-001.4: SeDenyServiceLogonRight → Collection (Guests)
+///   - URA-001.5: SeDenyInteractiveLogonRight → Collection (Guests)
+///   - URA-001.6: SeDenyRemoteInteractiveLogonRight → Collection (Guests, Local account)
+///   - URA-001.7: SeRemoteInteractiveLogonRight → Collection (Administrators, Remote Desktop Users)
+///   - URA-001.8: SeDebugPrivilege → Collection (Administrators)
+///   - URA-001.9: SeTakeOwnershipPrivilege → Collection (Administrators)
+/// 
+/// Phase 10.9 fix: Use EvidenceValue constructor directly (no FromCollection factory).
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
+public class UserRightsCheck : BaseHardeningCheck
 {
-    public string CheckId => "URA-001";
-    public string Name => "User Rights Assignment";
-    public CheckCategory Category => CheckCategory.Account;
-    public CheckSeverity Severity => CheckSeverity.Medium;
+    private readonly IEvidenceParser _registryParser;
 
-    private static readonly List<SubCheck> SubChecks = new()
+    // Mapping: SubControlId → (PrivilegeName, RawOutput key)
+    private static readonly Dictionary<string, string> SubControlToPrivilege = new()
     {
-        new SubCheck { Id = "URA-001.1", Title = "Access this computer from the network", Expected = "Administrators, Remote Desktop Users", WhatItDoes = "Restricts network logon to approved groups.", Recommendation = "Only Admins + RDP Users.",
-            CheckCurrentCli = "# secpol.msc → User Rights Assignment → Access this computer from the network", CliCommand = "# secpol.msc → set to Administrators, Remote Desktop Users", VerifyCli = "# secpol.msc → verify members", Verification = "Only Administrators + Remote Desktop Users listed.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Access from network",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Access this computer from the network",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment",
-            YouAreHere = "secpol.msc → Security Settings → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Access this computer from the network > Administrators, Remote Desktop Users",
-            GraphicalSteps = "1) secpol.msc → Local Policies → User Rights Assignment. 2) Double-click 'Access this computer from the network'. 3) Keep only Administrators + Remote Desktop Users.",
-            UndoCli = "# restore prior groups", IgnoreConsequence = "Excess accounts can log on over the network.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.2", Title = "Deny access to this computer from the network", Expected = "Guests, Local account", WhatItDoes = "Blocks risky accounts from network access.", Recommendation = "Add Guests + Local account.",
-            CheckCurrentCli = "# secpol.msc → Deny access to this computer from the network", CliCommand = "# secpol.msc → add Guests, Local account", VerifyCli = "# verify", Verification = "Guests + Local account present.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny network access",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny access to this computer from the network",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny access to this computer from the network > Guests, Local account",
-            GraphicalSteps = "1) User Rights Assignment. 2) 'Deny access to this computer from the network'. 3) Add Guests + Local account.",
-            UndoCli = "# remove entries", IgnoreConsequence = "Guest/local accounts reachable over network.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.3", Title = "Deny log on as a batch job", Expected = "Guests", WhatItDoes = "Stops Guest batch/scheduled jobs.", Recommendation = "Add Guests.",
-            CheckCurrentCli = "# secpol.msc → Deny log on as a batch job", CliCommand = "# secpol.msc → add Guests", VerifyCli = "# verify", Verification = "Guests present.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny batch job",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on as a batch job",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on as a batch job > Guests",
-            GraphicalSteps = "1) 'Deny log on as a batch job'. 2) Add Guests.", UndoCli = "# remove", IgnoreConsequence = "Guest may run scheduled jobs.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.4", Title = "Deny log on as a service", Expected = "Guests", WhatItDoes = "Stops Guest as service identity.", Recommendation = "Add Guests.",
-            CheckCurrentCli = "# secpol.msc → Deny log on as a service", CliCommand = "# secpol.msc → add Guests", VerifyCli = "# verify", Verification = "Guests present.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny service",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on as a service",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on as a service > Guests",
-            GraphicalSteps = "1) 'Deny log on as a service'. 2) Add Guests.", UndoCli = "# remove", IgnoreConsequence = "Guest usable as service identity.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.5", Title = "Deny log on locally", Expected = "Guests", WhatItDoes = "Blocks Guest console logon.", Recommendation = "Add Guests.",
-            CheckCurrentCli = "# secpol.msc → Deny log on locally", CliCommand = "# secpol.msc → add Guests", VerifyCli = "# verify", Verification = "Guests present.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny local logon",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on locally",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on locally > Guests",
-            GraphicalSteps = "1) 'Deny log on locally'. 2) Add Guests.", UndoCli = "# remove", IgnoreConsequence = "Guest can log on at console.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.6", Title = "Deny log on through Remote Desktop Services", Expected = "Guests, Local account", WhatItDoes = "Blocks Guest/local RDP.", Recommendation = "Add Guests + Local account.",
-            CheckCurrentCli = "# secpol.msc → Deny log on through RDS", CliCommand = "# secpol.msc → add Guests, Local account", VerifyCli = "# verify", Verification = "Guests + Local account present.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Deny RDP",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on through Remote Desktop Services",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny log on through Remote Desktop Services > Guests, Local account",
-            GraphicalSteps = "1) 'Deny log on through Remote Desktop Services'. 2) Add Guests + Local account.", UndoCli = "# remove", IgnoreConsequence = "Guest/local RDP access possible.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.7", Title = "Allow log on through Remote Desktop Services", Expected = "Administrators, Remote Desktop Users", WhatItDoes = "Limits RDP to approved groups.", Recommendation = "Only Admins + RDP Users.",
-            CheckCurrentCli = "# secpol.msc → Allow log on through RDS", CliCommand = "# secpol.msc → set Admins + RDP Users", VerifyCli = "# verify", Verification = "Only approved groups.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Allow RDP",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Allow log on through Remote Desktop Services",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Allow log on through Remote Desktop Services > Administrators, RDP Users",
-            GraphicalSteps = "1) 'Allow log on through Remote Desktop Services'. 2) Keep Admins + RDP Users.", UndoCli = "# restore", IgnoreConsequence = "Unapproved RDP access.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.8", Title = "Debug programs", Expected = "Administrators only", WhatItDoes = "Restricts dangerous debug right.", Recommendation = "Administrators only.",
-            CheckCurrentCli = "# secpol.msc → Debug programs", CliCommand = "# secpol.msc → Administrators only", VerifyCli = "# verify", Verification = "Only Administrators.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Debug programs",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Debug programs",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Debug programs > Administrators",
-            GraphicalSteps = "1) 'Debug programs'. 2) Administrators only.", UndoCli = "# restore", IgnoreConsequence = "Debug right enables process memory reads.", HasRegistryPath = false },
-        new SubCheck { Id = "URA-001.9", Title = "Take ownership of files or other objects", Expected = "Administrators only", WhatItDoes = "Limits ownership seizure.", Recommendation = "Administrators only.",
-            CheckCurrentCli = "# secpol.msc → Take ownership", CliCommand = "# secpol.msc → Administrators only", VerifyCli = "# verify", Verification = "Only Administrators.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "User Rights → Take ownership",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Take ownership of files or other objects",
-            ConsolePath = "… > Local Policies > User Rights Assignment", YouAreHere = "secpol.msc → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Take ownership of files or other objects > Administrators",
-            GraphicalSteps = "1) 'Take ownership of files or other objects'. 2) Administrators only.", UndoCli = "# restore", IgnoreConsequence = "Non-admins can seize ownership.", HasRegistryPath = false }
+        { "URA-001.1", "SeNetworkLogonRight" },
+        { "URA-001.2", "SeDenyNetworkLogonRight" },
+        { "URA-001.3", "SeDenyBatchLogonRight" },
+        { "URA-001.4", "SeDenyServiceLogonRight" },
+        { "URA-001.5", "SeDenyInteractiveLogonRight" },
+        { "URA-001.6", "SeDenyRemoteInteractiveLogonRight" },
+        { "URA-001.7", "SeRemoteInteractiveLogonRight" },
+        { "URA-001.8", "SeDebugPrivilege" },
+        { "URA-001.9", "SeTakeOwnershipPrivilege" }
     };
 
-    public Task<Finding> EvaluateAsync()
+    // Well-known SIDs to friendly names
+    private static readonly Dictionary<string, string> SidToName = new(StringComparer.OrdinalIgnoreCase)
     {
-        var statuses = new List<CheckStatus>();
+        { "*S-1-5-32-544", "Administrators" },
+        { "*S-1-5-32-546", "Guests" },
+        { "*S-1-5-32-555", "Remote Desktop Users" },
+        { "*S-1-11-0", "Local account" },
+        { "*S-1-5-11", "Authenticated Users" },
+        { "*S-1-5-32-545", "Users" },
+        { "*S-1-5-18", "SYSTEM" },
+        { "*S-1-5-19", "LOCAL SERVICE" },
+        { "*S-1-5-20", "NETWORK SERVICE" }
+    };
 
-        try
-        {
-            // 1. Export secedit USER_RIGHTS و بررسی SeDenyNetworkLogonRight
-            string seceditOutput = RunSeceditExport();
-            bool hasDenyNetwork = seceditOutput.Contains("SeDenyNetworkLogonRight", StringComparison.OrdinalIgnoreCase);
-            statuses.Add(hasDenyNetwork ? CheckStatus.Pass : CheckStatus.Fail);
+    public override string CheckId => "URA-001";
+    public override string Name => "User Rights Assignment";
+    public override CheckCategory Category => CheckCategory.Account;
+    public override CheckSeverity Severity => CheckSeverity.Medium;
 
-            // 2. بررسی SeDebugPrivilege از whoami /priv
-            string whoamiOutput = Run("whoami.exe", "/priv");
-            bool hasDebugPriv = whoamiOutput.Contains("SeDebugPrivilege", StringComparison.OrdinalIgnoreCase);
-            bool debugDisabled = whoamiOutput.Contains("SeDebugPrivilege") && whoamiOutput.Contains("Disabled");
-            statuses.Add((!hasDebugPriv || debugDisabled) ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 3. بررسی RDP Users group membership
-            string rdpOutput = Run("net", "localgroup \"Remote Desktop Users\"");
-            bool hasRdpGroup = rdpOutput.Contains("Remote Desktop Users", StringComparison.OrdinalIgnoreCase);
-            statuses.Add(hasRdpGroup ? CheckStatus.Pass : CheckStatus.Fail);
-
-            var finalStatus = GetWorstStatus(statuses);
-            int passCount = statuses.Count(s => s == CheckStatus.Pass);
-            string details = $"{passCount}/{statuses.Count} User Rights settings verified";
-
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, finalStatus, details,
-                "User Rights Assignment verified",
-                "Review User Rights Assignment against the baseline (secpol.msc).",
-                errorMessage: string.Empty,
-                description: "Controls which groups may perform sensitive system operations.",
-                registryPath: string.Empty,
-                cisReference: "CIS 2.2", riskScore: 55, sourceType: "secedit + whoami",
-                sourceCommand: "secedit /export /areas USER_RIGHTS",
-                fixTools: new List<string> { "secpol.msc" },
-                subChecks: SubChecks));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
-                errorMessage: ex.Message,
-                description: "Controls which groups may perform sensitive system operations.",
-                registryPath: string.Empty,
-                cisReference: "CIS 2.2", riskScore: 55, sourceType: "secedit + whoami",
-                sourceCommand: "secedit /export /areas USER_RIGHTS",
-                fixTools: new List<string> { "secpol.msc" },
-                subChecks: SubChecks));
-        }
+    public UserRightsCheck()
+    {
+        _registryParser = new RegistryParser();
     }
 
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
-        var results = new List<TestResult>();
-        // Test 1: whoami /priv برای بررسی privilege های کاربر فعلی
-        try
-        {
-            var psi = new ProcessStartInfo("whoami.exe", "/priv")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                var hasDebug = output.Contains("SeDebugPrivilege", StringComparison.OrdinalIgnoreCase);
-                var passed = !hasDebug || (output.Contains("SeDebugPrivilege") && output.Contains("Disabled"));
-                var details = hasDebug ? "SeDebugPrivilege found (check if disabled)" : "SeDebugPrivilege not assigned to current user";
-                results.Add(new TestResult("Primary", "whoami /priv", passed, details));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "whoami /priv", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+        var evidenceList = new List<Evidence>();
 
-        // Test 2: secedit /export با ایجاد پوشه
-        try
-        {
-            if (!Directory.Exists(@"C:\temp"))
-            {
-                Directory.CreateDirectory(@"C:\temp");
-            }
-            var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\userrights.inf\" /areas USER_RIGHTS")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-            }
-            if (File.Exists(@"C:\temp\userrights.inf"))
-            {
-                var content = await File.ReadAllTextAsync(@"C:\temp\userrights.inf");
-                var hasDenyNetwork = content.Contains("SeDenyNetworkLogonRight", StringComparison.OrdinalIgnoreCase);
-                var passed = hasDenyNetwork;
-                var details = hasDenyNetwork ? "SeDenyNetworkLogonRight configured" : "SeDenyNetworkLogonRight not found";
-                results.Add(new TestResult("Cross-check", "secedit (USER_RIGHTS)", passed, details));
-            }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "secedit (USER_RIGHTS)", false, "secedit export failed"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "secedit (USER_RIGHTS)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+        // Run secedit once for all SubControls
+        var seceditOutput = await RunSeceditExportAsync();
+        var privilegeMap = ParsePrivilegeRights(seceditOutput);
 
-        // Test 3: PowerShell برای بررسی group membership
-        try
+        foreach (var kvp in SubControlToPrivilege)
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-LocalGroupMember -Group 'Remote Desktop Users' -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count\"")
+            var subControlId = kvp.Key;
+            var privilegeName = kvp.Value;
+
+            try
             {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
+                var startTime = DateTime.UtcNow;
+
+                // Extract groups for this privilege
+                var groups = new List<object>();
+                if (privilegeMap.TryGetValue(privilegeName, out var sids) && sids != null)
+                {
+                    foreach (var sid in sids)
+                    {
+                        var friendlyName = SidToName.TryGetValue(sid, out var name) ? name : sid;
+                        groups.Add(friendlyName);
+                    }
+                }
+
+                // Phase 10.9 fix: Use constructor directly, not FromCollection
+                var rawString = groups.Count > 0
+                    ? string.Join(", ", groups.Cast<string>())
+                    : "(empty)";
+                var typedValue = new EvidenceValue(
+                    groups,
+                    EvidenceValueType.Collection,
+                    rawString: rawString);
+
+                var parsedValue = _registryParser.Parse(seceditOutput, "Secedit");
+
+                evidenceList.Add(new Evidence
+                {
+                    EvidenceId = $"{CheckId}-{subControlId}",
+                    SubControlId = subControlId,
+                    SourceType = EvidenceSourceType.Other,
+                    SourceName = $"secedit /areas USER_RIGHTS",
+                    AcquisitionCommand = "secedit /export /cfg C:\\temp\\ura.inf /areas USER_RIGHTS",
+                    RawOutput = privilegeMap.ContainsKey(privilegeName)
+                        ? $"{privilegeName} = {string.Join(",", sids ?? new List<string>())}"
+                        : $"{privilegeName} not configured",
+                    ParsedValue = parsedValue,
+                    TypedValue = typedValue,
+                    Evaluation = CheckStatus.NotScanned,
+                    CollectedAtUtc = DateTime.UtcNow,
+                    CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+                });
+            }
+            catch (Exception ex)
             {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                var passed = !string.IsNullOrWhiteSpace(output);
-                var details = passed ? $"Remote Desktop Users group has {output.Trim()} members" : "Could not query RDP Users group";
-                results.Add(new TestResult("Verification", "PowerShell (RDP Users)", passed, details));
+                evidenceList.Add(CreateErrorEvidence(subControlId, ex));
             }
         }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Verification", "PowerShell (RDP Users)", false, $"Error: {ex.Message}"));
-        }
-        return results;
+
+        return evidenceList;
     }
 
-    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    /// <summary>
+    /// Parses secedit output to extract [Privilege Rights] section.
+    /// Returns dictionary: privilege name → list of SIDs.
+    /// </summary>
+    private static Dictionary<string, List<string>> ParsePrivilegeRights(string seceditOutput)
     {
-        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
-        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
-        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
-        return CheckStatus.Pass;
-    }
+        var result = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
-    private static string Run(string cmd, string args)
-    {
-        try
+        if (string.IsNullOrWhiteSpace(seceditOutput))
+            return result;
+
+        bool inPrivilegeSection = false;
+
+        foreach (var rawLine in seceditOutput.Split('\n'))
         {
-            var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-            using var p = Process.Start(psi);
-            if (p == null) return string.Empty;
-            string o = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(3000);
-            return o;
+            var line = rawLine.Trim();
+
+            // Detect section boundaries
+            if (line.StartsWith("[", StringComparison.Ordinal))
+            {
+                inPrivilegeSection = line.Equals("[Privilege Rights]", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+
+            if (!inPrivilegeSection)
+                continue;
+
+            // Skip empty lines and comments
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith(";", StringComparison.Ordinal))
+                continue;
+
+            // Parse: PrivilegeName = *S-1-5-32-544,*S-1-5-32-555
+            var parts = line.Split('=', 2);
+            if (parts.Length != 2)
+                continue;
+
+            var privilegeName = parts[0].Trim();
+            var sidList = parts[1].Trim()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .ToList();
+
+            result[privilegeName] = sidList;
         }
-        catch { return string.Empty; }
+
+        return result;
     }
 
-    private static string RunSeceditExport()
+    /// <summary>
+    /// Runs secedit /export to get USER_RIGHTS configuration.
+    /// </summary>
+    private static async Task<string> RunSeceditExportAsync()
     {
         try
         {
@@ -250,24 +196,57 @@ public class UserRightsCheck : IHardeningCheck, IMultiPathCheck
             {
                 Directory.CreateDirectory(@"C:\temp");
             }
-            var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\userrights.inf\" /areas USER_RIGHTS")
+
+            var tempFile = Path.Combine(@"C:\temp", $"ura_{Guid.NewGuid():N}.inf");
+
+            var psi = new ProcessStartInfo("secedit.exe", $"/export /cfg \"{tempFile}\" /areas USER_RIGHTS")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            using var p = Process.Start(psi);
-            if (p != null)
+
+            using var process = Process.Start(psi);
+            if (process == null)
+                return string.Empty;
+
+            await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (File.Exists(tempFile))
             {
-                p.StandardOutput.ReadToEnd();
-                p.WaitForExit(5000);
+                var content = await File.ReadAllTextAsync(tempFile);
+                try { File.Delete(tempFile); } catch { }
+                return content;
             }
-            if (File.Exists(@"C:\temp\userrights.inf"))
-            {
-                return File.ReadAllText(@"C:\temp\userrights.inf");
-            }
+
+            return string.Empty;
         }
-        catch { }
-        return string.Empty;
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static Evidence CreateErrorEvidence(string subControlId, Exception ex)
+    {
+        // Phase 10.9 fix: Use constructor directly for empty collection
+        var emptyCollection = new EvidenceValue(
+            new List<object>(),
+            EvidenceValueType.Collection,
+            rawString: "(empty)");
+
+        return new Evidence
+        {
+            EvidenceId = $"URA-001-{subControlId}",
+            SubControlId = subControlId,
+            SourceType = EvidenceSourceType.Other,
+            SourceName = "secedit",
+            RawOutput = ex.Message,
+            TypedValue = emptyCollection,
+            Evaluation = CheckStatus.Error,
+            Error = ex.Message,
+            CollectedAtUtc = DateTime.UtcNow
+        };
     }
 }
