@@ -294,7 +294,8 @@ public static class ControlCatalog
             }
         },
 
-        // 16. Secure RDP (7 SubControls)
+               // 16. Secure RDP (7 SubControls)
+        // Phase 10.8 fix: Updated ExpectedValueType to match check output
         new ControlDefinition
         {
             ControlId = "16", BaselineId = "Hosseini-16", Title = "Secure RDP",
@@ -304,12 +305,20 @@ public static class ControlCatalog
             SubControls = new()
             {
                 new SubControlDefinition { SubControlId = "RDP-001.1", SettingName = "Require user authentication for remote connections by using Network Level Authentication", ExpectedValue = "Enabled", Description = "Requires authentication before a full RDP session is created.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "RDP-001.2", SettingName = "Set client connection encryption level", ExpectedValue = "Enabled — High Level", Description = "Enforces stronger RDP session encryption.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                
+                // Phase 10.8 fix: Changed from Boolean to Integer (MinEncryptionLevel 3 = High)
+                new SubControlDefinition { SubControlId = "RDP-001.2", SettingName = "Set client connection encryption level", ExpectedValue = "3", Description = "Enforces stronger RDP session encryption (High = 3).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+
                 new SubControlDefinition { SubControlId = "RDP-001.3", SettingName = "Require secure RPC communication", ExpectedValue = "Enabled", Description = "Requires authenticated and encrypted RPC communication.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "RDP-001.4", SettingName = "Always prompt for password upon connection", ExpectedValue = "Enabled", Description = "Forces password entry on each connection.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "RDP-001.5", SettingName = "Limit number of connections", ExpectedValue = "Configured (for example, 2)", Description = "Restricts concurrent sessions.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                
+                // Phase 10.8 fix: Changed ExpectedValue to simple integer "5"
+                new SubControlDefinition { SubControlId = "RDP-001.5", SettingName = "Limit number of connections", ExpectedValue = "5", Description = "Restricts concurrent sessions to 5 or fewer.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+
                 new SubControlDefinition { SubControlId = "RDP-001.6", SettingName = "Set time limit for active but idle Remote Desktop Services sessions", ExpectedValue = "15 minutes", Description = "Disconnects idle RDP sessions.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual },
-                new SubControlDefinition { SubControlId = "RDP-001.7", SettingName = "Set time limit for disconnected sessions", ExpectedValue = "1 minute or End immediately", Description = "Ends disconnected sessions quickly.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual }
+                
+                // Phase 10.8 fix: Changed from Duration to Integer (milliseconds)
+                new SubControlDefinition { SubControlId = "RDP-001.7", SettingName = "Set time limit for disconnected sessions", ExpectedValue = "60000", Description = "Ends disconnected sessions quickly (max 60 seconds = 60000 ms).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
             }
         },
 
