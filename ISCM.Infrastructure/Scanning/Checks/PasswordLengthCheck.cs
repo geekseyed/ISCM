@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
@@ -35,16 +36,10 @@ public class PasswordLengthCheck : BaseHardeningCheck
     public PasswordLengthCheck()
     {
         _registryParser = new RegistryParser();
-        // NO _evaluator field - Check should not evaluate!
     }
 
     /// <summary>
     /// Phase 10.3: Collects evidence for all 6 password policy SubControls.
-    /// 
-    /// Contract:
-    /// - Returns 6 Evidence items (one per SubControl)
-    /// - Each Evidence has RawOutput and TypedValue populated
-    /// - Evidence.Evaluation = NotScanned (Scanner will evaluate)
     /// </summary>
     public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
@@ -80,9 +75,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
             }
 
             var parsedValue = _registryParser.Parse(rawOutput, "Registry");
-
-            // Phase 10.3: Create Evidence with TypedValue
-            var typedValue = ExtractIntegerFromOutput(rawOutput);
+            var typedValue = ExtractIntegerFromOutput(rawOutput, "Minimum password length");
 
             return new Evidence
             {
@@ -94,7 +87,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
                 RawOutput = rawOutput,
                 ParsedValue = parsedValue,
                 TypedValue = typedValue,
-                Evaluation = CheckStatus.NotScanned, // Check does NOT evaluate
+                Evaluation = CheckStatus.NotScanned,
                 CollectedAtUtc = DateTime.UtcNow,
                 CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
@@ -125,7 +118,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var typedValue = ExtractIntegerFromOutput(rawOutput);
+            var typedValue = ExtractIntegerFromOutput(rawOutput, "Length of password history maintained");
 
             return new Evidence
             {
@@ -168,7 +161,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var typedValue = ExtractDurationFromOutput(rawOutput, "days");
+            var typedValue = ExtractDurationFromOutput(rawOutput, "Maximum password age", "days");
 
             return new Evidence
             {
@@ -211,7 +204,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
         {
             var rawOutput = await RunCommandAsync("net", "accounts");
             var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
-            var typedValue = ExtractDurationFromOutput(rawOutput, "days");
+            var typedValue = ExtractDurationFromOutput(rawOutput, "Minimum password age", "days");
 
             return new Evidence
             {
@@ -332,51 +325,79 @@ public class PasswordLengthCheck : BaseHardeningCheck
     }
 
     // Helper methods to extract typed values from raw output
-    private static EvidenceValue ExtractIntegerFromOutput(string rawOutput)
+
+    private static EvidenceValue ExtractIntegerFromOutput(string rawOutput, string keyword)
     {
         if (string.IsNullOrWhiteSpace(rawOutput))
             return EvidenceValue.FromInteger(0);
 
-        // Try to parse as direct integer
-        if (int.TryParse(rawOutput.Trim(), out var intValue))
-            return EvidenceValue.FromInteger(intValue);
+        // Try to extract value from specific line containing keyword
+        var lines = rawOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                // Check for "None" keyword
+                if (line.Contains("None", StringComparison.OrdinalIgnoreCase))
+                    return EvidenceValue.FromInteger(0);
 
-        // Try to extract number from text like "14 characters" or "24 passwords remembered"
-        var match = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var extractedInt))
-            return EvidenceValue.FromInteger(extractedInt);
+                // Try to extract number from this line
+                var match = Regex.Match(line, @"(\d+)");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var value))
+                    return EvidenceValue.FromInteger(value);
+            }
+        }
 
-        // Fallback: return as string if extraction fails
-        return EvidenceValue.FromString(rawOutput);
+        // Fallback: try to extract first number from entire output
+        var match2 = Regex.Match(rawOutput, @"(\d+)");
+        if (match2.Success && int.TryParse(match2.Groups[1].Value, out var fallbackValue))
+            return EvidenceValue.FromInteger(fallbackValue);
+
+        return EvidenceValue.FromInteger(0);
     }
 
-    private static EvidenceValue ExtractDurationFromOutput(string rawOutput, string unit)
+    private static EvidenceValue ExtractDurationFromOutput(string rawOutput, string keyword, string unit)
     {
         if (string.IsNullOrWhiteSpace(rawOutput))
             return EvidenceValue.FromDuration(new DurationValue(0, DurationUnit.Days));
 
-        // Try to extract duration from text like "60 days", "15 minutes"
-        var match = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)\s*(days?|hours?|minutes?|seconds?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var durationValue))
+        // Try to extract value from specific line containing keyword
+        var lines = rawOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
         {
-            var durationUnit = match.Groups[2].Value.ToLower() switch
+            if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
             {
-                "day" or "days" => DurationUnit.Days,
-                "hour" or "hours" => DurationUnit.Hours,
-                "minute" or "minutes" => DurationUnit.Minutes,
-                "second" or "seconds" => DurationUnit.Seconds,
-                _ => DurationUnit.Days
-            };
-            return EvidenceValue.FromDuration(new DurationValue(durationValue, durationUnit));
+                // Check for "Unlimited" in THIS line only (not entire output)
+                if (line.Contains("Unlimited", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Unlimited = 99999 days (effectively infinite, will fail any reasonable threshold)
+                    return EvidenceValue.FromDuration(new DurationValue(99999, DurationUnit.Days));
+                }
+
+                // Try to extract duration from this line
+                var match = Regex.Match(line, @"(\d+)\s*(days?|hours?|minutes?|seconds?)", RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var durationValue))
+                {
+                    var durationUnit = match.Groups[2].Value.ToLower() switch
+                    {
+                        "day" or "days" => DurationUnit.Days,
+                        "hour" or "hours" => DurationUnit.Hours,
+                        "minute" or "minutes" => DurationUnit.Minutes,
+                        "second" or "seconds" => DurationUnit.Seconds,
+                        _ => DurationUnit.Days
+                    };
+                    return EvidenceValue.FromDuration(new DurationValue(durationValue, durationUnit));
+                }
+
+                // Fallback: extract any number from this line
+                var numMatch = Regex.Match(line, @"(\d+)");
+                if (numMatch.Success && int.TryParse(numMatch.Groups[1].Value, out var numValue))
+                    return EvidenceValue.FromDuration(new DurationValue(numValue, DurationUnit.Days));
+            }
         }
 
-        // Fallback: try to extract any number and assume days
-        var numMatch = System.Text.RegularExpressions.Regex.Match(rawOutput, @"(\d+)");
-        if (numMatch.Success && int.TryParse(numMatch.Groups[1].Value, out var numValue))
-            return EvidenceValue.FromDuration(new DurationValue(numValue, DurationUnit.Days));
-
-        // Fallback: return as string if extraction fails
-        return EvidenceValue.FromString(rawOutput);
+        // Fallback: return 0 if keyword not found
+        return EvidenceValue.FromDuration(new DurationValue(0, DurationUnit.Days));
     }
 
     private static EvidenceValue ExtractBooleanFromOutput(string rawOutput, string keyword)
@@ -395,8 +416,7 @@ public class PasswordLengthCheck : BaseHardeningCheck
             rawOutput.Contains("False", StringComparison.OrdinalIgnoreCase))
             return EvidenceValue.FromBoolean(false);
 
-        // Fallback: return as string if extraction fails
-        return EvidenceValue.FromString(rawOutput);
+        return EvidenceValue.FromBoolean(false);
     }
 
     private static async Task<string> RunCommandAsync(string cmd, string args)
