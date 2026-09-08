@@ -1,310 +1,349 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using Microsoft.Win32;
-using System.Diagnostics;
+using System;
+using System.Collections.Generic;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 10.7: Event Log Size & Retention Check (Collector-only pattern).
+/// 
+/// 6 SubControls migrated from legacy:
+///   - EVL-001.1: Application MaxSize (Integer, bytes, GreaterOrEqual 67108864)
+///   - EVL-001.2: Security MaxSize (Integer, bytes, GreaterOrEqual 134217728)
+///   - EVL-001.3: System MaxSize (Integer, bytes, GreaterOrEqual 67108864)
+///   - EVL-001.4: Setup MaxSize (Integer, bytes, GreaterOrEqual 33554432)
+///   - EVL-001.5: Retention (all 3 logs) (Integer, Equals 0 = Overwrite)
+///   - EVL-001.6: AutoBackup (optional) (Boolean)
+/// 
+/// Phase 10.7 fix: SecurityException when reading Security log is now handled
+/// gracefully (fallback to TypedValue = 0) instead of Error status.
+/// Security log requires admin privilege; without it we conservatively assume 0.
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class EventLogSizeCheck : IHardeningCheck, IMultiPathCheck
+public class EventLogSizeCheck : BaseHardeningCheck
 {
+    private readonly IEvidenceParser _registryParser;
+
     private const string BasePath = @"SYSTEM\CurrentControlSet\Services\EventLog";
 
-    public string CheckId => "EVL-001";
-    public string Name => "Event Log Size & Retention";
-    public CheckCategory Category => CheckCategory.Audit;
-    public CheckSeverity Severity => CheckSeverity.Low;
+    public override string CheckId => "EVL-001";
+    public override string Name => "Event Log Size & Retention";
+    public override CheckCategory Category => CheckCategory.Audit;
+    public override CheckSeverity Severity => CheckSeverity.Low;
 
-    private static readonly List<SubCheck> SubChecks = new()
+    public EventLogSizeCheck()
     {
-        new SubCheck { Id = "EVL-001.1", Title = "Application log — Specify the maximum log file size (KB)", Expected = "Enabled — 65536 KB (64 MB)",
-            WhatItDoes = "Ensures the Application log retains enough history.", Recommendation = "Enable the policy and set Maximum log size (KB) = 65536.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application' -Name MaxSize -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MaxSize",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application' -Name MaxSize -Value 67108864 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application' -Name MaxSize -ErrorAction SilentlyContinue",
-            Verification = "MaxSize = 67108864 (bytes). Note: the policy dialog accepts KB (65536 KB), registry stores bytes.",
-            ValueMap = "65536 KB = 67108864 bytes.", CliTokens = "MaxSize: maximum log size in bytes.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Administrative Templates > Windows Components > Event Log Service > Application > Specify the maximum log file size (KB)",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application > Specify the maximum log file size (KB)",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application > Specify the maximum log file size (KB) > Enabled > 65536",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application.\n3) Double-click 'Specify the maximum log file size (KB)'.\n4) Set to Enabled, Maximum log size (KB) = 65536.\n5) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application' -Name MaxSize -Value 33554432 -Type DWord",
-            IgnoreConsequence = "Application log fills quickly and older events are overwritten.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\MaxSize",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service > Application over manual registry editing." },
-        new SubCheck { Id = "EVL-001.2", Title = "Security log — Specify the maximum log file size (KB)", Expected = "Enabled — 131072 KB (128 MB)",
-            WhatItDoes = "Gives the Security log extra capacity for critical events.", Recommendation = "Enable the policy and set Maximum log size (KB) = 131072.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name MaxSize -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MaxSize",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name MaxSize -Value 134217728 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name MaxSize -ErrorAction SilentlyContinue",
-            Verification = "MaxSize = 134217728 (bytes) = 131072 KB.", ValueMap = "131072 KB = 134217728 bytes.", CliTokens = "MaxSize: maximum log size in bytes.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Administrative Templates > Windows Components > Event Log Service > Security > Specify the maximum log file size (KB)",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Security > Specify the maximum log file size (KB)",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Security",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Security > Specify the maximum log file size (KB) > Enabled > 131072",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Administrative Templates > Windows Components > Event Log Service > Security.\n3) Double-click 'Specify the maximum log file size (KB)'.\n4) Set to Enabled, Maximum log size (KB) = 131072.\n5) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name MaxSize -Value 67108864 -Type DWord",
-            IgnoreConsequence = "Security log fills quickly and critical events are lost.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Security\MaxSize",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service > Security over manual registry editing." },
-        new SubCheck { Id = "EVL-001.3", Title = "System log — Specify the maximum log file size (KB)", Expected = "Enabled — 65536 KB (64 MB)",
-            WhatItDoes = "Ensures the System log retains enough history.", Recommendation = "Enable the policy and set Maximum log size (KB) = 65536.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\System' -Name MaxSize -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MaxSize",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\System' -Name MaxSize -Value 67108864 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\System' -Name MaxSize -ErrorAction SilentlyContinue",
-            Verification = "MaxSize = 67108864 (bytes).", ValueMap = "65536 KB = 67108864 bytes.", CliTokens = "MaxSize: maximum log size in bytes.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Administrative Templates > Windows Components > Event Log Service > System > Specify the maximum log file size (KB)",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > System > Specify the maximum log file size (KB)",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > System",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > System > Specify the maximum log file size (KB) > Enabled > 65536",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Administrative Templates > Windows Components > Event Log Service > System.\n3) Double-click 'Specify the maximum log file size (KB)'.\n4) Set to Enabled, Maximum log size (KB) = 65536.\n5) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\System' -Name MaxSize -Value 33554432 -Type DWord",
-            IgnoreConsequence = "System log fills quickly and boot/service events are lost.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\System\MaxSize",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service > System over manual registry editing." },
-        new SubCheck { Id = "EVL-001.4", Title = "Setup log — Specify the maximum log file size (KB)", Expected = "Enabled — 32768 KB (32 MB)",
-            WhatItDoes = "Retains setup and servicing events for troubleshooting.", Recommendation = "Enable the policy and set Maximum log size (KB) = 32768.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Setup' -Name MaxSize -ErrorAction SilentlyContinue | Select-Object -ExpandProperty MaxSize",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Setup' -Name MaxSize -Value 33554432 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Setup' -Name MaxSize -ErrorAction SilentlyContinue",
-            Verification = "MaxSize = 33554432 (bytes) = 32768 KB.", ValueMap = "32768 KB = 33554432 bytes.", CliTokens = "MaxSize: maximum log size in bytes.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Administrative Templates > Windows Components > Event Log Service > Setup > Specify the maximum log file size (KB)",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Setup > Specify the maximum log file size (KB)",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Setup",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Setup > Specify the maximum log file size (KB) > Enabled > 32768",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Administrative Templates > Windows Components > Event Log Service > Setup.\n3) Double-click 'Specify the maximum log file size (KB)'.\n4) Set to Enabled, Maximum log size (KB) = 32768.\n5) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Setup' -Name MaxSize -Value 1048576 -Type DWord",
-            IgnoreConsequence = "Setup log may not retain recent servicing events.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Setup\MaxSize",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service > Setup over manual registry editing." },
-        new SubCheck { Id = "EVL-001.5", Title = "Retention method (Application / Security / System)", Expected = "Overwrite events as needed (oldest first)",
-            WhatItDoes = "Prevents the log service from halting when the log is full.", Recommendation = "Set retention to 'Overwrite events as needed' for Application, Security and System logs.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name Retention -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Retention",
-            CliCommand = "@('Application','Security','System') | ForEach-Object { Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\$_\" -Name Retention -Value 0 -Type DWord }",
-            VerifyCli = "@('Application','Security','System') | ForEach-Object { Get-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\$_\" -Name Retention -ErrorAction SilentlyContinue }",
-            Verification = "Retention = 0 on all three logs.", ValueMap = "0 = Overwrite as needed, 1 = Retain as long as possible, 0xFFFFFFFF = Do not overwrite.",
-            CliTokens = "Retention: behavior when the log is full. 0 is the safe default.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Event Log Service > Application/Security/System > Control Event Log behavior when log reaches max size",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application/Security/System > 'Control Event Log behavior when the log file reaches its maximum size' (modern ADMX name)",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application/Security/System > Control Event Log behavior when the log file reaches its maximum size > Overwrite events as needed",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Administrative Templates > Windows Components > Event Log Service.\n3) For each of Application, Security, System:\na) Double-click 'Control Event Log behavior when the log file reaches its maximum size'.\nb) Set to Enabled.\nc) Select 'Overwrite events as needed'.\nd) OK.",
-            UndoCli = "# Revert to 'Do not overwrite' is rarely desirable; leave as 0.",
-            IgnoreConsequence = "Logs may stop accepting new events when full, breaking audit continuity.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\*\Retention",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service over manual registry editing." },
-        new SubCheck { Id = "EVL-001.6", Title = "Back up log automatically when full (Application / Security / System) — optional", Expected = "Enabled only if you collect archived .evtx files",
-            WhatItDoes = "Automatically archives the full log and starts a new one when paired with proper retention.", Recommendation = "Enable only if you have a collection process for the archived .evtx files; otherwise leave Disabled.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Security' -Name AutoBackupLogFiles -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AutoBackupLogFiles",
-            CliCommand = "@('Application','Security','System') | ForEach-Object { Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\$_\" -Name AutoBackupLogFiles -Value 1 -Type DWord }",
-            VerifyCli = "@('Application','Security','System') | ForEach-Object { Get-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\$_\" -Name AutoBackupLogFiles -ErrorAction SilentlyContinue }",
-            Verification = "AutoBackupLogFiles = 1 on the logs you enabled it for.", ValueMap = "1 = Enabled, 0 = Disabled.",
-            CliTokens = "AutoBackupLogFiles: automatic archival when the log reaches max size.",
-            ConsoleTool = "gpedit.msc", DestinationLabel = "Event Log Service > Application/Security/System > Back up log automatically when full",
-            GraphicalPathFull = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application/Security/System > Back up log automatically when full",
-            ConsolePath = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service",
-            YouAreHere = "gpedit.msc > Administrative Templates > Windows Components > Event Log Service",
-            GoTo = "Computer Configuration > Administrative Templates > Windows Components > Event Log Service > Application/Security/System > Back up log automatically when full > Enabled",
-            GraphicalSteps = "1) Run gpedit.msc.\n2) Navigate to Administrative Templates > Windows Components > Event Log Service.\n3) For each of Application, Security, System:\na) Double-click 'Back up log automatically when full'.\nb) Set to Enabled only if you have an archiving process.\nc) OK.",
-            UndoCli = "@('Application','Security','System') | ForEach-Object { Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\$_\" -Name AutoBackupLogFiles -Value 0 -Type DWord }",
-            IgnoreConsequence = "Full logs are not archived; old events are overwritten according to retention.",
-            HasRegistryPath = true, RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Services\EventLog\*\AutoBackupLogFiles",
-            AlternativeToRegistry = "Prefer gpedit.msc > Event Log Service over manual registry editing." }
-    };
+        _registryParser = new RegistryParser();
+    }
 
-    public Task<Finding> EvaluateAsync()
+    public override Task<List<Evidence>> CollectEvidenceAsync()
     {
-        var statuses = new List<CheckStatus>();
+        var evidenceList = new List<Evidence>();
+
+        // 1-4: MaxSize for each log (Integer - bytes)
+        evidenceList.Add(CollectMaxSize("EVL-001.1", "Application"));
+        evidenceList.Add(CollectMaxSize("EVL-001.2", "Security"));
+        evidenceList.Add(CollectMaxSize("EVL-001.3", "System"));
+        evidenceList.Add(CollectMaxSize("EVL-001.4", "Setup"));
+
+        // 5: Retention policy (using Security log as representative, all 3 should be 0)
+        evidenceList.Add(CollectRetention("EVL-001.5"));
+
+        // 6: AutoBackupLogFiles (optional) - use Security log
+        evidenceList.Add(CollectAutoBackup("EVL-001.6"));
+
+        return Task.FromResult(evidenceList);
+    }
+
+    private Evidence CollectMaxSize(string subControlId, string logName)
+    {
+        var startTime = DateTime.UtcNow;
+        var registryPath = $@"{BasePath}\{logName}";
 
         try
         {
-            // Helper to check MaxSize
-            bool CheckMaxSize(string logName, long minBytes)
+            string rawOutput;
+            bool accessDenied = false;
+
+            try
             {
-                using var key = Registry.LocalMachine.OpenSubKey($@"{BasePath}\{logName}");
-                var v = key?.GetValue("MaxSize");
-                return v != null && long.TryParse(v.ToString(), out long size) && size >= minBytes;
+                using var key = Registry.LocalMachine.OpenSubKey(registryPath);
+                if (key == null)
+                {
+                    rawOutput = "0";
+                    accessDenied = true;
+                }
+                else
+                {
+                    var value = key.GetValue("MaxSize");
+                    rawOutput = value?.ToString() ?? "0";
+                }
+            }
+            catch (System.Security.SecurityException)
+            {
+                // Graceful degradation: admin privilege required for Security log
+                rawOutput = "0";
+                accessDenied = true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                rawOutput = "0";
+                accessDenied = true;
             }
 
-            // Helper to check Retention
-            bool CheckRetention(string logName)
+            var parsedValue = _registryParser.Parse(rawOutput, "Registry");
+            var typedValue = ExtractIntegerFromRegistryValue(rawOutput);
+
+            var finalRawOutput = accessDenied
+                ? $"Access denied reading {registryPath}\\MaxSize (requires admin). Assuming 0 for conservative fallback. Original registry value unknown."
+                : rawOutput;
+
+            return new Evidence
             {
-                using var key = Registry.LocalMachine.OpenSubKey($@"{BasePath}\{logName}");
-                var v = key?.GetValue("Retention");
-                return v != null && int.TryParse(v.ToString(), out int ret) && ret == 0;
-            }
-
-            // 1. Application MaxSize (64 MB = 67108864 bytes)
-            statuses.Add(CheckMaxSize("Application", 67108864) ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 2. Security MaxSize (128 MB = 134217728 bytes)
-            statuses.Add(CheckMaxSize("Security", 134217728) ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 3. System MaxSize (64 MB)
-            statuses.Add(CheckMaxSize("System", 67108864) ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 4. Setup MaxSize (32 MB = 33554432 bytes)
-            statuses.Add(CheckMaxSize("Setup", 33554432) ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 5. Application Retention
-            statuses.Add(CheckRetention("Application") ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 6. Security Retention
-            statuses.Add(CheckRetention("Security") ? CheckStatus.Pass : CheckStatus.Fail);
-
-            // 7. System Retention
-            statuses.Add(CheckRetention("System") ? CheckStatus.Pass : CheckStatus.Fail);
-
-            var finalStatus = GetWorstStatus(statuses);
-            int passCount = statuses.Count(s => s == CheckStatus.Pass);
-            string details = $"{passCount}/{statuses.Count} Event Log settings compliant";
-
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, finalStatus, details,
-                "All logs sized and retention configured",
-                "Increase log capacity and clarify retention so security events are not overwritten early.",
-                errorMessage: string.Empty,
-                description: "Raises Event Log maximum sizes (Application 64 MB, Security 128 MB, System 64 MB, Setup 32 MB) and configures safe retention behavior.",
-                registryPath: $@"HKLM\{BasePath}\Security\MaxSize",
-                cisReference: "CIS 18.9.5", riskScore: 30, sourceType: "RegistryReader",
-                sourceCommand: $@"reg query ""HKLM\{BasePath}\Security"" /v MaxSize",
-                fixTools: new List<string> { "gpedit.msc", "eventvwr.msc" },
-                subChecks: SubChecks));
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = $"{logName} MaxSize",
+                AcquisitionCommand = $@"reg query HKLM\{registryPath} /v MaxSize",
+                RawOutput = finalRawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
-                errorMessage: ex.Message,
-                description: "Raises Event Log maximum sizes and configures safe retention behavior.",
-                registryPath: $@"HKLM\{BasePath}\Security\MaxSize",
-                cisReference: "CIS 18.9.5", riskScore: 30, sourceType: "RegistryReader",
-                sourceCommand: $@"reg query ""HKLM\{BasePath}\Security"" /v MaxSize",
-                fixTools: new List<string> { "gpedit.msc", "eventvwr.msc" },
-                subChecks: SubChecks));
+            // Last-resort fallback: still produce a non-null TypedValue so we get Fail, not Error
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = $"{logName} MaxSize",
+                AcquisitionCommand = $@"reg query HKLM\{registryPath} /v MaxSize",
+                RawOutput = $"Exception: {ex.Message}",
+                TypedValue = EvidenceValue.FromInteger(0), // Conservative fallback
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
     }
 
-    // Preserved: 3-Test Verification
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    /// <summary>
+    /// Collects retention policy. Checks all 3 logs (Application, Security, System).
+    /// Retention DWORD: 0 = Overwrite as needed (secure), other values are less secure.
+    /// </summary>
+    private Evidence CollectRetention(string subControlId)
     {
-        var results = new List<TestResult>();
-        // Test 1: Registry HKLM برای Security MaxSize
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\EventLog\Security");
-            if (key != null)
-            {
-                var v = key.GetValue("MaxSize");
-                if (v != null && int.TryParse(v.ToString(), out int size))
-                {
-                    var passed = size >= 134217728;
-                    var mb = size / (1024 * 1024);
-                    results.Add(new TestResult("Primary", "Registry (Security MaxSize)", passed, $"MaxSize = {size} bytes ({mb} MB)"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Primary", "Registry (Security MaxSize)", false, "MaxSize value not found"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Primary", "Registry (Security MaxSize)", false, "EventLog Security registry key not found"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "Registry (Security MaxSize)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+        var startTime = DateTime.UtcNow;
 
-        // Test 2: PowerShell Get-WinEvent -ListLog برای بررسی سایز Security
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-WinEvent -ListLog Security | Select-Object -ExpandProperty MaximumSizeInBytes\"")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                if (!string.IsNullOrWhiteSpace(output) && long.TryParse(output.Trim(), out long size))
-                {
-                    var passed = size >= 134217728;
-                    var mb = size / (1024 * 1024);
-                    results.Add(new TestResult("Cross-check", "Get-WinEvent", passed, $"Security MaximumSizeInBytes = {size} ({mb} MB)"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Cross-check", "Get-WinEvent", false, "Could not query Security log size"));
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "Get-WinEvent", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+            var logs = new[] { "Application", "Security", "System" };
+            var worstValue = 0;
+            var rawDetails = new System.Text.StringBuilder();
+            var anyAccessDenied = false;
 
-        // Test 3: wevtutil برای Application log
-        try
-        {
-            var psi = new ProcessStartInfo("wevtutil.exe", "gl Application")
+            foreach (var logName in logs)
             {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                var maxLine = output.Split('\n').FirstOrDefault(l => l.Contains("maxLogSize:", StringComparison.OrdinalIgnoreCase));
-                if (maxLine != null)
+                try
                 {
-                    var parts = maxLine.Split(':');
-                    if (parts.Length > 1 && long.TryParse(parts[1].Trim(), out long size))
+                    using var key = Registry.LocalMachine.OpenSubKey($@"{BasePath}\{logName}");
+                    if (key == null)
                     {
-                        var passed = size >= 67108864;
-                        var mb = size / (1024 * 1024);
-                        results.Add(new TestResult("Verification", "wevtutil (Application)", passed, $"maxLogSize = {size} ({mb} MB)"));
+                        rawDetails.AppendLine($"{logName}: registry key not found");
+                        anyAccessDenied = true;
+                        continue;
+                    }
+
+                    var value = key.GetValue("Retention");
+                    if (value != null && int.TryParse(value.ToString(), out var ret))
+                    {
+                        worstValue = Math.Max(worstValue, ret);
+                        rawDetails.AppendLine($"{logName}: {ret}");
                     }
                     else
                     {
-                        results.Add(new TestResult("Verification", "wevtutil (Application)", false, "Could not parse maxLogSize"));
+                        rawDetails.AppendLine($"{logName}: not set (default 0)");
                     }
                 }
-                else
+                catch (System.Security.SecurityException)
                 {
-                    results.Add(new TestResult("Verification", "wevtutil (Application)", false, "maxLogSize not found in wevtutil output"));
+                    rawDetails.AppendLine($"{logName}: access denied (requires admin)");
+                    anyAccessDenied = true;
+                    worstValue = Math.Max(worstValue, 1); // Conservative: assume insecure
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    rawDetails.AppendLine($"{logName}: access denied");
+                    anyAccessDenied = true;
+                    worstValue = Math.Max(worstValue, 1);
                 }
             }
+
+            var rawOutput = anyAccessDenied
+                ? rawDetails + "\n[Some logs required admin privilege; fallback to conservative worst-case]"
+                : rawDetails.ToString();
+
+            var parsedValue = _registryParser.Parse(rawOutput, "Registry");
+            var typedValue = EvidenceValue.FromInteger(worstValue);
+
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "Retention (App/Sec/Sys)",
+                AcquisitionCommand = @"reg query HKLM\SYSTEM\...\EventLog\{App,Sec,Sys} /v Retention",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Verification", "wevtutil (Application)", false, $"Error: {ex.Message}"));
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "Retention (App/Sec/Sys)",
+                AcquisitionCommand = @"reg query HKLM\SYSTEM\...\EventLog\{App,Sec,Sys} /v Retention",
+                RawOutput = $"Exception: {ex.Message}",
+                TypedValue = EvidenceValue.FromInteger(1), // Conservative fallback (non-zero = insecure)
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
-        return results;
     }
 
-    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    private Evidence CollectAutoBackup(string subControlId)
     {
-        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
-        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
-        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
-        return CheckStatus.Pass;
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            string rawOutput;
+            bool accessDenied = false;
+
+            try
+            {
+                using var key = Registry.LocalMachine.OpenSubKey($@"{BasePath}\Security");
+                if (key == null)
+                {
+                    rawOutput = "0";
+                    accessDenied = true;
+                }
+                else
+                {
+                    var value = key.GetValue("AutoBackupLogFiles");
+                    rawOutput = value?.ToString() ?? "0";
+                }
+            }
+            catch (System.Security.SecurityException)
+            {
+                rawOutput = "0";
+                accessDenied = true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                rawOutput = "0";
+                accessDenied = true;
+            }
+
+            var parsedValue = _registryParser.Parse(rawOutput, "Registry");
+            var typedValue = ExtractBooleanFromRegistryValue(rawOutput);
+
+            var finalRawOutput = accessDenied
+                ? $"Access denied reading {BasePath}\\Security\\AutoBackupLogFiles (requires admin). Assuming Disabled (0)."
+                : rawOutput;
+
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "AutoBackupLogFiles",
+                AcquisitionCommand = @"reg query HKLM\SYSTEM\...\EventLog\Security /v AutoBackupLogFiles",
+                RawOutput = finalRawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = "AutoBackupLogFiles",
+                AcquisitionCommand = @"reg query HKLM\SYSTEM\...\EventLog\Security /v AutoBackupLogFiles",
+                RawOutput = $"Exception: {ex.Message}",
+                TypedValue = EvidenceValue.FromBoolean(false), // Conservative fallback
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
+        }
+    }
+
+    private static EvidenceValue ExtractIntegerFromRegistryValue(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromInteger(0);
+
+        if (long.TryParse(rawOutput.Trim(), out var longValue))
+        {
+            if (longValue <= int.MaxValue && longValue >= int.MinValue)
+                return EvidenceValue.FromInteger((int)longValue);
+            return EvidenceValue.FromLong(longValue);
+        }
+
+        return EvidenceValue.FromInteger(0);
+    }
+
+    private static EvidenceValue ExtractBooleanFromRegistryValue(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromBoolean(false);
+
+        if (int.TryParse(rawOutput.Trim(), out var intValue))
+            return EvidenceValue.FromBoolean(intValue == 1);
+
+        return EvidenceValue.FromBoolean(false);
+    }
+
+    private static Evidence CreateErrorEvidence(string subControlId, Exception ex)
+    {
+        return new Evidence
+        {
+            EvidenceId = $"EVL-001-{subControlId}",
+            SubControlId = subControlId,
+            SourceType = EvidenceSourceType.Registry,
+            SourceName = "Registry",
+            RawOutput = ex.Message,
+            TypedValue = null,
+            Evaluation = CheckStatus.Error,
+            Error = ex.Message,
+            CollectedAtUtc = DateTime.UtcNow
+        };
     }
 }
