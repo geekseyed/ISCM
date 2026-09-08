@@ -61,8 +61,7 @@ public static class ControlCatalog
             SubControls = new()
             {
                 new SubControlDefinition { SubControlId = "GUEST-001.1", SettingName = "Accounts: Guest account status", ExpectedValue = "Disabled", Description = "Turns off the built-in Guest account.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "net user", "PowerShell Get-LocalUser", "NetUserGetInfo API" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts: Rename guest account", ExpectedValue = "Unique complex name", Description = "Makes the well-known account name harder to target.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "PowerShell Get-LocalUser" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals }
-            }
+new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts: Rename guest account", ExpectedValue = "Guest", Description = "Makes the well-known account name harder to target. Name must NOT be 'Guest'.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "PowerShell Get-LocalUser" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals },            }
         },
 
         // 4. Advanced Audit Policy Configuration (11 SubControls)

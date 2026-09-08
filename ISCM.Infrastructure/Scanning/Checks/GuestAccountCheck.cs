@@ -1,227 +1,225 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
-using Microsoft.Win32;
+using ISCM.Domain.ValueObjects;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 10.6: Guest Account Check (Collector-only pattern).
+/// 
+/// این چک **فقط Collector** است:
+/// - Evidence تولید می‌کند (RawOutput + TypedValue)
+/// - Evidence.Evaluation = NotScanned (ارزیابی نمی‌کند)
+/// - Scanner مسئول ارزیابی تایپ‌شده با استفاده از کاتالوگ است
+/// 
+/// SubControls:
+///   - GUEST-001.1: Guest account status (Boolean, Equals, Disabled)
+///   - GUEST-001.2: Rename guest account (String, NotEquals, "Guest")
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class GuestAccountCheck : IHardeningCheck, IMultiPathCheck
+public class GuestAccountCheck : BaseHardeningCheck
 {
-    public string CheckId => "GUEST-001";
-    public string Name => "Guest Account";
-    public CheckCategory Category => CheckCategory.Account;
-    public CheckSeverity Severity => CheckSeverity.Critical;
+    private readonly IEvidenceParser _registryParser;
 
-    private static readonly List<SubCheck> SubChecks = new()
-    {
-        new SubCheck { Id = "GUEST-001.1", Title = "Accounts: Guest account status", Expected = "Disabled",
-            WhatItDoes = "Turns off the built-in Guest account entirely.",
-            Recommendation = "Disable the built-in Guest account.",
-            CheckCurrentCli = "net user Guest", CliCommand = "net user Guest /active:no",
-            VerifyCli = "net user Guest", Verification = "'Account active' shows No.",
-            ValueMap = "/active:no = Disabled.", CliTokens = "Guest: built-in account; /active:no disables it.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → Guest account status",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Guest account status",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
-            YouAreHere = "secpol.msc → Security Settings → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Guest account status > Disabled",
-            GraphicalSteps = "1) secpol.msc. 2) Expand Local Policies. 3) Click Security Options. 4) Right pane: double-click 'Accounts: Guest account status'. 5) Disabled.",
-            UndoCli = "net user Guest /active:yes", IgnoreConsequence = "Anonymous guest access remains an attack vector.",
-            HasRegistryPath = false, RegistryPath = "", AlternativeToRegistry = "" },
-        new SubCheck { Id = "GUEST-001.2", Title = "Accounts: Rename guest account", Expected = "Unique complex name",
-            WhatItDoes = "Renames Guest so attackers cannot target a known account name.",
-            Recommendation = "Rename the SID -501 account.",
-            CheckCurrentCli = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select Name",
-            CliCommand = "$g = Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' }; Rename-LocalUser -SID $g.SID -NewName 'Seyedi.pro'",
-            VerifyCli = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select Name",
-            Verification = "Name is not 'Guest'.", ValueMap = "", CliTokens = "SID -501: built-in guest; Rename-LocalUser changes its name.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Security Options → Rename guest account",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Rename guest account",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
-            YouAreHere = "secpol.msc → Security Settings → Local Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Accounts: Rename guest account > Set to a unique complex name",
-            GraphicalSteps = "1) secpol.msc → Local Policies → Security Options. 2) Double-click 'Accounts: Rename guest account'. 3) Enter a unique complex name.",
-            UndoCli = "# rename back if required", IgnoreConsequence = "Known account name stays targetable.",
-            HasRegistryPath = false, RegistryPath = "", AlternativeToRegistry = "" }
-    };
+    public override string CheckId => "GUEST-001";
+    public override string Name => "Guest Account";
+    public override CheckCategory Category => CheckCategory.Account;
+    public override CheckSeverity Severity => CheckSeverity.Critical;
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    public struct USER_INFO_1
+    public GuestAccountCheck()
     {
-        public string usri1_name;
-        public string usri1_password;
-        public uint usri1_password_age;
-        public uint usri1_priv;
-        public string usri1_home_dir;
-        public string usri1_comment;
-        public uint usri1_flags;
-        public string usri1_script_path;
+        _registryParser = new RegistryParser();
     }
 
-    [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
-    private static extern uint NetUserGetInfo(string servername, string username, uint level, out IntPtr bufptr);
-
-    [DllImport("Netapi32.dll")]
-    private static extern uint NetApiBufferFree(IntPtr Buffer);
-
-    private const uint UF_ACCOUNTDISABLE = 0x0002;
-    private const uint NERR_Success = 0;
-
-    public Task<Finding> EvaluateAsync()
+    /// <summary>
+    /// Phase 10.6: Collects evidence for both guest account SubControls.
+    /// </summary>
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
-        var statuses = new List<CheckStatus>();
+        var evidenceList = new List<Evidence>();
+
+        evidenceList.Add(await CollectGuestAccountStatus());
+        evidenceList.Add(await CollectGuestAccountRename());
+
+        return evidenceList;
+    }
+
+    private async Task<Evidence> CollectGuestAccountStatus()
+    {
+        var subControlId = "GUEST-001.1";
+        var startTime = DateTime.UtcNow;
 
         try
         {
-            // 1. Guest account status via NetUserGetInfo
-            IntPtr bufPtr;
-            uint result = NetUserGetInfo(null, "Guest", 1, out bufPtr);
-            if (result == NERR_Success)
-            {
-                USER_INFO_1 userInfo = Marshal.PtrToStructure<USER_INFO_1>(bufPtr);
-                bool isDisabled = (userInfo.usri1_flags & UF_ACCOUNTDISABLE) != 0;
-                statuses.Add(isDisabled ? CheckStatus.Pass : CheckStatus.Fail);
-                NetApiBufferFree(bufPtr);
-            }
-            else
-            {
-                statuses.Add(CheckStatus.Fail);
-            }
+            // Use PowerShell to get Guest account status by SID (works even if renamed)
+            var rawOutput = await RunPowerShellAsync(
+                "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Enabled");
 
-            // 2. Guest account rename (check if name is still "Guest")
-            string nameOutput = Run("powershell.exe", "-Command \"Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Name\"");
-            if (!string.IsNullOrWhiteSpace(nameOutput) && !nameOutput.Trim().Equals("Guest", StringComparison.OrdinalIgnoreCase))
-            {
-                statuses.Add(CheckStatus.Pass);
-            }
-            else
-            {
-                statuses.Add(CheckStatus.Fail);
-            }
+            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var typedValue = ExtractGuestStatusFromOutput(rawOutput);
 
-            var finalStatus = GetWorstStatus(statuses);
-            int passCount = statuses.Count(s => s == CheckStatus.Pass);
-            string details = $"{passCount}/{statuses.Count} Guest account settings compliant";
-
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, finalStatus, details,
-                "Guest disabled + renamed",
-                "Disable and rename the built-in Guest account to prevent anonymous access.",
-                errorMessage: string.Empty,
-                description: "The built-in Guest account provides anonymous access and must be disabled and renamed.",
-                registryPath: string.Empty,
-                cisReference: "CIS 2.3.1.1", riskScore: 95, sourceType: "NetUserGetInfo + PowerShell",
-                sourceCommand: "net user Guest",
-                fixTools: new List<string> { "net.exe", "lusrmgr.msc", "secpol.msc" },
-                subChecks: SubChecks));
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.PowerShell,
+                SourceName = "Get-LocalUser (SID -501)",
+                AcquisitionCommand = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Enabled",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
         catch (Exception ex)
         {
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
-                errorMessage: ex.Message,
-                description: "The built-in Guest account provides anonymous access and must be disabled and renamed.",
-                registryPath: string.Empty,
-                cisReference: "CIS 2.3.1.1", riskScore: 95, sourceType: "NetUserGetInfo + PowerShell",
-                sourceCommand: "net user Guest",
-                fixTools: new List<string> { "net.exe", "lusrmgr.msc", "secpol.msc" },
-                subChecks: SubChecks));
+            return CreateErrorEvidence(subControlId, ex);
         }
     }
 
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    private async Task<Evidence> CollectGuestAccountRename()
     {
-        var results = new List<TestResult>();
-        // Test 1: net user Guest (CMD)
+        var subControlId = "GUEST-001.2";
+        var startTime = DateTime.UtcNow;
+
         try
         {
-            string output = Run("net", "user Guest");
-            var activeLine = output.Split('\n').FirstOrDefault(l => l.Contains("Account active", StringComparison.OrdinalIgnoreCase));
-            if (activeLine != null)
+            // Use PowerShell to get SID -501 account name
+            var rawOutput = await RunPowerShellAsync(
+                "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Name");
+
+            var parsedValue = _registryParser.Parse(rawOutput, "PowerShell");
+            var typedValue = ExtractGuestNameFromOutput(rawOutput);
+
+            return new Evidence
             {
-                var passed = activeLine.Contains("No", StringComparison.OrdinalIgnoreCase);
-                results.Add(new TestResult("Primary", "net user", passed, activeLine.Trim()));
-            }
-            else
-            {
-                results.Add(new TestResult("Primary", "net user", false, "Account active line not found"));
-            }
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.PowerShell,
+                SourceName = "Get-LocalUser (SID -501)",
+                AcquisitionCommand = "Get-LocalUser | Where-Object { $_.SID.Value -like '*-501' } | Select-Object -ExpandProperty Name",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Primary", "net user", false, $"Error: {ex.Message}"));
+            return CreateErrorEvidence(subControlId, ex);
         }
-        await Task.Delay(50);
+    }
 
-        // Test 2: PowerShell Get-LocalUser
+    private static Evidence CreateErrorEvidence(string subControlId, Exception ex)
+    {
+        return new Evidence
+        {
+            EvidenceId = $"GUEST-001-{subControlId}",
+            SubControlId = subControlId,
+            SourceType = EvidenceSourceType.PowerShell,
+            SourceName = "Get-LocalUser",
+            RawOutput = ex.Message,
+            TypedValue = null,
+            Evaluation = CheckStatus.Error,
+            Error = ex.Message,
+            CollectedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
+    /// Extracts Guest account enabled state as Boolean.
+    /// 
+    /// PowerShell Get-LocalUser ... Enabled returns:
+    ///   "True"  → account is ENABLED  → Boolean true
+    ///   "False" → account is DISABLED → Boolean false
+    /// 
+    /// Catalog expects "Disabled" which parses to Boolean false,
+    /// so actual must mirror the raw enabled flag (NO inversion).
+    /// 
+    /// Phase 10.6 fix: removed incorrect inversion that caused
+    /// disabled accounts to fail the "Disabled" expectation.
+    /// </summary>
+    private static EvidenceValue ExtractGuestStatusFromOutput(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            // Conservative: unknown → assume enabled (insecure) so check fails safely
+            return EvidenceValue.FromBoolean(true);
+
+        var trimmed = rawOutput.Trim();
+
+        // Account DISABLED → Boolean false (matches catalog "Disabled")
+        if (trimmed.Equals("False", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("No", StringComparison.OrdinalIgnoreCase))
+        {
+            return EvidenceValue.FromBoolean(false);
+        }
+
+        // Account ENABLED → Boolean true (will fail "Disabled" expectation)
+        if (trimmed.Equals("True", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("Enabled", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Equals("Yes", StringComparison.OrdinalIgnoreCase))
+        {
+            return EvidenceValue.FromBoolean(true);
+        }
+
+        // Conservative fallback: assume enabled
+        return EvidenceValue.FromBoolean(true);
+    }
+
+    /// <summary>
+    /// Extracts the Guest account name from PowerShell output.
+    /// The value is compared against "Guest" in catalog with NotEquals operator.
+    /// </summary>
+    private static EvidenceValue ExtractGuestNameFromOutput(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromString("(unknown)");
+
+        var trimmed = rawOutput.Trim();
+
+        // PowerShell may output multiple lines or just the name
+        var firstLine = trimmed.Split('\n')[0].Trim();
+
+        // Remove any PowerShell formatting artifacts
+        if (firstLine.StartsWith("---"))
+            return EvidenceValue.FromString("(unknown)");
+
+        return EvidenceValue.FromString(firstLine);
+    }
+
+    private static async Task<string> RunPowerShellAsync(string command)
+    {
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-LocalUser -Name 'Guest' | Select-Object -ExpandProperty Enabled\"")
+            var psi = new ProcessStartInfo("powershell.exe", $"-Command \"{command}\"")
             {
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
             using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                var passed = output.Trim().Equals("False", StringComparison.OrdinalIgnoreCase);
-                results.Add(new TestResult("Cross-check", "Get-LocalUser", passed, $"Enabled = {output.Trim()}"));
-            }
+            if (process == null) return "Process not started";
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            return output;
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Cross-check", "Get-LocalUser", false, $"Error: {ex.Message}"));
+            return $"Error: {ex.Message}";
         }
-        await Task.Delay(50);
-
-        // Test 3: NetUserGetInfo (Win32 API)
-        try
-        {
-            IntPtr bufPtr;
-            uint result = NetUserGetInfo(null, "Guest", 1, out bufPtr);
-            if (result == NERR_Success)
-            {
-                USER_INFO_1 userInfo = Marshal.PtrToStructure<USER_INFO_1>(bufPtr);
-                bool isDisabled = (userInfo.usri1_flags & UF_ACCOUNTDISABLE) != 0;
-                NetApiBufferFree(bufPtr);
-                results.Add(new TestResult("Verification", "NetUserGetInfo API", isDisabled, isDisabled ? "UF_ACCOUNTDISABLE flag set" : "Account enabled"));
-            }
-            else
-            {
-                results.Add(new TestResult("Verification", "NetUserGetInfo API", false, $"API error code: {result}"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Verification", "NetUserGetInfo API", false, $"Error: {ex.Message}"));
-        }
-        return results;
-    }
-
-    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
-    {
-        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
-        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
-        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
-        return CheckStatus.Pass;
-    }
-
-    private static string Run(string cmd, string args)
-    {
-        try
-        {
-            var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
-            using var p = Process.Start(psi);
-            if (p == null) return string.Empty;
-            string o = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(3000);
-            return o;
-        }
-        catch { return string.Empty; }
     }
 }

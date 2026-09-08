@@ -1,102 +1,260 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
-public class AccountLockoutCheck : IHardeningCheck, IMultiPathCheck
+/// <summary>
+/// Phase 10.6: Account Lockout Policy Check (Collector-only pattern).
+/// 
+/// این چک **فقط Collector** است:
+/// - Evidence تولید می‌کند (RawOutput + TypedValue)
+/// - Evidence.Evaluation = NotScanned (ارزیابی نمی‌کند)
+/// - Scanner مسئول ارزیابی تایپ‌شده با استفاده از کاتالوگ است
+/// 
+/// SubControls:
+///   - LCK-001.1: Account lockout threshold (Integer, LessOrEqual, 5)
+///   - LCK-001.2: Account lockout duration (Duration minutes, GreaterOrEqual, 15)
+///   - LCK-001.3: Reset account lockout counter after (Duration minutes, GreaterOrEqual, 15)
+/// </summary>
+[SupportedOSPlatform("windows")]
+public class AccountLockoutCheck : BaseHardeningCheck
 {
-    public string CheckId => "LCK-001";
-    public string Name => "Account Lockout Policy";
-    public CheckCategory Category => CheckCategory.Account;
-    public CheckSeverity Severity => CheckSeverity.Medium;
+    private readonly IEvidenceParser _registryParser;
 
-    // SubChecks definitions preserved exactly as provided
-    private static readonly List<SubCheck> SubChecks = new()
-    {
-        new SubCheck { Id = "LCK-001.1", Title = "Account lockout threshold", Expected = "5 invalid logon attempts",
-            WhatItDoes = "Number of failed logons before the account is locked.", Recommendation = "Set threshold to 5.",
-            CheckCurrentCli = "net accounts", CliCommand = "net accounts /lockoutthreshold:5",
-            VerifyCli = "net accounts", Verification = "'Lockout threshold' shows 5.",
-            ValueMap = "5 = lock after 5 fails; 0 = never lock.", CliTokens = "/lockoutthreshold: failed-logon limit.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Account Lockout Policy → Threshold",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Account lockout threshold",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy",
-            YouAreHere = "secpol.msc → Security Settings → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Account lockout threshold > 5",
-            GraphicalSteps = "1) secpol.msc → Account Policies → Account Lockout Policy. 2) Double-click 'Account lockout threshold'. 3) Set 5.",
-            UndoCli = "net accounts /lockoutthreshold:0", IgnoreConsequence = "Brute-force attempts never lock the account.", HasRegistryPath = false },
-        new SubCheck { Id = "LCK-001.2", Title = "Account lockout duration", Expected = "15 minutes",
-            WhatItDoes = "How long the account stays locked after threshold.", Recommendation = "Set 15.",
-            CheckCurrentCli = "net accounts", CliCommand = "net accounts /lockoutduration:15",
-            VerifyCli = "net accounts", Verification = "'Lockout duration' shows 15.",
-            ValueMap = "minutes.", CliTokens = "/lockoutduration: lock hold time.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Account Lockout Policy → Duration",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Account lockout duration",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy",
-            YouAreHere = "secpol.msc → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Account lockout duration > 15",
-            GraphicalSteps = "1) Account Lockout Policy. 2) 'Account lockout duration' = 15.",
-            UndoCli = "net accounts /lockoutduration:0", IgnoreConsequence = "Locked accounts may stay locked too long/short.", HasRegistryPath = false },
-        new SubCheck { Id = "LCK-001.3", Title = "Reset account lockout counter after", Expected = "15 minutes",
-            WhatItDoes = "Time before the failed-attempt counter resets to zero.", Recommendation = "Set 15.",
-            CheckCurrentCli = "net accounts", CliCommand = "net accounts /lockoutwindow:15",
-            VerifyCli = "net accounts", Verification = "'Lockout observation window' shows 15.",
-            ValueMap = "minutes.", CliTokens = "/lockoutwindow: counter reset window.",
-            ConsoleTool = "secpol.msc", DestinationLabel = "Account Lockout Policy → Reset counter",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Reset account lockout counter after",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy",
-            YouAreHere = "secpol.msc → Account Policies", GoTo = "Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy > Reset account lockout counter after > 15",
-            GraphicalSteps = "1) Account Lockout Policy. 2) 'Reset account lockout counter after' = 15.",
-            UndoCli = "net accounts /lockoutwindow:0", IgnoreConsequence = "Counter may reset too fast/slow.", HasRegistryPath = false }
-    };
+    public override string CheckId => "LCK-001";
+    public override string Name => "Account Lockout Policy";
+    public override CheckCategory Category => CheckCategory.Account;
+    public override CheckSeverity Severity => CheckSeverity.High;
 
-    public async Task<Finding> EvaluateAsync()
+    public AccountLockoutCheck()
     {
-        var statuses = new List<CheckStatus>();
-        string details = "";
+        _registryParser = new RegistryParser();
+    }
+
+    /// <summary>
+    /// Phase 10.6: Collects evidence for all 3 lockout policy SubControls.
+    /// </summary>
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
+    {
+        var evidenceList = new List<Evidence>();
+
+        evidenceList.Add(await CollectLockoutThreshold());
+        evidenceList.Add(await CollectLockoutDuration());
+        evidenceList.Add(await CollectLockoutObservationWindow());
+
+        return evidenceList;
+    }
+
+    private async Task<Evidence> CollectLockoutThreshold()
+    {
+        var subControlId = "LCK-001.1";
+        var startTime = DateTime.UtcNow;
 
         try
         {
-            string output = Run("net", "accounts");
+            var rawOutput = await RunCommandAsync("net", "accounts");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
+            var typedValue = ExtractIntegerFromLine(rawOutput, "Lockout threshold");
 
-            // 1. Threshold
-            var tLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase));
-            if (tLine != null) { var num = new string(tLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int t) && t >= 5 && t > 0) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
-            else statuses.Add(CheckStatus.Unknown);
-
-            // 2. Duration
-            var dLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout duration", StringComparison.OrdinalIgnoreCase));
-            if (dLine != null) { var num = new string(dLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int d) && d >= 15) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
-            else statuses.Add(CheckStatus.Unknown);
-
-            // 3. Window
-            var wLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout observation", StringComparison.OrdinalIgnoreCase));
-            if (wLine != null) { var num = new string(wLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int w) && w >= 15) statuses.Add(CheckStatus.Pass); else statuses.Add(CheckStatus.Fail); }
-            else statuses.Add(CheckStatus.Unknown);
-
-            var finalStatus = GetWorstStatus(statuses);
-            details = $"T:{(statuses[0] == CheckStatus.Pass ? "OK" : "FAIL")}, D:{(statuses[1] == CheckStatus.Pass ? "OK" : "FAIL")}, W:{(statuses[2] == CheckStatus.Pass ? "OK" : "FAIL")}";
-
-            return new Finding(CheckId, Name, Category, Severity, finalStatus, details, "5 threshold, 15 min duration", "Lock accounts after repeated failed logons.", description: "Locks user accounts after repeated failed logon attempts.", cisReference: "CIS 5.4", riskScore: 60, sourceType: "net accounts", sourceCommand: "net accounts", fixTools: new List<string> { "secpol.msc" }, subChecks: SubChecks);
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
         }
-        catch (Exception ex) { return new Finding(CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error", errorMessage: ex.Message, subChecks: SubChecks); }
+        catch (Exception ex)
+        {
+            return CreateErrorEvidence(subControlId, ex);
+        }
     }
 
-    // Preserved: 3-Test Verification
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    private async Task<Evidence> CollectLockoutDuration()
     {
-        var results = new List<TestResult>();
-        // Test 1: net accounts
-        try { string output = Run("net", "accounts"); var thresholdLine = output.Split('\n').FirstOrDefault(l => l.Contains("Lockout threshold", StringComparison.OrdinalIgnoreCase)); if (thresholdLine != null) { var num = new string(thresholdLine.Where(char.IsDigit).ToArray()); if (int.TryParse(num, out int threshold)) { var passed = threshold >= 5 && threshold > 0; results.Add(new TestResult("Primary", "net accounts", passed, $"Lockout threshold = {threshold}")); } else results.Add(new TestResult("Primary", "net accounts", false, "Could not parse threshold")); } else results.Add(new TestResult("Primary", "net accounts", false, "Lockout threshold not found")); } catch (Exception ex) { results.Add(new TestResult("Primary", "net accounts", false, $"Error: {ex.Message}")); }
-        await Task.Delay(50);
-        // Test 2: secedit
-        try { if (!Directory.Exists(@"C:\temp")) Directory.CreateDirectory(@"C:\temp"); var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lockout.inf\" /areas SECURITYPOLICY") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var process = Process.Start(psi); await process.StandardOutput.ReadToEndAsync(); await process.WaitForExitAsync(); if (File.Exists(@"C:\temp\lockout.inf")) { var content = await File.ReadAllTextAsync(@"C:\temp\lockout.inf"); var lockoutLine = content.Split('\n').FirstOrDefault(l => l.Contains("LockoutBadCount", StringComparison.OrdinalIgnoreCase)); if (lockoutLine != null) { var parts = lockoutLine.Split('='); if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out int lockoutCount)) { var passed = lockoutCount >= 5 && lockoutCount > 0; results.Add(new TestResult("Cross-check", "secedit", passed, $"LockoutBadCount = {lockoutCount}")); } else results.Add(new TestResult("Cross-check", "secedit", false, "Could not parse LockoutBadCount")); } else results.Add(new TestResult("Cross-check", "secedit", false, "LockoutBadCount not found in export")); } else results.Add(new TestResult("Cross-check", "secedit", false, "secedit export failed")); } catch (Exception ex) { results.Add(new TestResult("Cross-check", "secedit", false, $"Error: {ex.Message}")); }
-        await Task.Delay(50);
-        // Test 3: PowerShell full parse
-        try { var psi = new ProcessStartInfo("powershell.exe", "-Command \"$output = net accounts; $threshold = ($output | Select-String 'Lockout threshold').ToString().Split(':')[-1].Trim(); $duration = ($output | Select-String 'Lockout duration').ToString().Split(':')[-1].Trim(); $window = ($output | Select-String 'Lockout observation').ToString().Split(':')[-1].Trim(); Write-Output \\\"T=$threshold|D=$duration|W=$window\\\"\"") { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var process = Process.Start(psi); if (process != null) { var output = await process.StandardOutput.ReadToEndAsync(); await process.WaitForExitAsync(); if (!string.IsNullOrWhiteSpace(output)) { var parts = output.Trim().Split('|'); if (parts.Length >= 3) { var tVal = parts[0].Replace("T=", "").Trim(); var dVal = parts[1].Replace("D=", "").Trim(); var wVal = parts[2].Replace("W=", "").Trim(); var tNum = new string(tVal.Where(char.IsDigit).ToArray()); var dNum = new string(dVal.Where(char.IsDigit).ToArray()); var wNum = new string(wVal.Where(char.IsDigit).ToArray()); if (int.TryParse(tNum, out int t) && int.TryParse(dNum, out int d) && int.TryParse(wNum, out int w)) { var passed = t >= 5 && t > 0 && d >= 15 && w >= 15; results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", passed, $"threshold={t}, duration={d}min, window={w}min")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Raw output: {output.Trim()}")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Could not parse output: {output.Trim()}")); } else results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, "Empty output from PowerShell")); } } catch (Exception ex) { results.Add(new TestResult("Verification", "PowerShell (lockout full verification)", false, $"Error: {ex.Message}")); }
-        return results;
+        var subControlId = "LCK-001.2";
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            var rawOutput = await RunCommandAsync("net", "accounts");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
+            var typedValue = ExtractDurationFromLine(rawOutput, "Lockout duration", "minutes");
+
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorEvidence(subControlId, ex);
+        }
     }
 
-    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses) { if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail; if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error; if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown; return CheckStatus.Pass; }
-    private static string Run(string cmd, string args) { try { var psi = new ProcessStartInfo(cmd, args) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true }; using var p = Process.Start(psi); if (p == null) return ""; string o = p.StandardOutput.ReadToEnd(); p.WaitForExit(3000); return o; } catch { return ""; } }
+    private async Task<Evidence> CollectLockoutObservationWindow()
+    {
+        var subControlId = "LCK-001.3";
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            var rawOutput = await RunCommandAsync("net", "accounts");
+            var parsedValue = _registryParser.Parse(rawOutput, "NetAccounts");
+            var typedValue = ExtractDurationFromLine(rawOutput, "Lockout observation window", "minutes");
+
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.NetAccounts,
+                SourceName = "net accounts",
+                AcquisitionCommand = "net accounts",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorEvidence(subControlId, ex);
+        }
+    }
+
+    private static Evidence CreateErrorEvidence(string subControlId, Exception ex)
+    {
+        return new Evidence
+        {
+            EvidenceId = $"LCK-001-{subControlId}",
+            SubControlId = subControlId,
+            SourceType = EvidenceSourceType.NetAccounts,
+            SourceName = "net accounts",
+            RawOutput = ex.Message,
+            TypedValue = null,
+            Evaluation = CheckStatus.Error,
+            Error = ex.Message,
+            CollectedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    // =========================================================================
+    // Helper methods (keyword-specific parsing from Phase 10.5)
+    // =========================================================================
+
+    private static EvidenceValue ExtractIntegerFromLine(string rawOutput, string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromInteger(0);
+
+        var lines = rawOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                // Handle "Never" for threshold (means 0 = never lock)
+                if (line.Contains("Never", StringComparison.OrdinalIgnoreCase))
+                    return EvidenceValue.FromInteger(0);
+
+                var match = Regex.Match(line, @"(\d+)");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var value))
+                    return EvidenceValue.FromInteger(value);
+            }
+        }
+
+        return EvidenceValue.FromInteger(0);
+    }
+
+    private static EvidenceValue ExtractDurationFromLine(string rawOutput, string keyword, string unit)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromDuration(new DurationValue(0, DurationUnit.Minutes));
+
+        var lines = rawOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                // Handle "Never" for duration/window (means account stays locked indefinitely)
+                // From security perspective, "Never" = very large value, will fail reasonable thresholds
+                if (line.Contains("Never", StringComparison.OrdinalIgnoreCase))
+                {
+                    return EvidenceValue.FromDuration(new DurationValue(99999, DurationUnit.Minutes));
+                }
+
+                // Try to extract duration from this line
+                var match = Regex.Match(line, @"(\d+)\s*(minutes?|mins?|hours?|days?)", RegexOptions.IgnoreCase);
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var durationValue))
+                {
+                    var durationUnit = match.Groups[2].Value.ToLower() switch
+                    {
+                        "minute" or "minutes" or "min" or "mins" => DurationUnit.Minutes,
+                        "hour" or "hours" => DurationUnit.Hours,
+                        "day" or "days" => DurationUnit.Days,
+                        _ => DurationUnit.Minutes
+                    };
+                    return EvidenceValue.FromDuration(new DurationValue(durationValue, durationUnit));
+                }
+
+                // Fallback: extract any number from this line (assume minutes)
+                var numMatch = Regex.Match(line, @"(\d+)");
+                if (numMatch.Success && int.TryParse(numMatch.Groups[1].Value, out var numValue))
+                    return EvidenceValue.FromDuration(new DurationValue(numValue, DurationUnit.Minutes));
+            }
+        }
+
+        return EvidenceValue.FromDuration(new DurationValue(0, DurationUnit.Minutes));
+    }
+
+    private static async Task<string> RunCommandAsync(string cmd, string args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(cmd, args)
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null) return "Process not started";
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            return output;
+        }
+        catch (Exception ex)
+        {
+            return $"Error: {ex.Message}";
+        }
+    }
 }
