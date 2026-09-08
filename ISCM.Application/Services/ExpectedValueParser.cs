@@ -115,6 +115,7 @@ public sealed class ExpectedValueParser
 
     // ==========================================================================
     // Boolean: "Enabled"/"Disabled", "True"/"False", "1"/"0", "Yes"/"No"
+    // Phase 10.8 fix: Prefix matching to handle descriptive strings
     // ==========================================================================
 
     private ParseResult<object> ParseBoolean(string input)
@@ -127,13 +128,43 @@ public sealed class ExpectedValueParser
             return ParseResult<object>.Success((object)directBool);
         }
 
-        // Keyword matching (case-insensitive)
         var upper = normalized.ToUpperInvariant();
 
-        if (upper is "ENABLED" or "TRUE" or "YES" or "ON" or "1")
-            return ParseResult<object>.Success((object)true);
+        // =====================================================================
+        // Phase 10.8: Prefix matching for descriptive Boolean values
+        // =====================================================================
+        // Catalog often stores descriptive strings like:
+        //   "Enabled - All drives"
+        //   "Enabled with UEFI lock"
+        //   "Disabled (recommended)"
+        //
+        // We check if the string STARTS WITH a known keyword, allowing
+        // trailing descriptive text after the keyword.
+        //
+        // Order matters: check "ENABLED" before "ENABLE" to avoid false positives.
 
-        if (upper is "DISABLED" or "FALSE" or "NO" or "OFF" or "0")
+        // Check for positive keywords (must come BEFORE negative to avoid
+        // "Disabled" matching "DISABLED" when we want "ENABLED")
+        if (upper.StartsWith("ENABLED") ||
+            upper.StartsWith("TRUE") ||
+            upper.StartsWith("YES") ||
+            upper.StartsWith("ON"))
+        {
+            return ParseResult<object>.Success((object)true);
+        }
+
+        if (upper.StartsWith("DISABLED") ||
+            upper.StartsWith("FALSE") ||
+            upper.StartsWith("NO") ||
+            upper.StartsWith("OFF"))
+        {
+            return ParseResult<object>.Success((object)false);
+        }
+
+        // Fallback: exact match for numeric "1" and "0"
+        if (upper == "1")
+            return ParseResult<object>.Success((object)true);
+        if (upper == "0")
             return ParseResult<object>.Success((object)false);
 
         return ParseResult<object>.Failure(

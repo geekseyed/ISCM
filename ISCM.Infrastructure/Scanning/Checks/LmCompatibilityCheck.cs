@@ -1,245 +1,151 @@
 ﻿using ISCM.Application.Interfaces;
+using ISCM.Application.Parsers;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using Microsoft.Win32;
-using System.Diagnostics;
+using System;
+using System.Collections.Generic;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 10.8 Batch 1: NTLM & LAN Manager Authentication Check (Collector-only pattern).
+/// 
+/// SubControls:
+///   - LM-001.1: LmCompatibilityLevel = 5 → Integer (Enum)
+///   - LM-001.2: NoLMHash = 1 → Boolean true
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class LmCompatibilityCheck : IHardeningCheck, IMultiPathCheck
+public class LmCompatibilityCheck : BaseHardeningCheck
 {
+    private readonly IEvidenceParser _registryParser;
     private const string LsaPath = @"SYSTEM\CurrentControlSet\Control\Lsa";
 
-    public string CheckId => "LM-001";
-    public string Name => "NTLM & LAN Manager Authentication";
-    public CheckCategory Category => CheckCategory.Network;
-    public CheckSeverity Severity => CheckSeverity.Medium;
+    public override string CheckId => "LM-001";
+    public override string Name => "NTLM & LAN Manager Authentication";
+    public override CheckCategory Category => CheckCategory.Network;
+    public override CheckSeverity Severity => CheckSeverity.Medium;
 
-    private static readonly List<SubCheck> SubChecks = new()
+    public LmCompatibilityCheck()
     {
-        new SubCheck { Id = "LM-001.1", Title = "Network security: LAN Manager authentication level",
-            Expected = "Send NTLMv2 response only. Refuse LM & NTLM",
-            WhatItDoes = "Forces stronger NTLM behavior and blocks weak LM/NTLM.",
-            Recommendation = "Set LmCompatibilityLevel = 5.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 5 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel",
-            Verification = "LmCompatibilityLevel = 5.",
-            ValueMap = "0 = Send LM & NTLM, 5 = Send NTLMv2 only, Refuse LM & NTLM.",
-            CliTokens = "-Name LmCompatibilityLevel: NTLM negotiation level.",
-            ConsoleTool = "secpol.msc",
-            DestinationLabel = "Security Options → LAN Manager authentication level",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Network security: LAN Manager authentication level",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
-            YouAreHere = "secpol.msc > Security Settings > Local Policies > Security Options",
-            GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Network security: LAN Manager authentication level > Send NTLMv2 response only. Refuse LM & NTLM",
-            GraphicalSteps = "1) Run secpol.msc.\n2) Navigate to Security Settings > Local Policies > Security Options.\n3) Double-click 'Network security: LAN Manager authentication level'.\n4) Select 'Send NTLMv2 response only. Refuse LM & NTLM'.\n5) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name LmCompatibilityLevel -Value 0",
-            IgnoreConsequence = "Weak LM/NTLM hashes remain usable by attackers.",
-            HasRegistryPath = true,
-            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\LmCompatibilityLevel",
-            AlternativeToRegistry = "Prefer secpol.msc > Security Options." },
-        new SubCheck { Id = "LM-001.2", Title = "Network security: Do not store LAN Manager hash value on next password change",
-            Expected = "Enabled",
-            WhatItDoes = "Stops storage of weak LM hashes.",
-            Recommendation = "Set NoLMHash = 1.",
-            CheckCurrentCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name NoLMHash",
-            CliCommand = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name NoLMHash -Value 1 -Type DWord",
-            VerifyCli = "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name NoLMHash",
-            Verification = "NoLMHash = 1.",
-            ValueMap = "1 = Do not store LM hash.",
-            CliTokens = "-Name NoLMHash: disables LM hash storage.",
-            ConsoleTool = "secpol.msc",
-            DestinationLabel = "Security Options → Do not store LAN Manager hash value on next password change",
-            GraphicalPathFull = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Network security: Do not store LAN Manager hash value on next password change",
-            ConsolePath = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options",
-            YouAreHere = "secpol.msc > Security Settings > Local Policies > Security Options",
-            GoTo = "Computer Configuration > Windows Settings > Security Settings > Local Policies > Security Options > Network security: Do not store LAN Manager hash value on next password change > Enabled",
-            GraphicalSteps = "1) Same Security Options node.\n2) Double-click 'Network security: Do not store LAN Manager hash value on next password change'.\n3) Set to Enabled.\n4) OK.",
-            UndoCli = "Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' -Name NoLMHash -Value 0",
-            IgnoreConsequence = "Weak LM hash stored and crackable.",
-            HasRegistryPath = true,
-            RegistryPath = @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa\NoLMHash",
-            AlternativeToRegistry = "Prefer secpol.msc > Security Options." }
-    };
-
-    public Task<Finding> EvaluateAsync()
-    {
-        var statuses = new List<CheckStatus>();
-
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(LsaPath);
-
-            // 1. LmCompatibilityLevel >= 5
-            var lmVal = key?.GetValue("LmCompatibilityLevel");
-            if (lmVal != null && int.TryParse(lmVal.ToString(), out int level) && level >= 5) statuses.Add(CheckStatus.Pass);
-            else statuses.Add(CheckStatus.Fail);
-
-            // 2. NoLMHash = 1
-            var noLmVal = key?.GetValue("NoLMHash");
-            if (noLmVal != null && noLmVal.ToString() == "1") statuses.Add(CheckStatus.Pass);
-            else statuses.Add(CheckStatus.Fail);
-
-            var finalStatus = GetWorstStatus(statuses);
-            int passCount = statuses.Count(s => s == CheckStatus.Pass);
-            string details = $"{passCount}/{statuses.Count} NTLM/LM settings compliant";
-
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, finalStatus, details,
-                "NTLMv2 enforced + LM hash disabled",
-                "Force NTLMv2 and prevent LM/NTLM usage to protect against downgrade attacks.",
-                errorMessage: string.Empty,
-                description: "Hardens NTLM authentication to refuse weak LM and NTLM protocols.",
-                registryPath: $@"HKLM\{LsaPath}\LmCompatibilityLevel",
-                cisReference: "CIS 2.3.10.8", riskScore: 60, sourceType: "RegistryReader",
-                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v LmCompatibilityLevel",
-                fixTools: new List<string> { "secpol.msc" },
-                subChecks: SubChecks));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(new Finding(
-                CheckId, Name, Category, Severity, CheckStatus.Error, "Error", "N/A", "Error",
-                errorMessage: ex.Message,
-                description: "Hardens NTLM authentication to refuse weak LM and NTLM protocols.",
-                registryPath: $@"HKLM\{LsaPath}\LmCompatibilityLevel",
-                cisReference: "CIS 2.3.10.8", riskScore: 60, sourceType: "RegistryReader",
-                sourceCommand: $@"reg query ""HKLM\{LsaPath}"" /v LmCompatibilityLevel",
-                fixTools: new List<string> { "secpol.msc" },
-                subChecks: SubChecks));
-        }
+        _registryParser = new RegistryParser();
     }
 
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    public override Task<List<Evidence>> CollectEvidenceAsync()
     {
-        var results = new List<TestResult>();
-        // Test 1: Registry برای LmCompatibilityLevel
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(LsaPath);
-            if (key != null)
-            {
-                var v = key.GetValue("LmCompatibilityLevel");
-                if (v != null && int.TryParse(v.ToString(), out int level))
-                {
-                    var passed = level >= 5;
-                    var desc = level switch
-                    {
-                        0 => "Send LM & NTLM",
-                        1 => "Use LM & NTLM (negotiate)",
-                        2 => "Send NTLM only",
-                        3 => "Send NTLMv2 only",
-                        4 => "NTLMv2 + DC refuses LM",
-                        5 => "NTLMv2 + DC refuses LM & NTLM",
-                        _ => $"Unknown ({level})"
-                    };
-                    results.Add(new TestResult("Primary", "Registry (LmCompatibilityLevel)", passed, $"Level = {level} ({desc})"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Primary", "Registry (LmCompatibilityLevel)", false, "Value not found (defaults to level 3)"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Primary", "Registry (LmCompatibilityLevel)", false, "Registry key not found"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "Registry (LmCompatibilityLevel)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+        var evidenceList = new List<Evidence>();
+        evidenceList.Add(CollectIntegerEvidence("LM-001.1", LsaPath, "LmCompatibilityLevel"));
+        evidenceList.Add(CollectBooleanEvidence("LM-001.2", LsaPath, "NoLMHash", 1));
+        return Task.FromResult(evidenceList);
+    }
 
-        // Test 2: Registry برای NoLMHash
+    private Evidence CollectIntegerEvidence(string subControlId, string registryPath, string valueName)
+    {
+        var startTime = DateTime.UtcNow;
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(LsaPath);
-            if (key != null)
+            string rawOutput;
+            using (var key = Registry.LocalMachine.OpenSubKey(registryPath))
             {
-                var v = key.GetValue("NoLMHash");
-                if (v != null && int.TryParse(v.ToString(), out int val))
-                {
-                    var passed = val == 1;
-                    results.Add(new TestResult("Cross-check", "Registry (NoLMHash)", passed, $"NoLMHash = {val}"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Cross-check", "Registry (NoLMHash)", false, "NoLMHash value not found"));
-                }
+                var value = key?.GetValue(valueName);
+                rawOutput = value?.ToString() ?? "0";
             }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "Registry (NoLMHash)", false, "Registry key not found"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "Registry (NoLMHash)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
+            var parsedValue = _registryParser.Parse(rawOutput, "Registry");
+            var typedValue = ExtractIntegerFromRegistryValue(rawOutput);
 
-        // Test 3: secedit export
-        try
-        {
-            if (!Directory.Exists(@"C:\temp"))
+            return new Evidence
             {
-                Directory.CreateDirectory(@"C:\temp");
-            }
-            var psi = new ProcessStartInfo("secedit.exe", "/export /cfg \"C:\\temp\\lmcheck.inf\" /areas SECURITYPOLICY")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = valueName,
+                AcquisitionCommand = $@"reg query HKLM\{registryPath} /v {valueName}",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
             };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-            }
-            if (File.Exists(@"C:\temp\lmcheck.inf"))
-            {
-                var content = await File.ReadAllTextAsync(@"C:\temp\lmcheck.inf");
-                var line = content.Split('\n').FirstOrDefault(l => l.Contains("LMCompatibilityLevel", StringComparison.OrdinalIgnoreCase));
-                if (line != null)
-                {
-                    var parts = line.Split('=');
-                    if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out int level))
-                    {
-                        var passed = level >= 5;
-                        results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", passed, $"LMCompatibilityLevel = {level}"));
-                    }
-                    else
-                    {
-                        results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", false, "Could not parse level"));
-                    }
-                }
-                else
-                {
-                    results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", false, "LMCompatibilityLevel not found in export"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", false, "secedit export failed"));
-            }
         }
         catch (Exception ex)
         {
-            results.Add(new TestResult("Verification", "secedit (LMCompatibilityLevel)", false, $"Error: {ex.Message}"));
+            return CreateFallbackEvidence(subControlId, valueName, registryPath, ex);
         }
-        return results;
     }
 
-    private static CheckStatus GetWorstStatus(IEnumerable<CheckStatus> statuses)
+    private Evidence CollectBooleanEvidence(string subControlId, string registryPath, string valueName, int expectedValue)
     {
-        if (statuses.Any(s => s == CheckStatus.Fail)) return CheckStatus.Fail;
-        if (statuses.Any(s => s == CheckStatus.Error)) return CheckStatus.Error;
-        if (statuses.Any(s => s == CheckStatus.Unknown)) return CheckStatus.Unknown;
-        return CheckStatus.Pass;
+        var startTime = DateTime.UtcNow;
+        try
+        {
+            string rawOutput;
+            using (var key = Registry.LocalMachine.OpenSubKey(registryPath))
+            {
+                var value = key?.GetValue(valueName);
+                rawOutput = value?.ToString() ?? "0";
+            }
+            var parsedValue = _registryParser.Parse(rawOutput, "Registry");
+            var typedValue = ExtractBooleanFromRegistryValue(rawOutput, expectedValue);
+
+            return new Evidence
+            {
+                EvidenceId = $"{CheckId}-{subControlId}",
+                SubControlId = subControlId,
+                SourceType = EvidenceSourceType.Registry,
+                SourceName = valueName,
+                AcquisitionCommand = $@"reg query HKLM\{registryPath} /v {valueName}",
+                RawOutput = rawOutput,
+                ParsedValue = parsedValue,
+                TypedValue = typedValue,
+                Evaluation = CheckStatus.NotScanned,
+                CollectedAtUtc = DateTime.UtcNow,
+                CollectionDurationMs = (int)(DateTime.UtcNow - startTime).TotalMilliseconds
+            };
+        }
+        catch (Exception ex)
+        {
+            return CreateFallbackEvidence(subControlId, valueName, registryPath, ex);
+        }
+    }
+
+    private static Evidence CreateFallbackEvidence(string subControlId, string valueName, string registryPath, Exception ex)
+    {
+        return new Evidence
+        {
+            EvidenceId = $"LM-001-{subControlId}",
+            SubControlId = subControlId,
+            SourceType = EvidenceSourceType.Registry,
+            SourceName = valueName,
+            RawOutput = $"Exception: {ex.Message}",
+            TypedValue = EvidenceValue.FromInteger(0), // Conservative fallback
+            Evaluation = CheckStatus.NotScanned,
+            CollectedAtUtc = DateTime.UtcNow
+        };
+    }
+
+    private static EvidenceValue ExtractIntegerFromRegistryValue(string rawOutput)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromInteger(0);
+
+        if (int.TryParse(rawOutput.Trim(), out var intValue))
+            return EvidenceValue.FromInteger(intValue);
+
+        return EvidenceValue.FromInteger(0);
+    }
+
+    private static EvidenceValue ExtractBooleanFromRegistryValue(string rawOutput, int expectedValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawOutput))
+            return EvidenceValue.FromBoolean(false);
+
+        if (int.TryParse(rawOutput.Trim(), out var intValue))
+            return EvidenceValue.FromBoolean(intValue == expectedValue);
+
+        return EvidenceValue.FromBoolean(false);
     }
 }
