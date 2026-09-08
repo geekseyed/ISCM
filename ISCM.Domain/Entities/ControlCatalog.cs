@@ -9,6 +9,7 @@ namespace ISCM.Domain.Entities;
 /// Names and IDs match the PDF and DI registrations exactly.
 /// 
 /// Phase 10.2: All SubControls now have ExpectedValueType and Operator populated.
+/// Phase 10.8: WUP-001 SubControls updated to match check output types (Integer/String).
 /// </summary>
 public static class ControlCatalog
 {
@@ -61,7 +62,8 @@ public static class ControlCatalog
             SubControls = new()
             {
                 new SubControlDefinition { SubControlId = "GUEST-001.1", SettingName = "Accounts: Guest account status", ExpectedValue = "Disabled", Description = "Turns off the built-in Guest account.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "net user", "PowerShell Get-LocalUser", "NetUserGetInfo API" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts: Rename guest account", ExpectedValue = "Guest", Description = "Makes the well-known account name harder to target. Name must NOT be 'Guest'.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "PowerShell Get-LocalUser" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals },            }
+                new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts: Rename guest account", ExpectedValue = "Guest", Description = "Makes the well-known account name harder to target. Name must NOT be 'Guest'.", Category = CheckCategory.Account, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "03", EvidenceSources = new() { "PowerShell Get-LocalUser" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals }
+            }
         },
 
         // 4. Advanced Audit Policy Configuration (11 SubControls)
@@ -261,6 +263,7 @@ new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts
         },
 
         // 14. Windows Update / Patch Management (4 SubControls)
+        // Phase 10.8 fix: Updated ExpectedValueType to match check output (Integer/String instead of Boolean)
         new ControlDefinition
         {
             ControlId = "14", BaselineId = "Hosseini-14", Title = "Windows Update / Patch Management",
@@ -269,10 +272,10 @@ new SubControlDefinition { SubControlId = "GUEST-001.2", SettingName = "Accounts
             TechnicalCheckIds = new() { "WUP-001" },
             SubControls = new()
             {
-                new SubControlDefinition { SubControlId = "WUP-001.1", SettingName = "Configure Automatic Updates — fully isolated clients", ExpectedValue = "Disabled or Not Configured", Description = "Prevents clients from attempting irrelevant Internet-based automatic update behavior.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "WUP-001.2", SettingName = "Specify intranet Microsoft update service location", ExpectedValue = "Enabled with internal WSUS URL", Description = "Redirects clients to an internal WSUS server inside the isolated environment.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = false, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains },
-                new SubControlDefinition { SubControlId = "WUP-001.3", SettingName = "Configure Automatic Updates — WSUS-backed isolated environment", ExpectedValue = "Enabled > 4 - Auto download and schedule the install", Description = "Useful only after an internal WSUS/import workflow exists.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = false, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Enum, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "WUP-001.4", SettingName = "No auto-restart with logged on users for scheduled automatic updates installations", ExpectedValue = "Set according to maintenance-window policy", Description = "Lets you align reboots with operations instead of forcing a single answer.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+                new SubControlDefinition { SubControlId = "WUP-001.1", SettingName = "Configure Automatic Updates", ExpectedValue = "4", Description = "Auto download and schedule the install (AUOptions = 4).", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "WUP-001.2", SettingName = "Specify intranet Microsoft update service location", ExpectedValue = "http", Description = "Redirects clients to an internal WSUS server (URL contains 'http').", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = false, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains },
+                new SubControlDefinition { SubControlId = "WUP-001.3", SettingName = "No auto-restart with logged on users", ExpectedValue = "1", Description = "Enabled (NoAutoRebootWithLoggedOnUsers = 1).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "14", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "WUP-001.4", SettingName = "Verify latest patches", ExpectedValue = "KB", Description = "Confirms the client has a recent cumulative update installed (KB ID present in Get-HotFix output).", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "14", EvidenceSources = new() { "PowerShell" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains }
             }
         },
 
