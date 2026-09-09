@@ -185,7 +185,7 @@ public class CatalogValidator : ICatalogValidator
         var stringExemptions = new HashSet<string>
         {
             "GUEST-001.2",  // "Unique complex name" — genuinely a string
-            "ADM-001.3",    // "Set to a unique non-obvious name" — genuinely a string
+            "SEC-001.8",    // "Set to a unique non-obvious name" — genuinely a string
             "SMB-001.1",    // PowerShell command string
             "WUP-001.2"     // WSUS URL string
         };

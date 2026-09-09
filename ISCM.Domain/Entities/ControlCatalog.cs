@@ -7,9 +7,11 @@ namespace ISCM.Domain.Entities;
 /// <summary>
 /// Catalog of all parent controls (17 baseline + 3 extended checks).
 /// Names and IDs match the PDF and DI registrations exactly.
-/// 
+///
 /// Phase 10.2: All SubControls now have ExpectedValueType and Operator populated.
 /// Phase 10.8: WUP-001 SubControls updated to match check output types (Integer/String).
+/// Phase 11.0: Migrated ADM-001.1/2/3 → SEC-001.6/7/8, added new ADM-001.1 (admin count).
+///             Populated EXT-01 (DEF-001), EXT-02 (USB-001), EXT-03 (ALG-001) SubControls.
 /// </summary>
 public static class ControlCatalog
 {
@@ -18,7 +20,7 @@ public static class ControlCatalog
         // ═══════════════════════════════════════════════════════════════
         // BASELINE CONTROLS (17 items from PDF)
         // ═══════════════════════════════════════════════════════════════
-        
+
         // 1. Password Policy (6 SubControls)
         new ControlDefinition
         {
@@ -140,7 +142,7 @@ public static class ControlCatalog
             }
         },
 
-        // 8. Security Options (13 SubControls)
+        // 8. Security Options (16 SubControls — فاز 11: ADM-001.1/2/3 → SEC-001.6/7/8 + ADM-001.1 جدید)
         new ControlDefinition
         {
             ControlId = "08", BaselineId = "Hosseini-08", Title = "Security Options",
@@ -149,19 +151,33 @@ public static class ControlCatalog
             TechnicalCheckIds = new() { "UAC-001", "LM-001", "ADM-001" },
             SubControls = new()
             {
+                // UAC SubControls
                 new SubControlDefinition { SubControlId = "UAC-001.1", SettingName = "User Account Control: Run all administrators in Admin Approval Mode", ExpectedValue = "Enabled", Description = "Forces elevation through UAC instead of silent administrator execution.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "UAC-001.2", SettingName = "User Account Control: Behavior of the elevation prompt for administrators", ExpectedValue = "Prompt for consent on the secure desktop", Description = "Moves elevation prompts to the secure desktop.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Enum, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "UAC-001.3", SettingName = "User Account Control: Detect application installations and prompt for elevation", ExpectedValue = "Enabled", Description = "Detects installer behavior that requires elevation.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                
+                // LM SubControls
                 new SubControlDefinition { SubControlId = "LM-001.1", SettingName = "Network security: LAN Manager authentication level", ExpectedValue = "Send NTLMv2 response only. Refuse LM & NTLM", Description = "Forces stronger NTLM behavior and blocks weak LM/NTLM.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Enum, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "LM-001.2", SettingName = "Network security: Do not store LAN Manager hash value on next password change", ExpectedValue = "Enabled", Description = "Stops storage of weak LM hashes.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "ADM-001.1", SettingName = "Accounts: Limit local account use of blank passwords to console logon only", ExpectedValue = "Enabled", Description = "Stops blank-password local accounts from being used over the network.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "ADM-001.2", SettingName = "Accounts: Administrator account status", ExpectedValue = "Disabled", Description = "Disables the built-in Administrator account when operationally possible.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc", "net user" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "ADM-001.3", SettingName = "Accounts: Rename administrator account", ExpectedValue = "Set to a unique non-obvious name", Description = "Reduces exposure of the default Administrator account name.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // فاز 11.0: ADM-001.1 جدید (admin count)
+                // ═══════════════════════════════════════════════════════════════
+                new SubControlDefinition { SubControlId = "ADM-001.1", SettingName = "Local Administrators group member count", ExpectedValue = "2", Description = "Limit local administrator group to essential members only.", Category = CheckCategory.Account, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "WMI", "PowerShell Get-LocalGroupMember", "net localgroup" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                
+                // SEC SubControls (اصلی)
                 new SubControlDefinition { SubControlId = "SEC-001.1", SettingName = "Microsoft network server: Digitally sign communications (always)", ExpectedValue = "Enabled", Description = "Forces SMB server signing.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "SEC-001.2", SettingName = "Microsoft network client: Digitally sign communications (always)", ExpectedValue = "Enabled", Description = "Forces SMB client signing.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "SEC-001.3", SettingName = "Microsoft network client: Send unencrypted password to third-party SMB servers", ExpectedValue = "Disabled", Description = "Prevents plaintext SMB password transmission.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "SEC-001.4", SettingName = "Interactive logon: Don't display last signed-in", ExpectedValue = "Enabled", Description = "Hides the last signed-in user from the sign-in screen.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                new SubControlDefinition { SubControlId = "SEC-001.5", SettingName = "Interactive logon: Machine inactivity limit", ExpectedValue = "900 seconds (15 minutes)", Description = "Locks inactive sessions automatically.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual }
+                new SubControlDefinition { SubControlId = "SEC-001.5", SettingName = "Interactive logon: Machine inactivity limit", ExpectedValue = "900 seconds (15 minutes)", Description = "Locks inactive sessions automatically.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual },
+                
+                // ═══════════════════════════════════════════════════════════════
+                // فاز 11.0: انتقال ADM-001.1/2/3 قدیمی به SEC-001.6/7/8
+                // ═══════════════════════════════════════════════════════════════
+                new SubControlDefinition { SubControlId = "SEC-001.6", SettingName = "Accounts: Limit local account use of blank passwords to console logon only", ExpectedValue = "Enabled", Description = "Stops blank-password local accounts from being used over the network.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SEC-001.7", SettingName = "Accounts: Administrator account status", ExpectedValue = "Disabled", Description = "Disables the built-in Administrator account when operationally possible.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc", "net user" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SEC-001.8", SettingName = "Accounts: Rename administrator account", ExpectedValue = "Set to a unique non-obvious name", Description = "Reduces exposure of the default Administrator account name.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "08", EvidenceSources = new() { "Registry", "secpol.msc" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.NotEquals }
             }
         },
 
@@ -263,7 +279,6 @@ public static class ControlCatalog
         },
 
         // 14. Windows Update / Patch Management (4 SubControls)
-        // Phase 10.8 fix: Updated ExpectedValueType to match check output (Integer/String instead of Boolean)
         new ControlDefinition
         {
             ControlId = "14", BaselineId = "Hosseini-14", Title = "Windows Update / Patch Management",
@@ -294,8 +309,7 @@ public static class ControlCatalog
             }
         },
 
-               // 16. Secure RDP (7 SubControls)
-        // Phase 10.8 fix: Updated ExpectedValueType to match check output
+        // 16. Secure RDP (7 SubControls)
         new ControlDefinition
         {
             ControlId = "16", BaselineId = "Hosseini-16", Title = "Secure RDP",
@@ -305,19 +319,11 @@ public static class ControlCatalog
             SubControls = new()
             {
                 new SubControlDefinition { SubControlId = "RDP-001.1", SettingName = "Require user authentication for remote connections by using Network Level Authentication", ExpectedValue = "Enabled", Description = "Requires authentication before a full RDP session is created.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                
-                // Phase 10.8 fix: Changed from Boolean to Integer (MinEncryptionLevel 3 = High)
                 new SubControlDefinition { SubControlId = "RDP-001.2", SettingName = "Set client connection encryption level", ExpectedValue = "3", Description = "Enforces stronger RDP session encryption (High = 3).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
-
                 new SubControlDefinition { SubControlId = "RDP-001.3", SettingName = "Require secure RPC communication", ExpectedValue = "Enabled", Description = "Requires authenticated and encrypted RPC communication.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "RDP-001.4", SettingName = "Always prompt for password upon connection", ExpectedValue = "Enabled", Description = "Forces password entry on each connection.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
-                
-                // Phase 10.8 fix: Changed ExpectedValue to simple integer "5"
                 new SubControlDefinition { SubControlId = "RDP-001.5", SettingName = "Limit number of connections", ExpectedValue = "5", Description = "Restricts concurrent sessions to 5 or fewer.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
-
                 new SubControlDefinition { SubControlId = "RDP-001.6", SettingName = "Set time limit for active but idle Remote Desktop Services sessions", ExpectedValue = "15 minutes", Description = "Disconnects idle RDP sessions.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual },
-                
-                // Phase 10.8 fix: Changed from Duration to Integer (milliseconds)
                 new SubControlDefinition { SubControlId = "RDP-001.7", SettingName = "Set time limit for disconnected sessions", ExpectedValue = "60000", Description = "Ends disconnected sessions quickly (max 60 seconds = 60000 ms).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "16", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
             }
         },
@@ -346,18 +352,52 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "EVL-001.13", SettingName = "System — Back up log automatically when full", ExpectedValue = "Enabled (optional)", Description = "Creates automatic archival behavior for the System log.", Category = CheckCategory.Audit, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "17", EvidenceSources = new() { "Registry", "gpedit.msc" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
             }
         },
-        
+
         // ══════════════════════════════════════════════════════════════
         // EXTENDED CHECKS (Not in PDF baseline, but still scanned)
-        // ═══════════════════════════════════════════════════════════════
-        
-        new ControlDefinition { ControlId = "EXT-01", BaselineId = "", Title = "Windows Defender", Description = "Verifies Windows Defender antivirus is enabled.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false, TechnicalCheckIds = new() { "DEF-001" }, SubControls = new() },
-        new ControlDefinition { ControlId = "EXT-02", BaselineId = "", Title = "USB Storage Policy", Description = "Restricts USB storage device access to prevent data exfiltration.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsBaseline = false, TechnicalCheckIds = new() { "USB-001" }, SubControls = new() },
-        new ControlDefinition { ControlId = "EXT-03", BaselineId = "", Title = "AutoLogon Disabled", Description = "Ensures automatic logon is disabled to prevent unauthorized access.", Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = false, TechnicalCheckIds = new() { "ALG-001" }, SubControls = new() }
+        // فاز 11.0: پر شدن SubControls برای EXT-01, EXT-02, EXT-03
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-01", BaselineId = "", Title = "Windows Defender",
+            Description = "Verifies Windows Defender antivirus is enabled and configured properly.",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "DEF-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "DEF-001.1", SettingName = "Antivirus enabled", ExpectedValue = "Enabled", Description = "Ensures Windows Defender antivirus is active.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "PowerShell Get-MpComputerStatus" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DEF-001.2", SettingName = "Real-time protection enabled", ExpectedValue = "Enabled", Description = "Ensures real-time monitoring is active.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "Registry", "PowerShell Get-MpComputerStatus" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DEF-001.3", SettingName = "Antivirus definitions up-to-date", ExpectedValue = "Enabled", Description = "Verifies virus definitions are current.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-01", EvidenceSources = new() { "PowerShell Get-MpComputerStatus" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+            }
+        },
+        new ControlDefinition
+        {
+            ControlId = "EXT-02", BaselineId = "", Title = "USB Storage Policy",
+            Description = "Restricts USB storage device access to prevent data exfiltration.",
+            Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsBaseline = false,
+            TechnicalCheckIds = new() { "USB-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "USB-001.1", SettingName = "USB storage device access restricted", ExpectedValue = "Enabled", Description = "Disables USB storage devices via USBSTOR service.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-02", EvidenceSources = new() { "Registry", "PowerShell" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+            }
+        },
+        new ControlDefinition
+        {
+            ControlId = "EXT-03", BaselineId = "", Title = "AutoLogon Disabled",
+            Description = "Ensures automatic logon is disabled to prevent unauthorized access.",
+            Category = CheckCategory.Account, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "ALG-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "ALG-001.1", SettingName = "Automatic logon disabled", ExpectedValue = "Disabled", Description = "Prevents automatic logon with stored credentials.", Category = CheckCategory.Account, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-03", EvidenceSources = new() { "Registry", "PowerShell" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+            }
+        }
     };
 
     public static IReadOnlyList<ControlDefinition> GetAll() => _controls.AsReadOnly();
+
     public static IEnumerable<ControlDefinition> GetBaseline() => _controls.Where(c => c.IsBaseline);
+
     public static IEnumerable<ControlDefinition> GetExtended() => _controls.Where(c => !c.IsBaseline);
 
     public static ControlDefinition? GetByCheckId(string checkId)
