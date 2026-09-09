@@ -1,162 +1,182 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 11.4: AutoLogonCheck migrated to Collector-only pattern.
+/// 
+/// Verifies automatic logon is disabled:
+/// - ALG-001.1: Automatic logon disabled (AutoAdminLogon = 0)
+/// 
+/// Produces Evidence with TypedValue = bool for each SubControl.
+/// Scanner will evaluate using catalog metadata (ExpectedValueType.Boolean, Operator.Equals, Expected="Disabled").
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class AutoLogonCheck : IHardeningCheck, IMultiPathCheck
+public class AutoLogonCheck : BaseHardeningCheck
 {
-    private const string RegistryPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
-    private const string ValueName = "AutoAdminLogon";
+    private const string WinlogonRegistryPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon";
+    private const string AutoAdminLogonValueName = "AutoAdminLogon";
+    private const string DefaultPasswordValueName = "DefaultPassword";
 
-    public string CheckId => "ALG-001";
-    public string Name => "AutoLogon Disabled";
-    public CheckCategory Category => CheckCategory.System;
-    public CheckSeverity Severity => CheckSeverity.High;
+    public override string CheckId => "ALG-001";
+    public override string Name => "AutoLogon Disabled";
+    public override CheckCategory Category => CheckCategory.Account;
+    public override CheckSeverity Severity => CheckSeverity.High;
 
-    public Task<Finding> EvaluateAsync()
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
-        string currentValue = string.Empty;
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var evidenceList = new List<Evidence>();
 
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
-            if (key != null)
-            {
-                var val = key.GetValue(ValueName);
-                if (val != null && val.ToString() == "0")
-                {
-                    currentValue = "Disabled";
-                    status = CheckStatus.Pass;
-                }
-                else
-                {
-                    currentValue = "Enabled";
-                    status = CheckStatus.Fail;
-                }
-            }
-            else
-            {
-                currentValue = "Registry Key Missing";
-                status = CheckStatus.Unknown; // ✅ اصلاح: Warning → Unknown
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-        }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            expectedValue: "Disabled",
-            recommendation: "Disable AutoLogon to require credential entry upon boot.",
-            errorMessage: errorMessage,
-            description: "AutoLogon stores credentials in plaintext in the registry and enables unauthorized system access without authentication.",
-            registryPath: $@"HKLM\{RegistryPath}\{ValueName}",
-            cisReference: "CIS 2.3.11.1",
-            riskScore: 40,
-            sourceType: "RegistryReader",
-            sourceCommand: $"reg query \"HKLM\\{RegistryPath}\" /v {ValueName}",
-            fixTools: new List<string> { "regedit.exe" }
+        // ALG-001.1: Automatic logon disabled
+        var autoLogonDisabled = await GetAutoLogonDisabled();
+        evidenceList.Add(CreateEvidence(
+            subControlId: "ALG-001.1",
+            pathId: "ALG-001.1-path-1",
+            sourceType: EvidenceSourceType.Registry,
+            sourceName: "Registry (AutoAdminLogon)",
+            command: $@"reg query ""HKLM\{WinlogonRegistryPath}"" /v {AutoAdminLogonValueName}",
+            rawOutput: $"AutoAdminLogon = {(autoLogonDisabled ? "0 (Disabled)" : "1 (Enabled)")}",
+            typedValue: autoLogonDisabled
         ));
+
+        // Additional evidence: Check for DefaultPassword (security risk)
+        var hasDefaultPassword = await CheckDefaultPassword();
+        if (hasDefaultPassword)
+        {
+            evidenceList.Add(CreateEvidence(
+                subControlId: "ALG-001.1",
+                pathId: "ALG-001.1-path-2",
+                sourceType: EvidenceSourceType.Registry,
+                sourceName: "Registry (DefaultPassword)",
+                command: $@"reg query ""HKLM\{WinlogonRegistryPath}"" /v {DefaultPasswordValueName}",
+                rawOutput: "DefaultPassword value found (credential stored in plaintext)",
+                typedValue: false // Presence of DefaultPassword is a security risk
+            ));
+        }
+
+        return evidenceList;
     }
 
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    private async Task<bool> GetAutoLogonDisabled()
     {
-        var results = new List<TestResult>();
-
-        // Test 1: Registry AutoAdminLogon
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
+            // Method 1: Registry check
+            using var key = Registry.LocalMachine.OpenSubKey(WinlogonRegistryPath);
             if (key != null)
             {
-                var v = key.GetValue(ValueName);
-                if (v != null && int.TryParse(v.ToString(), out int val))
+                var value = key.GetValue(AutoAdminLogonValueName);
+                if (value != null && int.TryParse(value.ToString(), out int val))
                 {
-                    var passed = val == 0;
-                    results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", passed, $"AutoAdminLogon = {val}"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", true, "AutoAdminLogon not set (default = Disabled)"));
+                    return val == 0; // 0 = Disabled, 1 = Enabled
                 }
             }
-            else
-            {
-                results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", true, "Winlogon registry key not found (default = Disabled)"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "Registry (AutoAdminLogon)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
 
-        // Test 2: Registry DefaultPassword
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
-            if (key != null)
-            {
-                var v = key.GetValue("DefaultPassword");
-                if (v != null && !string.IsNullOrWhiteSpace(v.ToString()))
-                {
-                    results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", false, "DefaultPassword value found (credential stored in plaintext)"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", true, "DefaultPassword not set (no plaintext credential stored)"));
-                }
-            }
-            else
-            {
-                results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", true, "Winlogon key not found (no credential risk)"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "Registry (DefaultPassword)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
-
-        // Test 3: PowerShell Get-ItemProperty
-        try
-        {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name 'DefaultUserName','AutoAdminLogon' -ErrorAction SilentlyContinue | Select-Object -Property DefaultUserName,AutoAdminLogon | ConvertTo-Json -Compress\"")
+            // Method 2: PowerShell fallback
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-NoProfile -NonInteractive -Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name 'AutoAdminLogon' -ErrorAction Stop | Select-Object -ExpandProperty AutoAdminLogon\"")
             {
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
             using var process = Process.Start(psi);
-            if (process != null)
+            if (process == null) return true; // Default: assume disabled
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
             {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                if (!string.IsNullOrWhiteSpace(output))
+                if (int.TryParse(output.Trim(), out int val))
                 {
-                    var hasAutoLogon = output.Contains("\"AutoAdminLogon\":1") || output.Contains("\"AutoAdminLogon\": \"1\"");
-                    var passed = !hasAutoLogon;
-                    results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", passed, hasAutoLogon ? "AutoAdminLogon=1 detected" : "AutoAdminLogon not enabled"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", true, "Winlogon properties not found (default safe state)"));
+                    return val == 0;
                 }
             }
+
+            return true; // Default: assume disabled if not explicitly enabled
         }
-        catch (Exception ex)
+        catch
         {
-            results.Add(new TestResult("Verification", "PowerShell (Winlogon properties)", false, $"Error: {ex.Message}"));
+            return true; // Default: assume disabled on error
         }
-        return results;
+    }
+
+    private async Task<bool> CheckDefaultPassword()
+    {
+        try
+        {
+            // Check if DefaultPassword exists (security risk)
+            using var key = Registry.LocalMachine.OpenSubKey(WinlogonRegistryPath);
+            if (key != null)
+            {
+                var value = key.GetValue(DefaultPasswordValueName);
+                if (value != null && !string.IsNullOrWhiteSpace(value.ToString()))
+                {
+                    return true; // DefaultPassword exists
+                }
+            }
+
+            // PowerShell fallback
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-NoProfile -NonInteractive -Command \"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name 'DefaultPassword' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DefaultPassword\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            return !string.IsNullOrWhiteSpace(output);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private Evidence CreateEvidence(
+        string subControlId,
+        string pathId,
+        EvidenceSourceType sourceType,
+        string sourceName,
+        string command,
+        string rawOutput,
+        bool typedValue)
+    {
+        var evidence = new Evidence
+        {
+            SubControlId = subControlId,
+            PathId = pathId,
+            SourceType = sourceType,
+            SourceName = sourceName,
+            AcquisitionCommand = command,
+            RawOutput = rawOutput,
+            Evaluation = CheckStatus.NotScanned,
+            CollectedAtUtc = DateTime.UtcNow
+        };
+
+        evidence.TypedValue = new EvidenceValue(
+            value: typedValue,
+            type: EvidenceValueType.Boolean,
+            unit: null,
+            rawString: typedValue.ToString()
+        );
+
+        return evidence;
     }
 }
