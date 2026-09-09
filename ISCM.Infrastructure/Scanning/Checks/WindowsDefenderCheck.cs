@@ -1,166 +1,219 @@
 ﻿using ISCM.Application.Interfaces;
 using ISCM.Domain.Entities;
 using ISCM.Domain.Enums;
+using ISCM.Domain.ValueObjects;
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 
 namespace ISCM.Infrastructure.Scanning.Checks;
 
+/// <summary>
+/// Phase 11.2: WindowsDefenderCheck migrated to Collector-only pattern.
+/// 
+/// Verifies Windows Defender is enabled and configured properly:
+/// - DEF-001.1: Antivirus enabled (AMServiceEnabled)
+/// - DEF-001.2: Real-time protection enabled (DisableRealtimeMonitoring = 0)
+/// - DEF-001.3: Antivirus definitions up-to-date (AntivirusSignatureUpdateTime)
+/// 
+/// Produces Evidence with TypedValue = bool for each SubControl.
+/// Scanner will evaluate using catalog metadata (ExpectedValueType.Boolean, Operator.Equals, Expected="Enabled").
+/// </summary>
 [SupportedOSPlatform("windows")]
-public class WindowsDefenderCheck : IHardeningCheck, IMultiPathCheck
+public class WindowsDefenderCheck : BaseHardeningCheck
 {
-    private const string RegistryPath = @"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection";
-    private const string ValueName = "DisableRealtimeMonitoring";
+    private const string DefenderRegistryPath = @"SOFTWARE\Microsoft\Windows Defender";
+    private const string RealTimeProtectionPath = @"SOFTWARE\Microsoft\Windows Defender\Real-Time Protection";
 
-    public string CheckId => "DEF-001";
-    public string Name => "Windows Defender";
-    public CheckCategory Category => CheckCategory.System;
-    public CheckSeverity Severity => CheckSeverity.High;
+    public override string CheckId => "DEF-001";
+    public override string Name => "Windows Defender";
+    public override CheckCategory Category => CheckCategory.System;
+    public override CheckSeverity Severity => CheckSeverity.High;
 
-    public Task<Finding> EvaluateAsync()
+    public override async Task<List<Evidence>> CollectEvidenceAsync()
     {
-        string currentValue = string.Empty;
-        CheckStatus status = CheckStatus.Error;
-        string? errorMessage = null;
+        var evidenceList = new List<Evidence>();
 
-        try
-        {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
-            if (key != null)
-            {
-                var registryValue = key.GetValue(ValueName);
-                if (registryValue != null && registryValue.ToString() == "1")
-                {
-                    currentValue = "Disabled";
-                    status = CheckStatus.Fail;
-                }
-                else
-                {
-                    currentValue = "Enabled";
-                    status = CheckStatus.Pass;
-                }
-            }
-            else
-            {
-                currentValue = "Registry Key Missing";
-                status = CheckStatus.Unknown; // ✅ اصلاح: Warning → Unknown
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = ex.Message;
-            status = CheckStatus.Error;
-        }
-
-        return Task.FromResult(new Finding(
-            CheckId, Name, Category, Severity, status, currentValue,
-            expectedValue: "Enabled",
-            recommendation: "Enable Windows Defender real-time protection.",
-            errorMessage: errorMessage,
-            description: "Windows Defender real-time protection must be enabled to detect and block malware in real time.",
-            registryPath: $@"HKLM\{RegistryPath}\{ValueName}",
-            cisReference: "CIS 1.2",
-            riskScore: 88,
-            sourceType: "RegistryReader",
-            sourceCommand: $@"reg query ""HKLM\{RegistryPath}"" /v {ValueName}",
-            fixTools: new List<string> { "powershell.exe" }
+        // DEF-001.1: Antivirus enabled
+        var antivirusEnabled = await GetAntivirusEnabled();
+        evidenceList.Add(CreateEvidence(
+            subControlId: "DEF-001.1",
+            pathId: "DEF-001.1-path-1",
+            sourceType: EvidenceSourceType.PowerShell,
+            sourceName: "Get-MpComputerStatus",
+            command: "Get-MpComputerStatus | Select-Object -ExpandProperty AMServiceEnabled",
+            rawOutput: $"AMServiceEnabled = {antivirusEnabled}",
+            typedValue: antivirusEnabled
         ));
+
+        // DEF-001.2: Real-time protection enabled
+        var realTimeProtectionEnabled = await GetRealTimeProtectionEnabled();
+        evidenceList.Add(CreateEvidence(
+            subControlId: "DEF-001.2",
+            pathId: "DEF-001.2-path-1",
+            sourceType: EvidenceSourceType.Registry,
+            sourceName: "Registry (DisableRealtimeMonitoring)",
+            command: $@"reg query ""HKLM\{RealTimeProtectionPath}"" /v DisableRealtimeMonitoring",
+            rawOutput: $"DisableRealtimeMonitoring = {(realTimeProtectionEnabled ? "0 (Enabled)" : "1 (Disabled)")}",
+            typedValue: realTimeProtectionEnabled
+        ));
+
+        // DEF-001.3: Antivirus definitions up-to-date
+        var definitionsUpToDate = await GetDefinitionsUpToDate();
+        evidenceList.Add(CreateEvidence(
+            subControlId: "DEF-001.3",
+            pathId: "DEF-001.3-path-1",
+            sourceType: EvidenceSourceType.PowerShell,
+            sourceName: "Get-MpComputerStatus",
+            command: "Get-MpComputerStatus | Select-Object AntivirusSignatureUpdateTime",
+            rawOutput: $"Definitions up-to-date = {definitionsUpToDate}",
+            typedValue: definitionsUpToDate
+        ));
+
+        return evidenceList;
     }
 
-    public async Task<List<TestResult>> RunMultipleTestsAsync()
+    private async Task<bool> GetAntivirusEnabled()
     {
-        var results = new List<TestResult>();
-
-        // Test 1: Registry HKLM - DisableRealtimeMonitoring
         try
         {
-            using var key = Registry.LocalMachine.OpenSubKey(RegistryPath);
+            // Method 1: PowerShell Get-MpComputerStatus
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-NoProfile -NonInteractive -Command \"Get-MpComputerStatus -ErrorAction Stop | Select-Object -ExpandProperty AMServiceEnabled\"")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                return output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<bool> GetRealTimeProtectionEnabled()
+    {
+        try
+        {
+            // Method 1: Registry check
+            using var key = Registry.LocalMachine.OpenSubKey(RealTimeProtectionPath);
             if (key != null)
             {
-                var v = key.GetValue(ValueName);
-                if (v != null && int.TryParse(v.ToString(), out int val))
+                var value = key.GetValue("DisableRealtimeMonitoring");
+                if (value != null && int.TryParse(value.ToString(), out int val))
                 {
-                    var passed = val == 0;
-                    results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", passed, $"DisableRealtimeMonitoring = {val} ({(passed ? "Enabled" : "Disabled")})"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", true, "Value not set (default = Enabled)"));
+                    return val == 0; // 0 = Enabled, 1 = Disabled
                 }
             }
-            else
-            {
-                results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", true, "Registry key not found (default = Enabled)"));
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Primary", "Registry (DisableRealtimeMonitoring)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
 
-        // Test 2: PowerShell Get-MpComputerStatus - RealTimeProtectionEnabled
-        try
-        {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty RealTimeProtectionEnabled\"")
+            // Method 2: PowerShell fallback
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-NoProfile -NonInteractive -Command \"Get-MpComputerStatus -ErrorAction Stop | Select-Object -ExpandProperty RealTimeProtectionEnabled\"")
             {
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
-            using var process = Process.Start(psi);
-            if (process != null)
-            {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    var passed = output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
-                    results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", passed, $"RealTimeProtectionEnabled = {output.Trim()}"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", false, "Could not query RealTimeProtectionEnabled"));
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            results.Add(new TestResult("Cross-check", "Get-MpComputerStatus (RealTimeProtection)", false, $"Error: {ex.Message}"));
-        }
-        await Task.Delay(50);
 
-        // Test 3: PowerShell Get-MpComputerStatus - AMRunningMode
+            using var process = Process.Start(psi);
+            if (process == null) return false;
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                return output.Trim().Equals("True", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return true; // Default to enabled if not explicitly disabled
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<bool> GetDefinitionsUpToDate()
+    {
         try
         {
-            var psi = new ProcessStartInfo("powershell.exe", "-Command \"Get-MpComputerStatus -ErrorAction SilentlyContinue | Select-Object -ExpandProperty AMRunningMode\"")
+            // Check if definitions were updated in the last 7 days
+            var psi = new ProcessStartInfo("powershell.exe",
+                "-NoProfile -NonInteractive -Command \"$status = Get-MpComputerStatus -ErrorAction Stop; $lastUpdate = $status.AntivirusSignatureUpdateTime; $daysAgo = ((Get-Date) - $lastUpdate).TotalDays; Write-Output ([math]::Round($daysAgo, 2))\"")
             {
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
             using var process = Process.Start(psi);
-            if (process != null)
+            if (process == null) return false;
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
             {
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                if (!string.IsNullOrWhiteSpace(output))
+                if (double.TryParse(output.Trim(), out double daysAgo))
                 {
-                    var mode = output.Trim();
-                    var passed = mode.Equals("Normal", StringComparison.OrdinalIgnoreCase);
-                    results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", passed, $"AMRunningMode = {mode}"));
-                }
-                else
-                {
-                    results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", false, "Could not query AMRunningMode"));
+                    return daysAgo <= 7.0; // Consider up-to-date if updated within last 7 days
                 }
             }
+
+            return false;
         }
-        catch (Exception ex)
+        catch
         {
-            results.Add(new TestResult("Verification", "Get-MpComputerStatus (AMRunningMode)", false, $"Error: {ex.Message}"));
+            return false;
         }
-        return results;
+    }
+
+    private Evidence CreateEvidence(
+        string subControlId,
+        string pathId,
+        EvidenceSourceType sourceType,
+        string sourceName,
+        string command,
+        string rawOutput,
+        bool typedValue)
+    {
+        var evidence = new Evidence
+        {
+            SubControlId = subControlId,
+            PathId = pathId,
+            SourceType = sourceType,
+            SourceName = sourceName,
+            AcquisitionCommand = command,
+            RawOutput = rawOutput,
+            Evaluation = CheckStatus.NotScanned,
+            CollectedAtUtc = DateTime.UtcNow
+        };
+
+        evidence.TypedValue = new EvidenceValue(
+            value: typedValue,
+            type: EvidenceValueType.Boolean,
+            unit: null,
+            rawString: typedValue.ToString()
+        );
+
+        return evidence;
     }
 }
