@@ -16,19 +16,21 @@ using FluentAssertions;
 namespace ISCM.Tests.Integration.Scanner;
 
 /// <summary>
-/// Golden tests for Phase 10.4 — Scanner Integration with Collector-only Checks
+/// Golden tests for Phase 10.4 → Phase 11.5 — Scanner Integration with Collector-only Checks
 /// 
 /// این تست‌ها تأیید می‌کنند که Scanner:
-/// 1. CollectEvidenceAsync را از چک‌ها فراخوانی می‌کند (نه EvaluateSubControlsAsync)
+/// 1. CollectEvidenceAsync را از چک‌ها فراخوانی می‌کند (تنها متد موجود در Collector-only pattern)
 /// 2. Evidence را به SubControlResult تبدیل می‌کند
 /// 3. EvaluateSubControlTyped را با متادیتای کاتالوگ فراخوانی می‌کند
 /// 4. Agreement را اعمال می‌کند
 /// 5. Finding نهایی را تولید می‌کند
+/// 
+/// Phase 11.5: Removed IMultiPathCheckValidator dependency (legacy removed).
 /// </summary>
 public class ScannerCollectorIntegrationTests
 {
     [Fact]
-    public async Task Scanner_CallsCollectEvidenceAsync_NotEvaluateSubControlsAsync()
+    public async Task Scanner_CallsCollectEvidenceAsync_AsOnlyCollectionMethod()
     {
         // Arrange
         var mockCheck = new Mock<BaseHardeningCheck>();
@@ -55,10 +57,6 @@ public class ScannerCollectorIntegrationTests
         var mockBaselineService = new Mock<IBaselineService>();
         mockBaselineService.Setup(s => s.GetDefaultBaseline())
             .Returns(new BaselineDefinition { BaselineId = "TEST", Name = "Test Baseline", Version = "1.0" });
-
-        var mockMultiPathValidator = new Mock<IMultiPathCheckValidator>();
-        mockMultiPathValidator.Setup(v => v.Validate(It.IsAny<string>(), It.IsAny<List<TestResult>>()))
-            .Returns(new MultiPathValidationResult { IsValid = true });
 
         var parser = new ExpectedValueParser();
         var typedEvaluator = new TypedEvidenceEvaluator(
@@ -89,10 +87,10 @@ public class ScannerCollectorIntegrationTests
 
         var verificationPathService = new VerificationPathService();
 
+        // Phase 11.5: Scanner constructor now takes 11 parameters (no IMultiPathCheckValidator)
         var scanner = new WindowsHardeningScanner(
             systemInfoCollector,
             new List<IHardeningCheck> { mockCheck.Object },
-            mockMultiPathValidator.Object,
             controlEvaluator,
             mockBaselineService.Object,
             mockAcquisitionService.Object,
@@ -111,9 +109,8 @@ public class ScannerCollectorIntegrationTests
         result.Should().NotBeNull();
         result.Findings.Should().NotBeEmpty();
 
-        // Verify CollectEvidenceAsync was called (not EvaluateSubControlsAsync)
+        // Verify CollectEvidenceAsync was called (the only collection method now)
         mockCheck.Verify(c => c.CollectEvidenceAsync(), Times.Once);
-        mockCheck.Verify(c => c.EvaluateSubControlsAsync(), Times.Never);
     }
 
     [Fact]
@@ -167,10 +164,6 @@ public class ScannerCollectorIntegrationTests
         mockBaselineService.Setup(s => s.GetDefaultBaseline())
             .Returns(new BaselineDefinition { BaselineId = "TEST", Name = "Test Baseline", Version = "1.0" });
 
-        var mockMultiPathValidator = new Mock<IMultiPathCheckValidator>();
-        mockMultiPathValidator.Setup(v => v.Validate(It.IsAny<string>(), It.IsAny<List<TestResult>>()))
-            .Returns(new MultiPathValidationResult { IsValid = true });
-
         var parser = new ExpectedValueParser();
         var typedEvaluator = new TypedEvidenceEvaluator(
             parser,
@@ -200,10 +193,10 @@ public class ScannerCollectorIntegrationTests
 
         var verificationPathService = new VerificationPathService();
 
+        // Phase 11.5: Scanner constructor now takes 11 parameters (no IMultiPathCheckValidator)
         var scanner = new WindowsHardeningScanner(
             systemInfoCollector,
             new List<IHardeningCheck> { mockCheck.Object },
-            mockMultiPathValidator.Object,
             controlEvaluator,
             mockBaselineService.Object,
             mockAcquisitionService.Object,

@@ -1,53 +1,37 @@
-﻿using ISCM.Domain.Entities;
-using ISCM.Domain.Enums;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using ISCM.Domain.Enums;
 
 namespace ISCM.Application.Interfaces;
 
+/// <summary>
+/// Interface for hardening checks.
+/// 
+/// Phase 11.5: Simplified to metadata-only interface.
+/// All evaluation logic moved to Scanner via IEvidenceCollector pattern.
+/// 
+/// Contract:
+/// - Checks provide metadata (CheckId, Name, Category, Severity)
+/// - Checks implement IEvidenceCollector for evidence collection
+/// - Scanner evaluates using catalog metadata and typed pipeline
+/// </summary>
 public interface IHardeningCheck
 {
+    /// <summary>
+    /// Unique identifier for this check (e.g., "PWD-001").
+    /// </summary>
     string CheckId { get; }
+
+    /// <summary>
+    /// Human-readable name of this check.
+    /// </summary>
     string Name { get; }
+
+    /// <summary>
+    /// Category of this check (Account, System, Network, Audit).
+    /// </summary>
     CheckCategory Category { get; }
+
+    /// <summary>
+    /// Severity of this check (Critical, High, Medium, Low).
+    /// </summary>
     CheckSeverity Severity { get; }
-
-    /// <summary>
-    /// Evaluates the check and returns a single Finding (legacy method).
-    /// </summary>
-    Task<Finding> EvaluateAsync();
-
-    /// <summary>
-    /// Phase 2.5: Evaluates all SubControls independently and returns detailed results with Evidence.
-    /// Default implementation wraps EvaluateAsync() result. Concrete checks can override for detailed evaluation.
-    /// </summary>
-    async Task<List<SubControlResult>> EvaluateSubControlsAsync()
-    {
-        var finding = await EvaluateAsync();
-
-        Enum.TryParse<EvidenceSourceType>(finding.SourceType, true, out var parsedSourceType);
-
-        var subControlResult = new SubControlResult
-        {
-            SubControlId = CheckId,
-            Status = finding.Status,
-            EvidenceItems = new List<Evidence>
-            {
-                new Evidence
-                {
-                    SourceType = parsedSourceType != EvidenceSourceType.Unknown ? parsedSourceType : EvidenceSourceType.Unknown,
-                    SourceName = finding.SourceCommand,
-                    RawOutput = finding.CurrentValue,
-                    ExpectedValue = finding.ExpectedValue,
-                    Evaluation = finding.Status,
-                    EvaluationReason = finding.Description,
-                    CollectedAtUtc = DateTime.UtcNow
-                }
-            },
-            EvaluatedAt = DateTime.UtcNow
-        };
-
-        return new List<SubControlResult> { subControlResult };
-    }
 }

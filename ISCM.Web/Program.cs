@@ -56,7 +56,7 @@ builder.Services.AddSingleton<IControlEvaluator>(sp =>
 builder.Services.AddSingleton<IBaselineService, BaselineService>();
 
 builder.Services.AddSingleton<ICatalogValidator, CatalogValidator>();
-builder.Services.AddSingleton<IMultiPathCheckValidator, MultiPathCheckValidator>();
+
 
 // Phase 4: سرویس‌های Freshness & Cache Control
 builder.Services.AddSingleton<IEvidenceFingerprintGenerator, EvidenceFingerprintGenerator>();
