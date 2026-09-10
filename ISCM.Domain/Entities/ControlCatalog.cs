@@ -591,6 +591,29 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "DVG-001.5", SettingName = "Credential Guard with UEFI Lock", ExpectedValue = "1", Description = "LsaCfgFlags = 1 enables Credential Guard with firmware lock.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "DVG-001.6", SettingName = "Virtualization Based Security Status", ExpectedValue = "Running", Description = "Verifies VBS is actually running (not just configured).", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "PowerShell Get-CimInstance" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: MSS Legacy Registry Hardening (Phase 12.10)
+        // Microsoft Security Compliance Toolkit legacy settings
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-13", BaselineId = "", Title = "MSS Legacy Registry Hardening",
+            Description = "Verifies legacy Microsoft Security Compliance Toolkit registry settings that reduce network and memory attack surface.",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "MSS-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "MSS-001.1", SettingName = "EnableICMPRedirect", ExpectedValue = "0", Description = "EnableICMPRedirect = 0 blocks ICMP redirect-based MITM attacks.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "MSS-001.2", SettingName = "PerformRouterDiscovery", ExpectedValue = "0", Description = "PerformRouterDiscovery = 0 disables automatic router discovery (anti-spoofing).", Category = CheckCategory.Network, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "MSS-001.3", SettingName = "KeepAliveTime", ExpectedValue = "300000", Description = "KeepAliveTime = 300000ms (5 minutes) reduces stale connection attack window.", Category = CheckCategory.Network, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "MSS-001.4", SettingName = "SafeDllSearchMode", ExpectedValue = "1", Description = "SafeDllSearchMode = 1 prevents DLL search order hijacking attacks.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "MSS-001.5", SettingName = "ScreenSaverGracePeriod", ExpectedValue = "5", Description = "ScreenSaverGracePeriod = 5 seconds limits lock-screen bypass window.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "MSS-001.6", SettingName = "WarningLevel (EventLog)", ExpectedValue = "90", Description = "WarningLevel = 90% triggers log-full warning before overflow.", Category = CheckCategory.Audit, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "MSS-001.7", SettingName = "AutoShareServer", ExpectedValue = "0", Description = "AutoShareServer = 0 disables automatic admin shares on servers (C$, ADMIN$).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "MSS-001.8", SettingName = "AutoShareWks", ExpectedValue = "0", Description = "AutoShareWks = 0 disables automatic admin shares on workstations.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-13", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals }
+            }
         }
 
     };
