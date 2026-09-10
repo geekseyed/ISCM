@@ -482,6 +482,29 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "DNS-001.5", SettingName = "DNS Client service running", ExpectedValue = "Running", Description = "Dnscache service must be running for proper DNS resolution.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-07", EvidenceSources = new() { "PowerShell Get-Service" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "DNS-001.6", SettingName = "Negative SOA cache disabled", ExpectedValue = "0", Description = "NegativeCacheTime = 0 prevents caching of negative DNS responses (anti-spoofing).", Category = CheckCategory.Network, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-07", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: Browser Security (Phase 12.5)
+        // Microsoft Edge hardening via Registry/Group Policy
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-08", BaselineId = "", Title = "Browser Security (Edge)",
+            Description = "Hardens Microsoft Edge browser: SmartScreen, password manager, extensions, developer tools.",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "BRW-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "BRW-001.1", SettingName = "SmartScreen enabled", ExpectedValue = "1", Description = "SmartScreenEnabled = 1 filters malicious websites and downloads.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.2", SettingName = "Block potentially unwanted apps", ExpectedValue = "1", Description = "SmartScreenPuaEnabled = 1 blocks PUA downloads.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.3", SettingName = "Password Manager disabled", ExpectedValue = "0", Description = "PasswordManagerEnabled = 0 prevents browser credential storage.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.4", SettingName = "Auto-fill disabled", ExpectedValue = "0", Description = "AutofillAddressEnabled = 0 prevents auto-fill data leakage.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.5", SettingName = "Extensions install control", ExpectedValue = "1", Description = "BlockExternalExtensions = 1 restricts unapproved extension installs.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.6", SettingName = "Pop-up blocker enabled", ExpectedValue = "1", Description = "DefaultPopupsSetting = 1 blocks malicious pop-ups (1=Block, 2=Allow).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.7", SettingName = "Developer tools disabled", ExpectedValue = "2", Description = "DeveloperToolsAvailability = 2 disables DevTools (0=Allow, 1=AllowForExtensions, 2=Disallow).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "BRW-001.8", SettingName = "InPrivate browsing disabled", ExpectedValue = "1", Description = "InPrivateModeAvailability = 1 disables InPrivate for audit trail preservation.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals }
+            }
         }
 
     };
