@@ -394,7 +394,7 @@ public static class ControlCatalog
             }
         },
 
-                // ══════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════
         // EXTENDED CHECK: HotFix Currency (Phase 12.1)
         // ══════════════════════════════════════════════════════════════
         new ControlDefinition
@@ -411,7 +411,38 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "HFX-001.4", SettingName = "Latest KB ID", ExpectedValue = "KB", Description = "Identifies the most recently installed KB for dashboard visibility.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains },
                 new SubControlDefinition { SubControlId = "HFX-001.5", SettingName = "Latest hotfix install date", ExpectedValue = "-", Description = "Records the exact install date of the latest KB for reporting.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains }
             }
+        },
+                
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: Services Security (Phase 12.2)
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-05", BaselineId = "", Title = "Services Security",
+            Description = "Verifies dangerous services are disabled and critical security services are running.",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "SVC-001" },
+            SubControls = new()
+            {
+                // Dangerous services — must be Stopped
+                new SubControlDefinition { SubControlId = "SVC-001.1", SettingName = "RemoteRegistry service disabled", ExpectedValue = "Stopped", Description = "Remote Registry allows remote registry modification.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.2", SettingName = "SSDP Discovery service disabled", ExpectedValue = "Stopped", Description = "SSDP exposes network services to discovery.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.3", SettingName = "UPnP Device Host service disabled", ExpectedValue = "Stopped", Description = "UPnP allows remote code execution.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.4", SettingName = "Telnet service disabled", ExpectedValue = "Stopped", Description = "Telnet transmits credentials in plaintext.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.5", SettingName = "FTP Server service disabled", ExpectedValue = "Stopped", Description = "FTP transmits data without encryption.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.6", SettingName = "Internet Connection Sharing disabled", ExpectedValue = "Stopped", Description = "ICS exposes internal network to internet.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.7", SettingName = "RpcLocator service disabled", ExpectedValue = "Stopped", Description = "RpcLocator is legacy and vulnerable.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+
+                // Security services — must be Running
+                new SubControlDefinition { SubControlId = "SVC-001.8", SettingName = "Windows Defender service running", ExpectedValue = "Running", Description = "Windows Defender provides real-time antivirus protection.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.9", SettingName = "Windows Time service running", ExpectedValue = "Running", Description = "Time synchronization is required for log correlation.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.10", SettingName = "Windows Event Log service running", ExpectedValue = "Running", Description = "Event Log is required for security auditing.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.11", SettingName = "Security Center service running", ExpectedValue = "Running", Description = "Security Center monitors system security status.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.12", SettingName = "Windows Firewall service running", ExpectedValue = "Running", Description = "Windows Firewall blocks unauthorized network access.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "SVC-001.13", SettingName = "Windows Update service running", ExpectedValue = "Running", Description = "Windows Update delivers security patches.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals }
+            }
         }
+
     };
 
     public static IReadOnlyList<ControlDefinition> GetAll() => _controls.AsReadOnly();
