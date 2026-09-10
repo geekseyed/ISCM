@@ -505,6 +505,27 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "BRW-001.7", SettingName = "Developer tools disabled", ExpectedValue = "2", Description = "DeveloperToolsAvailability = 2 disables DevTools (0=Allow, 1=AllowForExtensions, 2=Disallow).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "BRW-001.8", SettingName = "InPrivate browsing disabled", ExpectedValue = "1", Description = "InPrivateModeAvailability = 1 disables InPrivate for audit trail preservation.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-08", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: Kernel & Exploit Protections (Phase 12.6)
+        // Process Mitigations (DEP, ASLR, SEHOP, CFG)
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-09", BaselineId = "", Title = "Kernel & Exploit Protections",
+            Description = "Verifies system-wide process mitigations that protect against memory corruption and code injection exploits.",
+            Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsBaseline = false,
+            TechnicalCheckIds = new() { "KRN-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "KRN-001.1", SettingName = "DEP (Data Execution Prevention)", ExpectedValue = "True", Description = "DEP must be enabled system-wide to prevent code execution in data pages.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "KRN-001.2", SettingName = "ASLR (Address Space Layout Randomization)", ExpectedValue = "True", Description = "High-entropy ASLR must be enabled to randomize memory layout.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "KRN-001.3", SettingName = "SEHOP (Structured Exception Handling Overwrite Protection)", ExpectedValue = "True", Description = "SEHOP prevents exploitation of SEH-based buffer overflows.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "KRN-001.4", SettingName = "CFG (Control Flow Guard)", ExpectedValue = "True", Description = "CFG prevents ROP and JOP code-reuse attacks.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "KRN-001.5", SettingName = "Disable Non-Microsoft Font Providers", ExpectedValue = "True", Description = "Blocking non-system fonts reduces kernel attack surface.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "KRN-001.6", SettingName = "Strict Handle Checks", ExpectedValue = "True", Description = "Prevents processes from manipulating invalid or unauthorized handles.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+            }
         }
 
     };
