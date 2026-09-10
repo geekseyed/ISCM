@@ -13,6 +13,10 @@ public class ScannerConfiguration
     public int ParserTimeoutSeconds { get; set; } = 30;
     public int CheckTimeoutSeconds { get; set; } = 60;
 
+    // Phase 12.11: Parallel execution control
+    // 0 means "use Environment.ProcessorCount" (auto-detect)
+    public int MaxDegreeOfParallelism { get; set; } = 0;
+
     // Validation Settings
     public bool EnableFingerprintValidation { get; set; } = true;
     public bool EnableFreshnessPolicy { get; set; } = true;

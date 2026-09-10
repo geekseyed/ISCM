@@ -44,6 +44,17 @@ public class ScannerConfigurationService : IScannerConfigurationService
         return _currentConfiguration.CheckTimeoutSeconds;
     }
 
+    /// <summary>
+    /// Phase 12.11: Returns the configured maximum degree of parallelism.
+    /// If value is 0 or negative, defaults to Environment.ProcessorCount.
+    /// </summary>
+    public int GetMaxDegreeOfParallelism()
+    {
+        return _currentConfiguration.MaxDegreeOfParallelism > 0
+            ? _currentConfiguration.MaxDegreeOfParallelism
+            : Environment.ProcessorCount;
+    }
+
     public bool IsCacheEnabled()
     {
         return _currentConfiguration.EnableCache;

@@ -14,9 +14,7 @@ namespace ISCM.Infrastructure.Scanning;
 /// and typed pipeline (Phase 10).
 ///
 /// Phase 11.5: Simplified to collector-only pattern.
-/// - All checks implement IEvidenceCollector
-/// - Scanner evaluates using catalog metadata and typed pipeline
-/// - No legacy multi-path verification
+/// Phase 12.11: Parallel execution via Parallel.ForEachAsync with configurable concurrency.
 /// </summary>
 public class WindowsHardeningScanner : IScanService
 {
@@ -31,6 +29,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly INormalizationService _normalizationService;
     private readonly VerificationPathService _verificationPathService;
     private readonly SubControlAggregationService _aggregationService;
+    private readonly IScannerConfigurationService _configService; // Phase 12.11
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -43,7 +42,8 @@ public class WindowsHardeningScanner : IScanService
         IScanInvalidationService invalidationService,
         INormalizationService normalizationService,
         VerificationPathService verificationPathService,
-        SubControlAggregationService aggregationService)
+        SubControlAggregationService aggregationService,
+        IScannerConfigurationService configService) // Phase 12.11
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -56,6 +56,7 @@ public class WindowsHardeningScanner : IScanService
         _normalizationService = normalizationService ?? throw new ArgumentNullException(nameof(normalizationService));
         _verificationPathService = verificationPathService ?? throw new ArgumentNullException(nameof(verificationPathService));
         _aggregationService = aggregationService ?? throw new ArgumentNullException(nameof(aggregationService));
+        _configService = configService ?? throw new ArgumentNullException(nameof(configService)); // Phase 12.11
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -84,9 +85,22 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
         await Task.Delay(100);
 
-        foreach (var check in _checks)
+        // ═══════════════════════════════════════════════════════════════
+        // Phase 12.11: Parallel Execution
+        // ═══════════════════════════════════════════════════════════════
+        var maxParallelism = _configService.GetMaxDegreeOfParallelism();
+        var lockObj = new object(); // Thread-safe lock for shared state (scanResult + progress)
+        progress?.Report($"[INFO] Parallel scan: MaxDegreeOfParallelism = {maxParallelism}");
+
+        var parallelOptions = new ParallelOptions
         {
-            await Task.Delay(200);
+            MaxDegreeOfParallelism = maxParallelism
+        };
+
+        await Parallel.ForEachAsync(_checks, parallelOptions, async (check, cancellationToken) =>
+        {
+            // Small delay for UI responsiveness and to avoid resource contention
+            await Task.Delay(50, cancellationToken);
 
             try
             {
@@ -113,8 +127,13 @@ public class WindowsHardeningScanner : IScanService
 
                 // Produce Finding
                 var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
-                scanResult.AddFinding(finding);
-                progress?.Report(BuildResultLine(finding));
+
+                // Thread-safe state update (scanResult and progress are shared)
+                lock (lockObj)
+                {
+                    scanResult.AddFinding(finding);
+                    progress?.Report(BuildResultLine(finding));
+                }
             }
             catch (Exception ex)
             {
@@ -138,10 +157,14 @@ public class WindowsHardeningScanner : IScanService
                     recommendation: "Investigate the check execution error."
                 );
 
-                scanResult.AddFinding(errorFinding);
-                progress?.Report($"[ERROR] {check.CheckId}: {check.Name} = Crash ({ex.Message})");
+                // Thread-safe state update
+                lock (lockObj)
+                {
+                    scanResult.AddFinding(errorFinding);
+                    progress?.Report($"[ERROR] {check.CheckId}: {check.Name} = Crash ({ex.Message})");
+                }
             }
-        }
+        });
 
         progress?.Report("[INFO] Finalizing scan and calculating compliance score...");
         await Task.Delay(100);

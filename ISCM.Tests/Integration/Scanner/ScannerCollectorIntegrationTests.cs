@@ -87,6 +87,12 @@ public class ScannerCollectorIntegrationTests
 
         var verificationPathService = new VerificationPathService();
 
+
+        var configService = new Mock<IScannerConfigurationService>();
+        configService.Setup(c => c.GetMaxDegreeOfParallelism()).Returns(1);
+        configService.Setup(c => c.GetCheckTimeoutSeconds()).Returns(60);
+        configService.Setup(c => c.IsCacheEnabled()).Returns(false);
+
         // Phase 11.5: Scanner constructor now takes 11 parameters (no IMultiPathCheckValidator)
         var scanner = new WindowsHardeningScanner(
             systemInfoCollector,
@@ -99,7 +105,8 @@ public class ScannerCollectorIntegrationTests
             mockInvalidationService.Object,
             mockNormalizationService.Object,
             verificationPathService,
-            aggregationService
+            aggregationService,
+            configService.Object
         );
 
         // Act
@@ -192,6 +199,10 @@ public class ScannerCollectorIntegrationTests
         var mockNormalizationService = new Mock<INormalizationService>();
 
         var verificationPathService = new VerificationPathService();
+        var configService = new Mock<IScannerConfigurationService>();
+        configService.Setup(c => c.GetMaxDegreeOfParallelism()).Returns(1);
+        configService.Setup(c => c.GetCheckTimeoutSeconds()).Returns(60);
+        configService.Setup(c => c.IsCacheEnabled()).Returns(false);
 
         // Phase 11.5: Scanner constructor now takes 11 parameters (no IMultiPathCheckValidator)
         var scanner = new WindowsHardeningScanner(
@@ -205,8 +216,9 @@ public class ScannerCollectorIntegrationTests
             mockInvalidationService.Object,
             mockNormalizationService.Object,
             verificationPathService,
-            aggregationService
-        );
+            aggregationService,
+            configService.Object  
+            );
 
         // Act
         var result = await scanner.RunScanAsync(ScanMode.Full, null);
