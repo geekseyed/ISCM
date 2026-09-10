@@ -461,6 +461,27 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "STK-001.5", SettingName = "Script-based action tasks", ExpectedValue = "5", Description = "Tasks executing powershell.exe, cmd.exe, wscript.exe, or cscript.exe.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
                 new SubControlDefinition { SubControlId = "STK-001.6", SettingName = "Non-Microsoft tasks", ExpectedValue = "10", Description = "Tasks not authored by Microsoft (attack surface from third parties).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: DNS Security (Phase 12.4)
+        // Note: LLMNR/NetBIOS already covered by LLN-001 (Control 11)
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-07", BaselineId = "", Title = "DNS Security",
+            Description = "Hardens DNS client behavior: DoH, SMHNR leak prevention, mDNS, HOSTS integrity.",
+            Category = CheckCategory.Network, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "DNS-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "DNS-001.1", SettingName = "DNS over HTTPS (DoH)", ExpectedValue = "2", Description = "EnableDoH = 2 means Allow (1=Prohibit, 2=Allow, 3=Require).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-07", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "DNS-001.2", SettingName = "Smart Multi-homed Name Resolution", ExpectedValue = "0", Description = "DisableSmartMultiHomedNameResolution = 1 means disabled (0 means enabled/leaking).", Category = CheckCategory.Network, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-07", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DNS-001.3", SettingName = "mDNS service disabled", ExpectedValue = "Stopped", Description = "mDNS (Bonjour) can be abused for local poisoning. Service name: mdnsnsp/mdnssvc.", Category = CheckCategory.Network, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-07", EvidenceSources = new() { "PowerShell Get-Service" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DNS-001.4", SettingName = "HOSTS file size", ExpectedValue = "1000", Description = "Size in bytes. Suspiciously large HOSTS files may indicate malware redirection.", Category = CheckCategory.Network, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-07", EvidenceSources = new() { "FileSystem" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "DNS-001.5", SettingName = "DNS Client service running", ExpectedValue = "Running", Description = "Dnscache service must be running for proper DNS resolution.", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-07", EvidenceSources = new() { "PowerShell Get-Service" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DNS-001.6", SettingName = "Negative SOA cache disabled", ExpectedValue = "0", Description = "NegativeCacheTime = 0 prevents caching of negative DNS responses (anti-spoofing).", Category = CheckCategory.Network, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-07", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
+            }
         }
 
     };
