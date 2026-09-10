@@ -441,6 +441,26 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "SVC-001.12", SettingName = "Windows Firewall service running", ExpectedValue = "Running", Description = "Windows Firewall blocks unauthorized network access.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "SVC-001.13", SettingName = "Windows Update service running", ExpectedValue = "Running", Description = "Windows Update delivers security patches.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-05", EvidenceSources = new() { "PowerShell Get-Service", "sc query" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Equals }
             }
+        },
+                
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: Scheduled Tasks Security (Phase 12.3)
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-06", BaselineId = "", Title = "Scheduled Tasks Security",
+            Description = "Identifies suspicious scheduled tasks commonly used by malware for persistence (AppData, Temp, hidden, PowerShell-based).",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "STK-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "STK-001.1", SettingName = "Total scheduled task count", ExpectedValue = "0", Description = "Baseline visibility of all active scheduled tasks.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "STK-001.2", SettingName = "Suspicious path tasks", ExpectedValue = "0", Description = "Tasks with executables in AppData, Temp, Downloads, or ProgramData (common malware locations).", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "STK-001.3", SettingName = "At-startup/At-logon trigger tasks", ExpectedValue = "10", Description = "Tasks that auto-execute at boot or logon (persistence indicator).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "STK-001.4", SettingName = "Hidden tasks", ExpectedValue = "0", Description = "Tasks explicitly marked as hidden (malware often hides itself).", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "STK-001.5", SettingName = "Script-based action tasks", ExpectedValue = "5", Description = "Tasks executing powershell.exe, cmd.exe, wscript.exe, or cscript.exe.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = true, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "STK-001.6", SettingName = "Non-Microsoft tasks", ExpectedValue = "10", Description = "Tasks not authored by Microsoft (attack surface from third parties).", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-06", EvidenceSources = new() { "PowerShell Get-ScheduledTask" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.LessOrEqual }
+            }
         }
 
     };
