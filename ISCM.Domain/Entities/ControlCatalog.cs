@@ -526,6 +526,27 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "KRN-001.5", SettingName = "Disable Non-Microsoft Font Providers", ExpectedValue = "True", Description = "Blocking non-system fonts reduces kernel attack surface.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "KRN-001.6", SettingName = "Strict Handle Checks", ExpectedValue = "True", Description = "Prevents processes from manipulating invalid or unauthorized handles.", Category = CheckCategory.System, Severity = CheckSeverity.Medium, IsRequired = false, ParentControlId = "EXT-09", EvidenceSources = new() { "PowerShell Get-ProcessMitigation" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: LSA Advanced Protections (Phase 12.7)
+        // Complements CRG-001 (Credential Guard) with registry-level LSASS hardening
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-10", BaselineId = "", Title = "LSA Advanced Protections",
+            Description = "Hardens Local Security Authority (LSA) and LSASS against credential dumping attacks (Mimikatz, WDigest, anonymous enumeration).",
+            Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsBaseline = false,
+            TechnicalCheckIds = new() { "LSA-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "LSA-001.1", SettingName = "LSASS RunAsPPL", ExpectedValue = "1", Description = "RunAsPPL = 1 forces LSASS to run as Protected Process Light (blocks memory dumping). Independent of VBS.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "LSA-001.2", SettingName = "LSASS Audit Mode", ExpectedValue = "8", Description = "AuditLevel = 8 logs unsigned plugin attempts (event 3066/3067) for forensic visibility.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\LSASS.exe" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "LSA-001.3", SettingName = "WDigest credential storage disabled", ExpectedValue = "0", Description = "UseLogonCredential = 0 prevents plain-text password storage in LSASS memory (anti-Mimikatz).", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "LSA-001.4", SettingName = "RestrictAnonymous on LSA", ExpectedValue = "1", Description = "RestrictAnonymous = 1 blocks anonymous SID enumeration via LSA.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "LSA-001.5", SettingName = "RestrictAnonymousSAM", ExpectedValue = "1", Description = "RestrictAnonymousSAM = 1 blocks anonymous SAM account enumeration.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "LSA-001.6", SettingName = "LimitBlankPasswordUse", ExpectedValue = "1", Description = "LimitBlankPasswordUse = 1 prevents blank-password accounts from authenticating over the network.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-10", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals }
+            }
         }
 
     };
