@@ -570,6 +570,27 @@ public static class ControlCatalog
                 new SubControlDefinition { SubControlId = "CRP-001.7", SettingName = "TLS 1.0 Client Disabled", ExpectedValue = "0", Description = "Disables weak TLS 1.0 (prevents BEAST and related attacks).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-11", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\SCHANNEL\\Protocols\\TLS 1.0\\Client" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
                 new SubControlDefinition { SubControlId = "CRP-001.8", SettingName = "TLS 1.1 Client Disabled", ExpectedValue = "0", Description = "Disables TLS 1.1 (deprecated, no longer considered secure).", Category = CheckCategory.Network, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-11", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\SCHANNEL\\Protocols\\TLS 1.1\\Client" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals }
             }
+        },
+
+        // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: Device Guard & VBS (Phase 12.9)
+        // Based on Item 12 from Windows 11 Hardening Guide
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-12", BaselineId = "", Title = "Device Guard & VBS",
+            Description = "Verifies Virtualization-Based Security, HVCI, Secure Launch, and Code Integrity Policy enforcement.",
+            Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsBaseline = false,
+            TechnicalCheckIds = new() { "DVG-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "DVG-001.1", SettingName = "Enable Virtualization Based Security", ExpectedValue = "1", Description = "EnableVirtualizationBasedSecurity = 1 activates the VBS platform.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DVG-001.2", SettingName = "Require Platform Security Features", ExpectedValue = "3", Description = "RequirePlatformSecurityFeatures = 3 means Secure Boot + DMA Protection.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "DVG-001.3", SettingName = "Hypervisor Enforced Code Integrity (HVCI)", ExpectedValue = "1", Description = "HypervisorEnforcedCodeIntegrity = 1 enables kernel-mode code integrity.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DVG-001.4", SettingName = "Secure Launch Configuration", ExpectedValue = "1", Description = "EnableSecureLaunch = 1 protects boot process from tampering.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DVG-001.5", SettingName = "Credential Guard with UEFI Lock", ExpectedValue = "1", Description = "LsaCfgFlags = 1 enables Credential Guard with firmware lock.", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "Registry HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "DVG-001.6", SettingName = "Virtualization Based Security Status", ExpectedValue = "Running", Description = "Verifies VBS is actually running (not just configured).", Category = CheckCategory.System, Severity = CheckSeverity.Critical, IsRequired = true, ParentControlId = "EXT-12", EvidenceSources = new() { "PowerShell Get-CimInstance" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains }
+            }
         }
 
     };
