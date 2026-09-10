@@ -5,13 +5,14 @@ using ISCM.Domain.Enums;
 namespace ISCM.Domain.Entities;
 
 /// <summary>
-/// Catalog of all parent controls (17 baseline + 3 extended checks).
+/// Catalog of all parent controls (17 baseline + 4 extended checks).
 /// Names and IDs match the PDF and DI registrations exactly.
 ///
 /// Phase 10.2: All SubControls now have ExpectedValueType and Operator populated.
 /// Phase 10.8: WUP-001 SubControls updated to match check output types (Integer/String).
 /// Phase 11.0: Migrated ADM-001.1/2/3 → SEC-001.6/7/8, added new ADM-001.1 (admin count).
 ///             Populated EXT-01 (DEF-001), EXT-02 (USB-001), EXT-03 (ALG-001) SubControls.
+/// Phase 12.1: Added EXT-04 (HFX-001) HotFix Currency for patch management metadata.
 /// </summary>
 public static class ControlCatalog
 {
@@ -390,6 +391,25 @@ public static class ControlCatalog
             SubControls = new()
             {
                 new SubControlDefinition { SubControlId = "ALG-001.1", SettingName = "Automatic logon disabled", ExpectedValue = "Disabled", Description = "Prevents automatic logon with stored credentials.", Category = CheckCategory.Account, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-03", EvidenceSources = new() { "Registry", "PowerShell" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals }
+            }
+        },
+
+                // ══════════════════════════════════════════════════════════════
+        // EXTENDED CHECK: HotFix Currency (Phase 12.1)
+        // ══════════════════════════════════════════════════════════════
+        new ControlDefinition
+        {
+            ControlId = "EXT-04", BaselineId = "", Title = "HotFix Currency",
+            Description = "Verifies security patches are current and tracks patch metadata for reporting.",
+            Category = CheckCategory.System, Severity = CheckSeverity.High, IsBaseline = false,
+            TechnicalCheckIds = new() { "HFX-001" },
+            SubControls = new()
+            {
+                new SubControlDefinition { SubControlId = "HFX-001.1", SettingName = "HotFixes installed", ExpectedValue = "True", Description = "At least one hotfix must be installed.", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.Boolean, Operator = Operator.Equals },
+                new SubControlDefinition { SubControlId = "HFX-001.2", SettingName = "Latest hotfix age", ExpectedValue = "30 days", Description = "The most recent hotfix must be within the configured period (e.g., 30/60/90 days).", Category = CheckCategory.System, Severity = CheckSeverity.High, IsRequired = true, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.Duration, Operator = Operator.LessOrEqual },
+                new SubControlDefinition { SubControlId = "HFX-001.3", SettingName = "Total hotfix count", ExpectedValue = "1", Description = "Minimum number of hotfixes installed.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.Integer, Operator = Operator.GreaterOrEqual },
+                new SubControlDefinition { SubControlId = "HFX-001.4", SettingName = "Latest KB ID", ExpectedValue = "KB", Description = "Identifies the most recently installed KB for dashboard visibility.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains },
+                new SubControlDefinition { SubControlId = "HFX-001.5", SettingName = "Latest hotfix install date", ExpectedValue = "-", Description = "Records the exact install date of the latest KB for reporting.", Category = CheckCategory.System, Severity = CheckSeverity.Low, IsRequired = false, ParentControlId = "EXT-04", EvidenceSources = new() { "PowerShell Get-HotFix" }, ExpectedValueType = ExpectedValueType.String, Operator = Operator.Contains }
             }
         }
     };
