@@ -171,7 +171,21 @@ builder.Services.AddSingleton<SubControlAggregationService>();
 // Phase 5: Scanner Configuration
 builder.Services.AddSingleton<IScannerConfigurationService, ScannerConfigurationService>();
 
-builder.Services.AddScoped<IScanService, WindowsHardeningScanner>();
+// ═══════════════════════════════════════════════════════════
+// Phase 13.6: Decorator Pattern for Persistence
+// ═══════════════════════════════════════════════════════════
+// Original scanner registration (now as inner service)
+builder.Services.AddScoped<WindowsHardeningScanner>();
+
+// PersistentScanService as Decorator wraps WindowsHardeningScanner
+builder.Services.AddScoped<IScanService>(sp =>
+{
+    var inner = sp.GetRequiredService<WindowsHardeningScanner>();
+    var repository = sp.GetRequiredService<ISnapshotRepository>();
+    var mapper = sp.GetRequiredService<ISnapshotMapper>();
+
+    return new PersistentScanService(inner, repository, mapper);
+});
 builder.Services.AddScoped<IReportService, HtmlReportGenerator>();
 
 // Phase 4.2: ثبت سرویس Remediation

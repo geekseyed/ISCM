@@ -5,7 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+
 
 namespace ISCM.Web.Services;
 
@@ -69,9 +71,32 @@ public class ScanStateService
     public ScanResult? CurrentScanResult => _currentScanResult;
     public IReadOnlyList<string> ActivityLog => _activityLog.AsReadOnly();
 
+
+    // متد SetScanResult را به این شکل تغییر بده:
     public void SetScanResult(ScanResult result)
     {
-        _currentScanResult = result;
+        if (result == null) throw new ArgumentNullException(nameof(result));
+
+        // Phase 13.6: Deep-clone to prevent mutation of persisted snapshot data
+        // Serialize and deserialize to create a completely independent copy
+        try
+        {
+            var json = JsonSerializer.Serialize(result, new JsonSerializerOptions
+            {
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles,
+                WriteIndented = false
+            });
+            _currentScanResult = JsonSerializer.Deserialize<ScanResult>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            }) ?? result;
+        }
+        catch
+        {
+            // Fallback: use original if serialization fails
+            _currentScanResult = result;
+        }
+
         UpdateDisplayInfo();
 
         if (!string.IsNullOrEmpty(result.BaselineId))
