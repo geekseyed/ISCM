@@ -1,14 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0-Windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0-Windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\ISCM.Application\ISCM.Application.csproj" />
-    <ProjectReference Include="..\ISCM.Infrastructure\ISCM.Infrastructure.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ISCM.Application\ISCM.Application.csproj" />
+		<ProjectReference Include="..\ISCM.Infrastructure\ISCM.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Phase 13.5: EF Core SQLite required for DbContext registration -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+	</ItemGroup>
 
 </Project>

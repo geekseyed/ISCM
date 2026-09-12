@@ -8,45 +8,16 @@ namespace ISCM.Application.Snapshots;
 /// Phase 13.2: First-class domain concept representing a point-in-time
 /// compliance assessment. Once persisted, a ScanSnapshot MUST NOT be modified.
 /// 
-/// Design principles:
-/// - Immutable after construction (readonly collections, init-only properties)
-/// - Self-contained: contains all data needed for audit and diff operations
-/// - Identifiable: has stable SnapshotId and correlation ScanId
-/// - Verifiable: has integrity hash computed from all content
-/// 
-/// Lifecycle:
-/// 1. Created by ISnapshotMapper from a completed ScanResult
-/// 2. Persisted by ISnapshotRepository
-/// 3. Read-only for all subsequent operations (UI, Diff, Reporting)
-/// 4. Never modified; corrections produce new snapshots
-/// 
-/// Relationship to other concepts:
-/// - ScanResult = live execution context (mutable during scan)
-/// - ScanSnapshot = frozen historical record (immutable)
-/// - Future ScanJob/Execution concepts will reference ScanSnapshot
+/// Defined as a sealed record to support with-expressions for integrity hashing.
 /// </summary>
-public sealed class ScanSnapshot
+public sealed record ScanSnapshot
 {
     // =========================================================================
     // Identity
     // =========================================================================
 
-    /// <summary>
-    /// Unique identifier for this snapshot (database-agnostic).
-    /// Generated at creation time, stable for the lifetime of the snapshot.
-    /// </summary>
     public Guid SnapshotId { get; init; }
-
-    /// <summary>
-    /// Original scan correlation identifier from ScanContext.
-    /// Used for traceability back to the scan execution.
-    /// </summary>
     public string ScanId { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Asset identifier (typically hostname for Windows endpoints).
-    /// Future: may become a proper AssetId when Asset Inventory (Phase 18) is introduced.
-    /// </summary>
     public string AssetId { get; init; } = string.Empty;
 
     // =========================================================================
@@ -95,41 +66,20 @@ public sealed class ScanSnapshot
     // Content (Immutable Collections)
     // =========================================================================
 
-    /// <summary>
-    /// Control-level results. Immutable snapshot of the control hierarchy.
-    /// </summary>
     public IReadOnlyList<ControlSnapshot> Controls { get; init; } = Array.Empty<ControlSnapshot>();
-
-    /// <summary>
-    /// Flat list of findings for efficient querying and reporting.
-    /// Derived from the control hierarchy but stored separately for performance.
-    /// </summary>
     public IReadOnlyList<FindingSnapshot> Findings { get; init; } = Array.Empty<FindingSnapshot>();
 
     // =========================================================================
     // Integrity
     // =========================================================================
 
-    /// <summary>
-    /// SHA-256 hash computed over all content.
-    /// Used to detect tampering or corruption of persisted snapshots.
-    /// </summary>
     public string IntegrityHash { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Version of the snapshot schema. Used for forward/backward compatibility
-    /// when the snapshot structure evolves in future phases.
-    /// </summary>
     public int SchemaVersion { get; init; } = 1;
 
     // =========================================================================
-    // Factory Methods
+    // Constructor
     // =========================================================================
 
-    /// <summary>
-    /// Private constructor to enforce creation through factory/builder patterns.
-    /// Use ISnapshotMapper.ToSnapshot() to create instances.
-    /// </summary>
     public ScanSnapshot()
     {
         SnapshotId = Guid.NewGuid();
@@ -157,10 +107,6 @@ public sealed class ScanSnapshot
 
     public IEnumerable<FindingSnapshot> GetFindingsBySeverity(CheckSeverity severity)
         => Findings.Where(f => f.Severity == severity);
-
-    // =========================================================================
-    // Display Helpers
-    // =========================================================================
 
     public override string ToString()
         => $"Snapshot {SnapshotId:N} | {Hostname} | {CompletedAtUtc:yyyy-MM-dd HH:mm} | {Grade} ({ComplianceScore}%)";

@@ -8,7 +8,11 @@ using ISCM.Application.Services.Agreement;
 using ISCM.Application.Validators;
 using ISCM.Domain.Enums;
 using ISCM.Domain.ValueObjects;
+using ISCM.Infrastructure.Persistence.Mappers;
+using ISCM.Infrastructure.Persistence.Repositories;
+using ISCM.Infrastructure.Persistence;
 using ISCM.Infrastructure.Reporting;
+using Microsoft.EntityFrameworkCore;
 using ISCM.Infrastructure.Scanning;
 using ISCM.Infrastructure.Scanning.Checks;
 using ISCM.Infrastructure.Scanning.Collectors;
@@ -44,6 +48,7 @@ builder.Services.AddTransient<IHardeningCheck, UserRightsCheck>();
 builder.Services.AddTransient<IHardeningCheck, LlmnrNetbiosCheck>();
 builder.Services.AddTransient<IHardeningCheck, CredentialGuardCheck>();
 builder.Services.AddTransient<IHardeningCheck, EventLogSizeCheck>();
+
 
 // Phase 2.5: ثبت IControlEvaluator (Phase 7.6: با constructor typed evaluator)
 builder.Services.AddSingleton<IControlEvaluator>(sp =>
@@ -179,7 +184,39 @@ builder.Services.AddScoped<ScanHistoryService>();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<ReportGateService>();
 
+
+// ═══════════════════════════════════════════════════════════
+// Phase 13.5: Persistence & Snapshot Infrastructure
+// ═══════════════════════════════════════════════════════════
+
+// Storage path provider (Singleton - paths are constant per app lifetime)
+builder.Services.AddSingleton<ISCM.Application.Interfaces.IStoragePathProvider, ISCM.Infrastructure.Persistence.SqliteStoragePathProvider>();
+
+// EF Core DbContext (Scoped - one context per HTTP request/operation)
+builder.Services.AddDbContext<ISCM.Infrastructure.Persistence.DefenDoorDbContext>((sp, options) =>
+{
+    var pathProvider = sp.GetRequiredService<ISCM.Application.Interfaces.IStoragePathProvider>();
+    var dbPath = pathProvider.GetDatabasePath();
+    options.UseSqlite($"Data Source={dbPath}");
+}, ServiceLifetime.Scoped);
+
+// Snapshot Mapper (Singleton - stateless transformation)
+builder.Services.AddSingleton<ISCM.Application.Interfaces.ISnapshotMapper, ISCM.Infrastructure.Persistence.Mappers.ScanResultToSnapshotMapper>();
+
+// Snapshot Repository (Scoped - uses DbContext)
+builder.Services.AddScoped<ISCM.Application.Interfaces.ISnapshotRepository, ISCM.Infrastructure.Persistence.Repositories.SqliteSnapshotRepository>();
+
 var app = builder.Build();
+
+// ═══════════════════════════════════════════════════════════
+// Phase 13.5: Ensure Database Created on Startup
+// (Moved AFTER builder.Build() to avoid ASP0000 warning)
+// ═══════════════════════════════════════════════════════════
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ISCM.Infrastructure.Persistence.DefenDoorDbContext>();
+    dbContext.Database.EnsureCreated();
+}
 
 // Validate Catalog Integrity at Startup
 using (var scope = app.Services.CreateScope())
@@ -189,7 +226,6 @@ using (var scope = app.Services.CreateScope())
     Console.WriteLine($"[INFO] Catalog Integrity Validation: {(result.IsValid ? "PASSED" : $"FAILED ({result.CriticalIssues} critical, {result.HighIssues} high issues)")}");
     Console.WriteLine("[INFO] Catalog Integrity Validation: PASSED");
 }
-
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -204,3 +240,16 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+
+
+
+
+
+
+
+
+
+
+
+
