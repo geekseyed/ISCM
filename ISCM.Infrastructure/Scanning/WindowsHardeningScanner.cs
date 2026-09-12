@@ -15,6 +15,7 @@ namespace ISCM.Infrastructure.Scanning;
 ///
 /// Phase 11.5: Simplified to collector-only pattern.
 /// Phase 12.11: Parallel execution via Parallel.ForEachAsync with configurable concurrency.
+/// Phase 13.1: ScanId unified between ScanContext and ScanResult.
 /// </summary>
 public class WindowsHardeningScanner : IScanService
 {
@@ -29,7 +30,7 @@ public class WindowsHardeningScanner : IScanService
     private readonly INormalizationService _normalizationService;
     private readonly VerificationPathService _verificationPathService;
     private readonly SubControlAggregationService _aggregationService;
-    private readonly IScannerConfigurationService _configService; // Phase 12.11
+    private readonly IScannerConfigurationService _configService;
 
     public WindowsHardeningScanner(
         WindowsSystemInfoCollector systemInfoCollector,
@@ -43,7 +44,7 @@ public class WindowsHardeningScanner : IScanService
         INormalizationService normalizationService,
         VerificationPathService verificationPathService,
         SubControlAggregationService aggregationService,
-        IScannerConfigurationService configService) // Phase 12.11
+        IScannerConfigurationService configService)
     {
         _systemInfoCollector = systemInfoCollector ?? throw new ArgumentNullException(nameof(systemInfoCollector));
         _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -56,7 +57,7 @@ public class WindowsHardeningScanner : IScanService
         _normalizationService = normalizationService ?? throw new ArgumentNullException(nameof(normalizationService));
         _verificationPathService = verificationPathService ?? throw new ArgumentNullException(nameof(verificationPathService));
         _aggregationService = aggregationService ?? throw new ArgumentNullException(nameof(aggregationService));
-        _configService = configService ?? throw new ArgumentNullException(nameof(configService)); // Phase 12.11
+        _configService = configService ?? throw new ArgumentNullException(nameof(configService));
     }
 
     public int TotalCheckCount => _checks.Count();
@@ -74,10 +75,25 @@ public class WindowsHardeningScanner : IScanService
 
         // Phase 4: Create new ScanContext with new ScanId
         var scanContext = new ScanContext(hostname, mode);
-        var scanResult = new ScanResult(hostname, ipAddress, macAddress, osVersion, osBuild, mode, hostname)
+
+        // ═══════════════════════════════════════════════════════════
+        // Phase 13.1 FIX: Inject scanContext.ScanId into ScanResult
+        // to guarantee traceability across all Evidence items.
+        // Previously ScanResult generated its own ScanId, causing
+        // ScanResult.ScanId != Evidence.ScanId.
+        // ═══════════════════════════════════════════════════════════
+        var scanResult = new ScanResult(
+            hostname,
+            ipAddress,
+            macAddress,
+            osVersion,
+            osBuild,
+            mode,
+            targetId: hostname,
+            scannerVersion: scanContext.ScannerVersion,
+            scanId: scanContext.ScanId)  // ← Phase 13.1: Unified ScanId
         {
-            BaselineId = defaultBaseline.BaselineId,
-            ScannerVersion = scanContext.ScannerVersion
+            BaselineId = defaultBaseline.BaselineId
         };
 
         progress?.Report($"[INFO] Scan started: ScanId={scanContext.ScanId}");
@@ -85,11 +101,11 @@ public class WindowsHardeningScanner : IScanService
         progress?.Report("[INFO] Collector: RegistryReader - reading HKLM policies...");
         await Task.Delay(100);
 
-        // ═══════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════
         // Phase 12.11: Parallel Execution
-        // ═══════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════
         var maxParallelism = _configService.GetMaxDegreeOfParallelism();
-        var lockObj = new object(); // Thread-safe lock for shared state (scanResult + progress)
+        var lockObj = new object();
         progress?.Report($"[INFO] Parallel scan: MaxDegreeOfParallelism = {maxParallelism}");
 
         var parallelOptions = new ParallelOptions
@@ -99,12 +115,10 @@ public class WindowsHardeningScanner : IScanService
 
         await Parallel.ForEachAsync(_checks, parallelOptions, async (check, cancellationToken) =>
         {
-            // Small delay for UI responsiveness and to avoid resource contention
             await Task.Delay(50, cancellationToken);
 
             try
             {
-                // Phase 8.4: Get ControlDefinition for path capability validation
                 var controlDefinition = ControlCatalog.GetByCheckId(check.CheckId);
                 if (controlDefinition == null)
                 {
@@ -120,15 +134,12 @@ public class WindowsHardeningScanner : IScanService
                     };
                 }
 
-                // All checks are now collectors
                 var collector = (IEvidenceCollector)check;
                 var subControlResults = await RunCollectorOnlyPath(
                     collector, controlDefinition, scanContext, hostname, progress);
 
-                // Produce Finding
                 var finding = _controlEvaluator.EvaluateFromSubControls(controlDefinition, subControlResults, check.CheckId);
 
-                // Thread-safe state update (scanResult and progress are shared)
                 lock (lockObj)
                 {
                     scanResult.AddFinding(finding);
@@ -157,7 +168,6 @@ public class WindowsHardeningScanner : IScanService
                     recommendation: "Investigate the check execution error."
                 );
 
-                // Thread-safe state update
                 lock (lockObj)
                 {
                     scanResult.AddFinding(errorFinding);
@@ -194,7 +204,6 @@ public class WindowsHardeningScanner : IScanService
     {
         var checkId = collector.CollectorId;
 
-        // Step 1: Collect evidence (check does NOT evaluate)
         var evidenceList = await collector.CollectEvidenceAsync();
 
         if (evidenceList == null || evidenceList.Count == 0)
@@ -203,7 +212,6 @@ public class WindowsHardeningScanner : IScanService
             return new List<SubControlResult>();
         }
 
-        // Step 2-5: Group by SubControlId and build SubControlResults
         var subControlResults = evidenceList
             .GroupBy(e => e.SubControlId ?? checkId)
             .Select(g =>
@@ -230,10 +238,8 @@ public class WindowsHardeningScanner : IScanService
                     if (string.IsNullOrEmpty(evidence.MachineIdentity))
                         evidence.MachineIdentity = hostname;
 
-                    // Phase 4: Assign fingerprint and validate
                     _fingerprintService.AssignFingerprint(evidence);
 
-                    // Phase 4: Apply freshness policy
                     if (_freshnessPolicy.CanUseCachedEvidence(scanContext, evidence))
                     {
                         evidence.LifecycleState = EvidenceLifecycleState.Cached;
@@ -244,7 +250,6 @@ public class WindowsHardeningScanner : IScanService
                     }
                 }
 
-                // Validate path capability
                 if (subControlDef != null)
                 {
                     var capabilityReport = _verificationPathService.ValidatePathCapability(subControlDef);
@@ -256,7 +261,6 @@ public class WindowsHardeningScanner : IScanService
                     }
                 }
 
-                // Step 5: Evaluate using typed pipeline with catalog metadata
                 if (subControlDef != null && !string.IsNullOrWhiteSpace(subControlDef.ExpectedValue))
                 {
                     try
@@ -276,7 +280,6 @@ public class WindowsHardeningScanner : IScanService
                 }
                 else
                 {
-                    // No catalog metadata - fallback to Unknown
                     subResult.Status = CheckStatus.Unknown;
                 }
 
@@ -292,10 +295,8 @@ public class WindowsHardeningScanner : IScanService
         var check = _checks.FirstOrDefault(c => c.CheckId == checkId)
             ?? throw new InvalidOperationException($"Check '{checkId}' not found.");
 
-        // Phase 4: Invalidate old evidence for this check
         _invalidationService.InvalidateForRemediation("rescan", checkId);
 
-        // Phase 4: Create new ScanContext for rescan
         var scanContext = new ScanContext(checkId, ScanMode.Rescan);
 
         var controlDefinition = ControlCatalog.GetByCheckId(checkId);
@@ -327,7 +328,6 @@ public class WindowsHardeningScanner : IScanService
 
         Console.WriteLine($"[INFO] Rescan requested for SubControl {subControlId} within {checkId}");
 
-        // Phase 4: Invalidate old evidence for this subcontrol
         _invalidationService.InvalidateForRemediation("rescan", subControlId);
 
         return await RescanCheckAsync(checkId);

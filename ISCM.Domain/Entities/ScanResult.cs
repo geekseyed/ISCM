@@ -23,9 +23,24 @@ public class ScanResult : BaseEntity
 
     public ScanResult() { }
 
-    public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode)
+    /// <summary>
+    /// Phase 13.1 FIX: Added optional scanId parameter to ensure ScanId consistency
+    /// with ScanContext. If not provided, generates a new one (backward compatibility).
+    /// </summary>
+    public ScanResult(
+        string hostname,
+        string ipAddress,
+        string macAddress,
+        string osVersion,
+        string osBuild,
+        ScanMode mode,
+        string? scanId = null)
     {
-        ScanId = Guid.NewGuid().ToString("N");
+        // ═══════════════════════════════════════════════════════════
+        // Phase 13.1: ScanId must be injected from ScanContext to
+        // guarantee traceability. Fallback for backward compatibility.
+        // ═══════════════════════════════════════════════════════════
+        ScanId = scanId ?? Guid.NewGuid().ToString("N");
         TargetId = hostname;
         Hostname = hostname;
         IpAddress = ipAddress;
@@ -37,9 +52,26 @@ public class ScanResult : BaseEntity
         StartedAtUtc = DateTime.UtcNow;
     }
 
-    public ScanResult(string hostname, string ipAddress, string macAddress, string osVersion, string osBuild, ScanMode mode, string targetId, string scannerVersion = "1.0.0")
+    /// <summary>
+    /// Phase 13.1 FIX: Added optional scanId parameter to ensure ScanId consistency
+    /// with ScanContext. If not provided, generates a new one (backward compatibility).
+    /// </summary>
+    public ScanResult(
+        string hostname,
+        string ipAddress,
+        string macAddress,
+        string osVersion,
+        string osBuild,
+        ScanMode mode,
+        string targetId,
+        string scannerVersion = "1.0.0",
+        string? scanId = null)
     {
-        ScanId = Guid.NewGuid().ToString("N");
+        // ═══════════════════════════════════════════════════════════
+        // Phase 13.1: ScanId must be injected from ScanContext to
+        // guarantee traceability. Fallback for backward compatibility.
+        // ═══════════════════════════════════════════════════════════
+        ScanId = scanId ?? Guid.NewGuid().ToString("N");
         TargetId = targetId;
         Hostname = hostname;
         IpAddress = ipAddress;
