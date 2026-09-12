@@ -1,25 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net8.0-Windows</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\ISCM.Application\ISCM.Application.csproj" />
+		<ProjectReference Include="..\ISCM.Domain\ISCM.Domain.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<Folder Include="Repositories\" />
+		<Folder Include="Storage\" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- Phase 13.3: EF Core SQLite for Persistence Layer -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
 
-  <PropertyGroup>
-    <TargetFramework>net8.0-Windows</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\ISCM.Application\ISCM.Application.csproj" />
-    <ProjectReference Include="..\ISCM.Domain\ISCM.Domain.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Repositories\" />
-    <Folder Include="Storage\" />
-    <Folder Include="Persistence\" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="10.0.11" />
-    <PackageReference Include="System.Management" Version="10.0.11" />
-  </ItemGroup>
-
+		<PackageReference Include="System.DirectoryServices.AccountManagement" Version="10.0.11" />
+		<PackageReference Include="System.Management" Version="10.0.11" />
+	</ItemGroup>
 </Project>
