@@ -18,6 +18,7 @@ using ISCM.Infrastructure.Scanning.Checks;
 using ISCM.Infrastructure.Scanning.Collectors;
 using ISCM.Web.Components;
 using ISCM.Web.Services;
+using ISCM.Application.Snapshots;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -206,6 +207,7 @@ builder.Services.AddScoped<ReportGateService>();
 // Storage path provider (Singleton - paths are constant per app lifetime)
 builder.Services.AddSingleton<ISCM.Application.Interfaces.IStoragePathProvider, ISCM.Infrastructure.Persistence.SqliteStoragePathProvider>();
 
+
 // EF Core DbContext (Scoped - one context per HTTP request/operation)
 builder.Services.AddDbContext<ISCM.Infrastructure.Persistence.DefenDoorDbContext>((sp, options) =>
 {
@@ -219,6 +221,9 @@ builder.Services.AddSingleton<ISCM.Application.Interfaces.ISnapshotMapper, ISCM.
 
 // Snapshot Repository (Scoped - uses DbContext)
 builder.Services.AddScoped<ISCM.Application.Interfaces.ISnapshotRepository, ISCM.Infrastructure.Persistence.Repositories.SqliteSnapshotRepository>();
+builder.Services.AddSingleton<ISnapshotDiffEngine, SnapshotDiffEngine>();
+
+// Snapshot Diff Engine (Singleton - stateless comparison logic)
 
 var app = builder.Build();
 
