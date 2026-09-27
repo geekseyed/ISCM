@@ -23,7 +23,7 @@ namespace ISCM.BugFinder.Core.Contracts;
 ///       SymbolKey          &lt;K&gt;|&lt;Assembly&gt;|&lt;FQN&gt;&lt;(params)&gt;  (BF-13.4 StableKey)
 ///       TargetKey          SymbolKey | FILE|&lt;path&gt;           (BF-14.1 grouping key)
 ///       LocationId         LOC|&lt;path&gt;|L&lt;line?&gt;
-///   JSON converters for these types land with H-01.3 (schema versioning).
+///   JSON converters for these types land with H-01.7 (identifier adoption).
 /// </summary>
 public enum TargetKeyKind { Symbol, File, Other }
 

@@ -13,7 +13,7 @@ namespace ISCM.BugFinder.Core.Contracts;
 /// </summary>
 public sealed class BaselineManifest
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = CoreSchema.CurrentVersion;   // H-01.3: Single Truth
 
     // ---- H-01.3 seed: persisted contract versioning ----
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
