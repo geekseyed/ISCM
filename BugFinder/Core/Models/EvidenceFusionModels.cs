@@ -61,4 +61,9 @@ public class EvidenceFusionReport
     public int TotalTargets { get; set; }
     public int FullyCorroboratedCount { get; set; }  // targets backed by >= 2 distinct sources
     public DateTime GeneratedAtUtc { get; set; } = DateTime.UtcNow;
+    /// <summary>
+    /// H-01.7: typed-join diagnostics (case-variant keys, untargeted
+    /// evidence). Empty list = clean join surface.
+    /// </summary>
+    public IReadOnlyList<string> JoinDiagnostics { get; set; } = Array.Empty<string>();
 }

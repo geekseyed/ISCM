@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using ISCM.BugFinder.Core.Contracts;
 using ISCM.BugFinder.Core.Models;
 
 namespace ISCM.BugFinder.Core.Services;
@@ -10,6 +11,11 @@ namespace ISCM.BugFinder.Core.Services;
 /// Stage 1 Collect + Stage 2 Normalize → Normalize()
 /// Stage 3 Weight + Stage 4 Fuse + Stage 5 Package → Fuse()
 /// Adapters: FromRankedResult (BF-12.10), FromCorrelationReport (BF-13.8).
+/// H-01.7: group keys resolve through the typed join-key normalization
+/// layer (JoinKeyNormalization) so Fusion, Consistency and Conflict
+/// agree on group membership for padded and separator-variant keys,
+/// and the report carries typed-join diagnostics (case-variant keys,
+/// untargeted evidence).
 /// Principles: no fabrication (evidence-less candidates contribute nothing);
 /// uncorrelated items skipped (UNKNOWN), never treated as failure.
 /// </summary>
@@ -34,9 +40,9 @@ public class EvidenceFusionService
             TargetSymbolKey = NullIfEmpty(input.TargetSymbolKey),
             TargetFilePath = NullIfEmpty(input.TargetFilePath),
             TargetLineNumber = input.TargetLineNumber,
-            SourceArtifact = NullIfEmpty(input.SourceArtifact),
-            Description = NullIfEmpty(input.Description),
             ObservedAtUtc = input.ObservedAtUtc,
+            SourceArtifact = NullIfEmpty(input.SourceArtifact),
+            Description = NullIfEmpty(input.Description)
         }).ToList();
     }
 
@@ -74,6 +80,15 @@ public class EvidenceFusionService
                 Sources = sources
             });
         }
+
+        // H-01.7 — typed join index over the resolved group keys: surfaces
+        // case-variant and untargeted join hazards without changing grouping.
+        var diagnostics = new List<string>(
+            TypedJoinIndex.Build(report.Items.Select(i => i.TargetKey)).Diagnostics);
+        var untargeted = report.Items.Count(i => i.TargetKey == "FILE|unknown");
+        if (untargeted > 0)
+            diagnostics.Add($"{untargeted} fused target(s) carry neither a symbol key nor a file path (FILE|unknown)");
+        report.JoinDiagnostics = diagnostics;
 
         return Finalize(report);
     }
@@ -142,11 +157,13 @@ public class EvidenceFusionService
     }
 
     // Symbol key wins; otherwise group by file (evidence without any target
-    // still lands in an explicit UNTARGETED group — nothing is dropped)
+    // still lands in an explicit UNTARGETED group — nothing is dropped).
+    // H-01.7.1/1.7.2: resolution goes through the typed normalization layer
+    // so Fusion, Consistency and Conflict share ONE group-membership truth
+    // (pre-H-01.7 hazard: Fusion normalized while the other two trusted
+    // raw strings - the same event could split differently per service).
     public static string ResolveGroupKey(FusionEvidenceInput input) =>
-        input.TargetSymbolKey is not null
-            ? input.TargetSymbolKey
-            : $"FILE|{input.TargetFilePath ?? "unknown"}";
+        JoinKeyNormalization.ResolveGroupKey(input.TargetSymbolKey, input.TargetFilePath);
 
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
