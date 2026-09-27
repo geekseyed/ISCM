@@ -49,7 +49,7 @@ public class FailureLocation
 
 /// <summary>Stage 6: one suspicious location (NOT a root cause — see disclaimer).</summary>
 
-
+/// <summary>Stage 6: one suspicious location (NOT a root cause — see disclaimer).</summary>
 /// <summary>Stage 7: the assembled investigation chain — input for BF-14.4.</summary>
 public class InvestigationChainReport
 {
