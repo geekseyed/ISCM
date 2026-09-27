@@ -6,14 +6,15 @@ using ISCM.BugFinder.Core.Models;
 namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
-/// BF-14.9: Strict No-Repair Enforcement Service
+/// H-01: Strict No-Repair Enforcement Service
 /// Stage 1: No source modification - file policy (reads allowed,
 ///          writes/deletes/patch-apply blocked) + reflection audit of
 ///          the Core assembly for repair-capable API vocabulary
 /// Stages 2-3: No auto-fix / no remediation - operation gate over the
 ///          canonical allowed (16) and forbidden (10) operation sets
-/// Stage 4: No unsupported root cause - claim validator; every
-///          rejection preserves uncertainty explicitly
+/// Stage 4: Claim validation - H-01.5.4 contract: the Core accepts
+///          Observation and CandidateSuspicion ONLY; root-cause claims
+///          are NEVER accepted, every rejection preserves uncertainty
 /// Stage 5: Evidence-only conclusion - evidence + candidates +
 ///          limitations, structurally free of repair payload
 /// </summary>
@@ -24,7 +25,13 @@ public class NoRepairEnforcementService
         "It never modifies source, generates or applies patches, executes remediation, " +
         "or declares unsupported root causes.";
 
+    // H-01.5.4: RETAINED FOR HISTORY ONLY - the conditional RootCause
+    // acceptance path was removed; these constants are no longer used
+    // by any acceptance logic.
+    [Obsolete("H-01.5.4: RootCause is never accepted by the Core; these thresholds are historical.", true)]
     public const double RootCauseMinConfidence = 0.8;
+
+    [Obsolete("H-01.5.4: RootCause is never accepted by the Core; these thresholds are historical.", true)]
     public const int RootCauseMinDistinctSources = 3;
 
     private static readonly HashSet<CoreOperation> ForbiddenOperations = new()
@@ -71,7 +78,7 @@ public class NoRepairEnforcementService
         Reason = $"{action} on '{path}' is blocked: the Core is read-only. {BoundaryReference}"
     };
 
-    // Stage 4 — claim validation
+    // Stage 4 — claim validation (H-01.5 contract)
     public ClaimVerdict ValidateClaim(EvidenceClaimRequest request)
     {
         if (request is null) throw new ArgumentNullException(nameof(request));
@@ -89,18 +96,16 @@ public class NoRepairEnforcementService
                     : Reject(request, "candidate suspicion without any evidence signal is rejected; uncertainty preserved");
 
             case CoreClaimType.RootCause:
-                var supported = request.ConfidenceScore >= RootCauseMinConfidence
-                                && request.DistinctSourceCount >= RootCauseMinDistinctSources
-                                && request.UnresolvedHighConflicts == 0;
-                return supported
-                    ? Accept(request,
-                        $"root-cause claim conditionally accepted (confidence >= {RootCauseMinConfidence}, " +
-                        $"{RootCauseMinDistinctSources}+ distinct sources, no unresolved high conflicts); " +
-                        "requires human confirmation - the Core executes no repair")
-                    : Reject(request,
-                        $"unsupported root cause: requires confidence >= {RootCauseMinConfidence}, " +
-                        $">= {RootCauseMinDistinctSources} distinct sources, and no unresolved high conflicts; " +
-                        "uncertainty preserved");
+                // H-01.5.4: the Core NEVER accepts root-cause claims - the
+                // conditional-acceptance path (>=0.8 confidence, >=3 sources)
+                // was removed (audit KBF-14-009). Root-cause interpretation
+                // belongs to the external advisory layer (H-01.5.6), never
+                // to the Core. Uncertainty is always preserved.
+                return Reject(request,
+                    "root-cause claims are never accepted by the Core (H-01.5.4): " +
+                    "the Core emits Observation, CandidateSuspicion and " +
+                    "EvidenceOnlyConclusion only. Root-cause interpretation belongs " +
+                    "to the external advisory layer; uncertainty preserved");
 
             default:
                 return Reject(request, "unknown claim type");
@@ -129,7 +134,8 @@ public class NoRepairEnforcementService
         if (report.Locations.Count > 0)
             conclusion.EvidenceItems.Add($"failure localized to {report.Locations.Count} location(s)");
 
-        // Atomic 2 — report candidates (joined with confidence)
+        // Atomic 2 — report candidates (joined with confidence; H-01.5.5:
+        // no SuggestedAction / RootCause payload may enter conclusions)
         var confidenceByTarget = (report.Confidence?.Targets ?? new List<TargetConfidence>())
             .ToDictionary(t => t.TargetKey, t => t);
         foreach (var suspicious in report.SuspiciousLocations)

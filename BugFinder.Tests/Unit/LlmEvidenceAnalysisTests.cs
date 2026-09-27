@@ -160,8 +160,10 @@ public class LlmEvidenceAnalysisTests
 
         var analysis = new LlmEvidenceAnalysisService().Analyze("Overclaim", report, new ScriptedLlmAnalyzer(raw));
 
+        // "unsupported root cause" conditional language is gone):
         analysis.RejectedClaims.Should().Be(1);
-        analysis.Verdicts[0].Reason.Should().Contain("unsupported root cause");
+        analysis.Verdicts[0].Reason.Should().Contain("never accepted by the Core");
+        analysis.Verdicts[0].Reason.Should().Contain("H-01.5.4");
         analysis.Verdicts[0].UncertaintyPreserved.Should().BeTrue();
     }
 

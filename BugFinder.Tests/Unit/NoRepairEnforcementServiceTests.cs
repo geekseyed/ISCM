@@ -77,7 +77,7 @@ public class NoRepairEnforcementServiceTests
         _service.PermitFileWrite("src/Check.cs").Reason.Should().Contain("read-only");
     }
 
-    // Stage 4 — claims
+    // H-01.5 claim contract — Observation always accepted
     [Fact]
     public void Claim_Observation_AcceptedWithoutEvidence()
     {
@@ -90,6 +90,7 @@ public class NoRepairEnforcementServiceTests
         verdict.Acceptance.Should().Be(ClaimAcceptance.Accepted);
     }
 
+    // H-01.5 — suspicion without evidence rejected
     [Fact]
     public void Claim_CandidateSuspicion_WithoutEvidence_Rejected()
     {
@@ -119,8 +120,9 @@ public class NoRepairEnforcementServiceTests
         verdict.Acceptance.Should().Be(ClaimAcceptance.Accepted);
     }
 
+    // H-01.5.4 — RootCause is NEVER accepted by the Core (weak evidence case)
     [Fact]
-    public void Claim_RootCause_Unsupported_RejectedWithUncertaintyPreserved()
+    public void Claim_RootCause_WeakEvidence_RejectedWithUncertaintyPreserved()
     {
         var verdict = _service.ValidateClaim(new EvidenceClaimRequest
         {
@@ -134,11 +136,13 @@ public class NoRepairEnforcementServiceTests
 
         verdict.Acceptance.Should().Be(ClaimAcceptance.Rejected);
         verdict.UncertaintyPreserved.Should().BeTrue();
-        verdict.Reason.Should().Contain("unsupported root cause");
+        verdict.Reason.Should().Contain("never accepted by the Core");
     }
 
+    // H-01.5.4 — even MAXIMAL evidence is rejected (the KBF-14-009 fix:
+    // the old conditional-acceptance path is gone)
     [Fact]
-    public void Claim_RootCause_StrongNoConflicts_ConditionallyAccepted()
+    public void Claim_RootCause_StrongEvidence_StillRejected()
     {
         var verdict = _service.ValidateClaim(new EvidenceClaimRequest
         {
@@ -150,8 +154,10 @@ public class NoRepairEnforcementServiceTests
             UnresolvedHighConflicts = 0
         });
 
-        verdict.Acceptance.Should().Be(ClaimAcceptance.Accepted);
-        verdict.Reason.Should().Contain("human confirmation");
+        verdict.Acceptance.Should().Be(ClaimAcceptance.Rejected);
+        verdict.UncertaintyPreserved.Should().BeTrue();
+        verdict.Reason.Should().Contain("never accepted by the Core");
+        verdict.Reason.Should().Contain("H-01.5.4");
     }
 
     [Fact]
@@ -168,6 +174,8 @@ public class NoRepairEnforcementServiceTests
         });
 
         verdict.Acceptance.Should().Be(ClaimAcceptance.Rejected);
+        verdict.UncertaintyPreserved.Should().BeTrue();
+        verdict.Reason.Should().Contain("never accepted by the Core");
     }
 
     // Stage 5 — evidence-only conclusion from a real investigation

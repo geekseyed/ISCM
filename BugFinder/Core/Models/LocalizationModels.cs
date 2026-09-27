@@ -80,6 +80,8 @@ public class RegressionLocalizationReport
 /// <summary>
 /// Represents a single hypothesis for the root cause (one per suspect file).
 /// Matches the structure used in RegressionLocalizationService.
+/// H-01.5.5: SuggestedAction removed - advisory actions belong to the
+/// external advisory layer (H-01.5.6); the Core is evidence-only.
 /// </summary>
 public class RootCauseHypothesis
 {
@@ -90,11 +92,16 @@ public class RootCauseHypothesis
 
     public double ConfidenceScore { get; set; }
     public string Explanation { get; set; } = string.Empty;
-    public string SuggestedAction { get; set; } = string.Empty;
+
+    // H-01.5.5: SuggestedAction removed from Core conclusions
+    // (audit KBF-00-004). Advisory actions belong to the external
+    // advisory layer (H-01.5.6) - the Core is evidence-only.
 }
 
 /// <summary>
 /// Represents the single most likely root cause of the regression (Summary).
+/// H-01.5.5: SuggestedActions removed - advisory actions belong to the
+/// external advisory layer (H-01.5.6); the Core is evidence-only.
 /// </summary>
 public class LocalizedRootCause
 {
@@ -108,7 +115,10 @@ public class LocalizedRootCause
 
     public double Confidence { get; set; }
     public string Explanation { get; set; } = string.Empty;
-    public List<string> SuggestedActions { get; set; } = new();
+
+    // H-01.5.5: SuggestedActions removed from Core conclusions
+    // (audit KBF-00-004). Advisory actions belong to the external
+    // advisory layer (H-01.5.6) - the Core is evidence-only.
 }
 
 public enum LocalizationStrategy

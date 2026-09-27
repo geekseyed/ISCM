@@ -8,7 +8,11 @@ namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
 /// BF-10.8: Regression Localization Service
-/// Orchestrates all previous services to produce a final root-cause report.
+/// Orchestrates the previous services to produce a suspicion-ranked
+/// regression candidate report.
+/// H-01.5.5: no SuggestedAction payloads are produced by the Core;
+/// candidate language replaces root-cause language (KBF-10-007 seed -
+/// full rename lands in H-05.8).
 /// </summary>
 public class RegressionLocalizationService
 {
@@ -25,7 +29,9 @@ public class RegressionLocalizationService
 
     /// <summary>
     /// BF-10.8 - Main Entry Point:
-    /// Performs end-to-end regression analysis and returns a actionable report.
+    /// Performs end-to-end regression analysis and returns an
+    /// evidence-ranked candidate report (H-01.5.5: not "actionable",
+    /// not "root cause" - suspicion-only).
     /// </summary>
     public async Task<RegressionLocalizationReport> LocalizeRegressionAsync(
         List<string> failingTestNames,
@@ -95,20 +101,22 @@ public class RegressionLocalizationService
 
                 if (suspect.IsTestFile)
                 {
-                    sb.Append("Note: This is a test file; the root cause may be in the logic it tests.");
+                    sb.Append("Note: This is a test file; the defect may be in the logic it tests.");
                 }
                 else
                 {
-                    sb.Append("High probability this file contains the regression source.");
+                    // H-01.5.5 (audit KBF-10-007): root-cause/probability language
+                    // removed - suspicion-only, evidence-ranked candidate wording.
+                    sb.Append("Suspicion-only candidate (evidence-ranked, H-01.5.5): this file is a regression CANDIDATE, not a confirmed root cause.");
                 }
 
                 hypothesis.Explanation = sb.ToString();
-                hypothesis.SuggestedAction = $"Review changes in '{suspect.FilePath}', specifically around lines: {GetChangedLines(fileDiff)}";
+                // H-01.5.5: SuggestedAction no longer produced by the Core.
             }
             else
             {
                 hypothesis.Explanation = $"File '{suspect.FilePath}' was identified as highly changed but detailed diff extraction failed.";
-                hypothesis.SuggestedAction = "Manually inspect the file history.";
+                // H-01.5.5: SuggestedAction no longer produced by the Core.
             }
 
             report.Hypotheses.Add(hypothesis);
