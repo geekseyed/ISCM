@@ -256,7 +256,7 @@ public class InvestigationReportServiceTests
         InvestigationReport.DisclaimerSuspiciousness.Should().Contain("Suspiciousness != Root Cause");
         InvestigationReport.DisclaimerConfidence.Should().Contain("Confidence != Root Cause");
         InvestigationReport.DisclaimerUncertainty.Should().Contain("Missing Evidence != Failure");
-        InvestigationReport.CoreBoundary.Should().Contain("CORE STOPS HERE");
-        InvestigationReport.CoreBoundary.Should().Contain("No patch");
+        InvestigationReport.CoreBoundaryText.Should().Contain("CORE STOPS HERE");
+        InvestigationReport.CoreBoundaryText.Should().Contain("No patch");
     }
 }

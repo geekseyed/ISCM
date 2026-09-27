@@ -86,8 +86,11 @@ public class InvestigationReport
     public const string DisclaimerUncertainty = "Missing Evidence != Failure; Unknown != Failure (BF-14.7).";
 
     /// <summary>The architectural stop marker: Core is read-only, ends here.</summary>
-    public const string CoreBoundary =
-        "CORE STOPS HERE: this report is the terminal output of the Bug Finder Core. " +
-        "No patch, no fix, no auto-repair is produced by the Core. " +
-        "Optional remediation belongs to a separate extension outside BF-00..BF-15.";
+    public const string CoreBoundaryText =
+    "CORE STOPS HERE: this report is the terminal output of the Bug Finder Core. " +
+    "No patch, no fix, no auto-repair is produced by the Core. " +
+    "Optional remediation belongs to a separate extension outside BF-00..BF-15.";
+
+    /// <summary>Serializable view (const strings are invisible to System.Text.Json - 15.7 lesson).</summary>
+    public string CoreBoundary => CoreBoundaryText;
 }

@@ -144,7 +144,7 @@ public class NoRepairEnforcementService
         conclusion.Limitations.Add(InvestigationReport.DisclaimerSuspiciousness);
         conclusion.Limitations.Add(InvestigationReport.DisclaimerConfidence);
         conclusion.Limitations.Add(InvestigationReport.DisclaimerUncertainty);
-        conclusion.Limitations.Add(InvestigationReport.CoreBoundary);
+        conclusion.Limitations.Add(InvestigationReport.CoreBoundaryText);
         if (report.Uncertainty is not null)
             foreach (var t in report.Uncertainty.Targets.Where(t => t.MissingEvidence.Count > 0))
                 conclusion.Limitations.Add($"{t.TargetKey}: missing {t.MissingEvidence.Count} evidence dimension(s)");

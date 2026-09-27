@@ -189,7 +189,7 @@ public class NoRepairEnforcementServiceTests
         conclusion.RankedCandidates.Should().ContainSingle()
             .Which.Should().Contain("M|ISCM|Check.Evaluate()").And.Contain("VeryHigh");
         conclusion.Limitations.Should().HaveCount(4);   // 3 disclaimers + core boundary
-        conclusion.Limitations.Should().Contain(InvestigationReport.CoreBoundary);
+        conclusion.Limitations.Should().Contain(InvestigationReport.CoreBoundaryText);
         EvidenceOnlyConclusion.CarriesNoRepairPayload.Should().BeTrue();
     }
 
