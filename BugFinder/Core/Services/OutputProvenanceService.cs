@@ -59,11 +59,11 @@ public class OutputProvenanceService
     }
 
     private static void AppendStream(
-    List<OutputSegment> segments,
-    OutputStreamKind streamKind,
-    string? raw,
-    ref int lineCounter,
-    DateTimeOffset? observedAtUtc)
+     List<OutputSegment> segments,
+     OutputStreamKind streamKind,
+     string? raw,
+     ref int lineCounter,
+     DateTimeOffset? observedAtUtc)
     {
         // null stream = stream not captured (no segments, state still Observed)
         if (raw is null)
