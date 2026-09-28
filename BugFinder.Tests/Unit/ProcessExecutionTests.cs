@@ -76,7 +76,7 @@ public class ProcessExecutionTests
             input, new[] { "/c", "exit", "0" });
 
         result.Kind.Should().Be(ServiceResultKind.Success);
-        var evidence = result.Value;
+        var evidence = result.Value!;
 
         evidence.ExitCode.Should().Be(0);
         evidence.ProcessId.Should().NotBeNull();                 // 3.1.4
@@ -103,7 +103,7 @@ public class ProcessExecutionTests
         result.Kind.Should().Be(ServiceResultKind.Success);
 
         // THE assertion: 42 survives (pre-H-03.1 it was overwritten by 0)
-        result.Value.ExitCode.Should().Be(42);
+        result.Value!.ExitCode.Should().Be(42);
     }
 
     // KBF-01-007 — timestamps are OBSERVED (within sane bounds), not fabricated
@@ -119,7 +119,7 @@ public class ProcessExecutionTests
 
         var result = await _service.ExecuteRawAsync(input, new[] { "/c", "exit", "0" });
 
-        var evidence = result.Value;
+        var evidence = result.Value!;
         evidence.StartUtc!.Value.Should().BeOnOrAfter(before);
         evidence.EndUtc!.Value.Should().BeOnOrAfter(evidence.StartUtc.Value);
         evidence.Duration!.Value.Should().BeLessOrEqualTo(TimeSpan.FromSeconds(30));
@@ -139,7 +139,7 @@ public class ProcessExecutionTests
             input, new[] { "/c", "echo", "hello-bugfinder" });
 
         result.Kind.Should().Be(ServiceResultKind.Success);
-        result.Value.ExitCode.Should().Be(0);
+        result.Value!.ExitCode.Should().Be(0);
     }
 
     // Cancellation — unavailable, never a fake success
