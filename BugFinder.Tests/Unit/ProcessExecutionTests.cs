@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -85,6 +86,7 @@ public class ProcessExecutionTests
         evidence.EndUtc!.Value.Should().BeOnOrAfter(evidence.StartUtc!.Value);
         evidence.Duration.Should().NotBeNull();
         evidence.Executable.Should().Be("cmd.exe");
+        evidence.TerminatedByCancellation.Should().BeFalse();
     }
 
     // KBF-01-001 — THE fabrication fix: a REAL non-zero exit code survives
@@ -142,9 +144,13 @@ public class ProcessExecutionTests
         result.Value!.ExitCode.Should().Be(0);
     }
 
-    // Cancellation — unavailable, never a fake success
+    // ================================================================
+    // H-03.3 — cancellation & process lifetime
+    // ================================================================
+
+    // Stage 3.3.1 — cancel BEFORE launch: nothing starts, Unavailable
     [Fact]
-    public async Task Execute_CancelledImmediately_Unavailable()
+    public async Task Cancel_BeforeLaunch_Unavailable_NoProcessStarted()
     {
         var input = new ProcessLaunchInput
         {
@@ -155,10 +161,99 @@ public class ProcessExecutionTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();   // cancel BEFORE launch
 
-        var result = await _service.ExecuteRawAsync(input, new[] { "/c", "exit", "0" }, cts.Token);
+        var result = await _service.ExecuteRawAsync(
+            input, new[] { "/c", "exit", "0" }, cts.Token);
 
         result.Kind.Should().Be(ServiceResultKind.Unavailable);
         result.HasValue.Should().BeFalse();
+        result.Reasons.Should().Contain(r => r.Contains("not started"));
+    }
+
+    // Stages 3.3.2-3.3.4 — cancel MID-RUN: tree killed, evidence captured,
+    // returned as Partial (payload + gap reason)
+    [Fact]
+    public async Task Cancel_MidRun_PartialEvidenceWithTerminationMarker()
+    {
+        var input = new ProcessLaunchInput
+        {
+            WorkingDirectory = System.IO.Path.GetTempPath(),
+            Executable = "cmd.exe"
+        };
+
+        using var cts = new CancellationTokenSource();
+        var launchTask = _service.ExecuteRawAsync(
+            input, new[] { "/c", "ping", "127.0.0.1", "-n", "30" }, cts.Token);
+
+        await Task.Delay(500);   // let the process actually start
+        cts.Cancel();
+
+        var result = await launchTask;
+
+        result.Kind.Should().Be(ServiceResultKind.Partial);
+        result.HasValue.Should().BeTrue();
+
+        var evidence = result.Value!;
+        evidence.TerminatedByCancellation.Should().BeTrue();     // 3.3.4 marker
+        evidence.ProcessId.Should().NotBeNull();
+        evidence.StartUtc.Should().NotBeNull();
+        evidence.EndUtc.Should().NotBeNull();                    // OS-recorded kill time
+        evidence.EndUtc!.Value.Should().BeOnOrAfter(evidence.StartUtc!.Value);
+        result.Reasons.Should().Contain(r => r.Contains("cancelled before completion"));
+    }
+
+    // Stage 3.3.5 — no orphaned hosts: the captured PID is DEAD after return
+    [Fact]
+    public async Task Cancel_MidRun_NoOrphanedProcess()
+    {
+        var input = new ProcessLaunchInput
+        {
+            WorkingDirectory = System.IO.Path.GetTempPath(),
+            Executable = "cmd.exe"
+        };
+
+        using var cts = new CancellationTokenSource();
+        var launchTask = _service.ExecuteRawAsync(
+            input, new[] { "/c", "ping", "127.0.0.1", "-n", "30" }, cts.Token);
+
+        await Task.Delay(500);
+        cts.Cancel();
+
+        var result = await launchTask;
+        var pid = result.Value!.ProcessId!.Value;
+
+        // H-03.3.5 — poll briefly: the process must be gone (or HasExited)
+        var gone = false;
+        for (var attempt = 0; attempt < 20 && !gone; attempt++)
+        {
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                gone = p.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                gone = true;   // no such process = terminated
+            }
+            if (!gone) await Task.Delay(100);
+        }
+
+        gone.Should().BeTrue(
+            "cancelled child processes must be terminated, not orphaned (H-03.3.5)");
+    }
+
+    // Completed runs are NOT marked as terminated-by-cancellation
+    [Fact]
+    public async Task CompletedRun_NotMarkedAsTerminated()
+    {
+        var input = new ProcessLaunchInput
+        {
+            WorkingDirectory = System.IO.Path.GetTempPath(),
+            Executable = "cmd.exe"
+        };
+
+        var result = await _service.ExecuteRawAsync(input, new[] { "/c", "exit", "0" });
+
+        result.Value!.TerminatedByCancellation.Should().BeFalse();
     }
 
     // Contract violations fail fast (H-01.8 boundary: programmer error)

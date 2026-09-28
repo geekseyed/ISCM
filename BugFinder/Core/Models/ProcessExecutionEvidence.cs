@@ -14,6 +14,9 @@ namespace ISCM.BugFinder.Core.Models;
 ///     replaced by DateTime.UtcNow (KBF-01-007 fix; X-003).
 ///   - ProcessId captured from the live process (H-03.1.4).
 ///   - Configuration flows from the caller; the service invents nothing.
+///
+/// H-03.3.4: TerminatedByCancellation marks executions ended by an
+/// observed cancellation (the child tree was killed and reaped).
 /// </summary>
 public sealed class ProcessExecutionEvidence
 {
@@ -46,6 +49,9 @@ public sealed class ProcessExecutionEvidence
     public TimeSpan? Duration => StartUtc.HasValue && EndUtc.HasValue
         ? EndUtc.Value - StartUtc.Value
         : null;
+
+    /// <summary>H-03.3.4 — terminated by an observed cancellation (kill + reap).</summary>
+    public bool TerminatedByCancellation { get; init; }
 }
 
 /// <summary>H-03.1.1/3.1.2/3.1.3 — validated launch input.</summary>

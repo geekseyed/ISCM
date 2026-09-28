@@ -5,8 +5,8 @@ using ISCM.BugFinder.Core.Models;
 namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
-/// H-03.1: Process Execution Service — launches processes and captures
-/// launch/lifetime evidence WITHOUT interpreting them.
+/// H-03.1 (+H-03.3): Process Execution Service — launches processes and
+/// captures launch/lifetime/cancellation evidence WITHOUT interpreting it.
 ///
 /// FIXES AT THE SOURCE (vs the legacy TestExecutionService):
 ///   KBF-01-004  the dotnet test target is a MANDATORY input — the
@@ -18,18 +18,18 @@ namespace ISCM.BugFinder.Core.Services;
 ///               ExitTime), not DateTime.UtcNow.
 ///   KBF-10-001  arguments via ProcessStartInfo.ArgumentList — no raw
 ///               interpolation, no manual quoting.
-///   KBF-01-002  cancellation kills the child process and waits
-///               (child-process lifetime is owned here; H-03.3 deepens).
+///   KBF-01-002  cancellation kills the child tree and waits — no
+///               orphaned test hosts (deepened in H-03.3).
 ///
-/// TWO LAUNCH SHAPES:
-///   ExecuteAsync     - dotnet-test shaped (arguments built here)
-///   ExecuteRawAsync  - caller supplies the FULL argument list
-///                      (generic process runner; used by tests, probes
-///                      and future engine stages)
-///
-/// INPUT VALIDATION = FAIL-FAST ArgumentException (programmer error,
-/// H-01.8 boundary); RUNTIME problems (process won't start, cancelled,
-/// unexpected engine exception) = ServiceResult Unavailable/DiagnosticError.
+/// H-03.3 CANCELLATION CONTRACT:
+///   - cancel BEFORE launch  -> Unavailable, nothing launched (3.3.1)
+///   - cancel MID-RUN        -> kill entire tree (3.3.2), wait for
+///                              termination (3.3.3), capture CANCELLATION
+///                              EVIDENCE incl. OS-recorded EndUtc (3.3.4),
+///                              returned as Partial (payload + gap reason,
+///                              H-01.8.5) - never a fabricated success.
+///   - orphan prevention (3.3.5) pinned by test: the captured PID is dead
+///     after the call returns.
 ///
 /// Interpretation (test-failed vs build-failed vs discovery-failed)
 /// deliberately NOT here — that is H-03.2/H-03.9.
@@ -83,7 +83,7 @@ public class ProcessExecutionService
     /// <summary>
     /// Generic raw launch: caller owns the FULL argument list (the Core
     /// still owns working-dir validation, child-process lifetime, and
-    /// evidence capture). This is the shape tests/probes/H-03.2 use.
+    /// evidence capture).
     /// </summary>
     public async Task<ServiceResult<ProcessExecutionEvidence>> ExecuteRawAsync(
         ProcessLaunchInput input,
@@ -94,6 +94,12 @@ public class ProcessExecutionService
         {
             if (input is null) throw new ArgumentNullException(nameof(input));
             if (arguments is null) throw new ArgumentNullException(nameof(arguments));
+
+            // H-03.3.1 — cancellation observed BEFORE launch: nothing starts
+            if (cancellationToken.IsCancellationRequested)
+                return ServiceResult<ProcessExecutionEvidence>.Unavailable(
+                    "not started: cancellation observed before launch (H-03.3.1)",
+                    nameof(ProcessExecutionService));
 
             var workingDirectory = ValidateWorkingDirectory(input.WorkingDirectory);
 
@@ -140,20 +146,39 @@ public class ProcessExecutionService
             }
             catch (OperationCanceledException)
             {
-                // H-03.3 seed — terminate the child and wait (no orphans)
+                // H-03.3.2 — terminate the child tree
                 try { process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+
+                // H-03.3.3 — wait for termination (no orphans)
                 try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
 
-                return ServiceResult<ProcessExecutionEvidence>.Unavailable(
-                    "execution cancelled before completion",
-                    nameof(ProcessExecutionService));
+                // H-03.3.4 — capture CANCELLATION EVIDENCE (partial: the run
+                // started but never completed; EndUtc = OS-recorded kill time)
+                var evidence = new ProcessExecutionEvidence
+                {
+                    ProcessId = processId,
+                    StartUtc = startUtc,
+                    EndUtc = SafeDate(() =>
+                        new DateTimeOffset(process.ExitTime.ToUniversalTime())),
+                    ExitCode = SafeExitCode(process),
+                    Executable = input.Executable,
+                    Arguments = arguments.ToList(),
+                    WorkingDirectory = workingDirectory,
+                    TestProjectPath = input.TestProjectPath,
+                    ResultArtifactPath = input.ResultArtifactPath ?? string.Empty,
+                    TerminatedByCancellation = true
+                };
+
+                return ServiceResult<ProcessExecutionEvidence>.Partial(evidence,
+                    new[] { "execution cancelled before completion " +
+                            "(child process tree terminated and reaped — H-03.3)" });
             }
 
             // H-03.1.6/3.2.1 — observed end + REAL exit code
             DateTimeOffset? endUtc = SafeDate(() =>
                 new DateTimeOffset(process.ExitTime.ToUniversalTime()));
 
-            var evidence = new ProcessExecutionEvidence
+            var completed = new ProcessExecutionEvidence
             {
                 ProcessId = processId,
                 StartUtc = startUtc,
@@ -168,7 +193,7 @@ public class ProcessExecutionService
 
             // stdout/stderr stay in the result as raw provenance (H-03.7 owns
             // structured segmentation) - callers read them from the artifact.
-            return ServiceResult<ProcessExecutionEvidence>.Success(evidence);
+            return ServiceResult<ProcessExecutionEvidence>.Success(completed);
         }
         catch (Exception ex) when (ex is not ArgumentNullException and not ArgumentException)
         {
@@ -202,6 +227,8 @@ public class ProcessExecutionService
         catch (InvalidOperationException) { return null; }
         catch (System.ComponentModel.Win32Exception) { return null; }
     }
+
+    /// <summary>Int variant (Safe<T> where T : class refuses int — CS0452).</summary>
     private static int? SafeInt(Func<int> accessor)
     {
         try { return accessor(); }
