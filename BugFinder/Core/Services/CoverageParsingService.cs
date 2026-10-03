@@ -24,6 +24,17 @@ namespace ISCM.BugFinder.Core.Services;
 /// Stage 4.2.6  source artifact identity: SourceArtifactPath carried on
 ///              the document (hash lands in H-08.9).
 ///
+/// SHAPE CONTRACT (H-04.8.2 real-artifact evidence): the REAL coverlet
+/// XPlat output nests classes under &lt;packages&gt;/&lt;package&gt; — verified
+/// against a real 4 MB coverage.cobertura.xml artifact. Earlier fixtures
+/// assumed &lt;modules&gt;/&lt;module&gt;. ROOT-CAUSED DEFECT (found by H-04.8 gate
+/// verification): the parser previously selected ONLY "module" elements
+/// and returned NoModules on EVERY real coverlet artifact — the exact
+/// "shape assumption" defect class KBF-06-002 warns about. FIX: both
+/// "package" (real coverlet) and "module" containers are accepted as
+/// modules; NoModules fires only when NEITHER shape is present.
+/// Fixed at root, never bypassed.
+///
 /// Namespace-agnostic (LocalName matching) — coverlet emits default-
 /// namespace XML; explicit namespace handling would be brittle.
 /// Number parsing uses InvariantCulture (XML format is locale-independent).
@@ -61,14 +72,16 @@ public class CoverageParsingService
             return Fail(fullPath, CoverageParsingStatus.UnsupportedFormat,
                 "coverage root is missing the line-rate attribute — not a cobertura document");
 
+        // Module container: real coverlet emits packages/package;
+        // modules/module kept for compatibility. Neither => NoModules.
         var modules = root.Descendants()
-            .Where(e => e.Name.LocalName == "module")
+            .Where(e => e.Name.LocalName is "module" or "package")
             .Select(ParseModule)
             .ToList();
 
         if (modules.Count == 0)
             return Fail(fullPath, CoverageParsingStatus.NoModules,
-                "coverage document contains zero module elements");
+                "coverage document contains zero module/package elements");
 
         var totalLines = modules.Sum(m => m.Classes.Sum(c => c.AllLines.Count));
         var coveredLines = modules.Sum(m => m.Classes.Sum(c => c.AllLines.Count(l => l.IsCovered)));
@@ -89,6 +102,7 @@ public class CoverageParsingService
 
     // ---------- internals ----------
 
+    /// <summary>module/package containers share the class hierarchy shape.</summary>
     private static CoverageModule ParseModule(XElement moduleElement)
     {
         var classes = moduleElement.Descendants()

@@ -66,6 +66,39 @@ public class CoverageParsingTests : IDisposable
 </coverage>
 """;
 
+    // THE REAL COVERLET SHAPE — pinned from an actual coverage-evidence
+    // artifact (H-04.8.2 inspection). Classes nest under packages/package,
+    // NOT modules/module; class@name is fully qualified; @filename is a
+    // repo-relative normalized path; lines carry branch/condition attrs.
+    private const string RealCoverletXml = """
+<?xml version="1.0" encoding="utf-8"?>
+<coverage line-rate="0.5" branch-rate="0.5" version="1.9" timestamp="1791020861" lines-covered="1" lines-valid="2" branches-covered="0" branches-valid="0">
+  <sources>
+    <source>D:/Courses/C#-Project/ISCM/</source>
+  </sources>
+  <packages>
+    <package name="ISCM.Application" line-rate="0.5" branch-rate="0.5" complexity="2">
+      <classes>
+        <class name="ISCM.Domain.ValueObjects.SnapshotExportPackage" filename="ISCM.Application/Snapshots/SnapshotExportPackage.cs" line-rate="0.5" branch-rate="1" complexity="2">
+          <methods>
+            <method name="get_ExportFormat" signature="()" line-rate="0" branch-rate="1" complexity="1">
+              <lines>
+                <line number="22" hits="0" branch="False" />
+              </lines>
+            </method>
+            <method name="IsValid" signature="()" line-rate="1" branch-rate="1" complexity="1">
+              <lines>
+                <line number="60" hits="3" branch="False" />
+              </lines>
+            </method>
+          </methods>
+        </class>
+      </classes>
+    </package>
+  </packages>
+</coverage>
+""";
+
     // 4.2.1 — happy path parses everything
     [Fact]
     public void Parse_Cobertura_ParsesFullHierarchy()
@@ -97,6 +130,52 @@ public class CoverageParsingTests : IDisposable
         lines.First(l => l.LineNumber == 12).Hits.Should().Be(0);
         lines.First(l => l.LineNumber == 12).IsCovered.Should().BeFalse();   // instrumented, not hit
         lines.First(l => l.LineNumber == 12).ConditionCoverage.Should().Contain("50%");
+    }
+
+    // 4.8.2 REGRESSION — the REAL coverlet shape parses (root-caused fix:
+    // parser previously returned NoModules on every real artifact)
+    [Fact]
+    public void Parse_RealCoverletPackageShape_ParsesHierarchy()
+    {
+        var path = WriteArtifact(RealCoverletXml);
+        var doc = _service.Parse(path);
+
+        doc.Status.Should().Be(CoverageParsingStatus.Parsed);
+        doc.TotalModules.Should().Be(1);
+        doc.TotalClasses.Should().Be(1);
+        doc.TotalMethods.Should().Be(2);
+
+        var cls = doc.Modules.Single().Classes.Single();
+        cls.ClassName.Should().Be("ISCM.Domain.ValueObjects.SnapshotExportPackage");
+        cls.SourceFilePath.Should().Be("ISCM.Application/Snapshots/SnapshotExportPackage.cs");
+        doc.TotalLines.Should().Be(2);
+        doc.CoveredLines.Should().Be(1);
+    }
+
+    // 4.8.2 REGRESSION — real-shape per-line hits preserved (0 and >0)
+    [Fact]
+    public void Parse_RealCoverletPackageShape_PerLineHitsPreserved()
+    {
+        var path = WriteArtifact(RealCoverletXml);
+        var doc = _service.Parse(path);
+
+        var lines = doc.Modules[0].Classes[0].AllLines;
+        lines.First(l => l.LineNumber == 22).Hits.Should().Be(0);
+        lines.First(l => l.LineNumber == 22).IsCovered.Should().BeFalse();
+        lines.First(l => l.LineNumber == 60).Hits.Should().Be(3);
+        lines.First(l => l.LineNumber == 60).IsCovered.Should().BeTrue();
+    }
+
+    // 4.8.2 REGRESSION — NEITHER container => explicit NoModules (unchanged)
+    [Fact]
+    public void Parse_NoContainers_NoModules()
+    {
+        var path = WriteArtifact(
+            "<?xml version=\"1.0\"?><coverage line-rate=\"1\"><sources><source>D:/r/</source></sources></coverage>");
+        var doc = _service.Parse(path);
+
+        doc.Status.Should().Be(CoverageParsingStatus.NoModules);
+        doc.Reason.Should().Contain("module/package");
     }
 
     // 4.2.3/4.2.4 — hierarchy: module -> class -> methods
