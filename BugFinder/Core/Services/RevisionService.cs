@@ -1,14 +1,16 @@
-﻿using System.Diagnostics;
-using ISCM.BugFinder.Core.Models;
+﻿using ISCM.BugFinder.Core.Models;
 
 namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
-/// BF-10.2: Current Revision Service
-/// Enriches basic commit info with complete metadata, dirty state, and relationship to main branch
+/// BF-10.2: Current Revision Service — H-05.1 migration to the structured
+/// Git command layer (KBF-10-001): ArgumentList quoting, read-only verb
+/// whitelist, invocation evidence (5.1.5). Output parsing ('|') stays as
+/// H-05.2 scope.
 /// </summary>
 public class RevisionService
 {
+    private readonly GitCommandService _git = new();
     private readonly GitIntegrationService _gitService;
     private readonly string? _repositoryRootPath;
 
@@ -18,9 +20,7 @@ public class RevisionService
         _repositoryRootPath = _gitService.GetRepositoryRootPath();
     }
 
-    /// <summary>
-    /// BF-10.2 - Stage 1-4: Get complete revision snapshot
-    /// </summary>
+    /// <summary>BF-10.2 - Stage 1-4: Get complete revision snapshot.</summary>
     public RevisionSnapshotResult GetCurrentRevisionSnapshot()
     {
         if (string.IsNullOrEmpty(_repositoryRootPath))
@@ -36,7 +36,6 @@ public class RevisionService
         {
             var snapshot = new RevisionSnapshot();
 
-            // Basic Info (reuse GitIntegrationService)
             var basicInfo = _gitService.GetCurrentRevisionInfo();
             if (!basicInfo.IsGitRepository)
             {
@@ -56,43 +55,44 @@ public class RevisionService
             snapshot.AuthorName = basicInfo.AuthorName ?? string.Empty;
             snapshot.CommitTimestamp = basicInfo.CommitTimestamp ?? DateTime.MinValue;
 
-            // Enhanced Commit Metadata (FIXED: Combined arguments)
-            var commitDetails = ExecuteGitCommand("show", "-s --format=%H|%h|%an|%ae|%ai|%cn|%ce|%ci|%P|%s HEAD");
+            // Enhanced Commit Metadata (parsing is H-05.2 scope)
+            var commitDetails = RunGit("show",
+                new[] { "-s", "--format=%H|%h|%an|%ae|%ai|%cn|%ce|%ci|%P|%s", "HEAD" },
+                "BF-10.2:enhanced-metadata");
             var parts = commitDetails.Split('|');
             if (parts.Length >= 10)
             {
                 snapshot.AuthorEmail = parts[3];
                 snapshot.CommitterTimestamp = DateTime.TryParse(parts[7], out var ct) ? ct : null;
 
-                // Parent SHAs
                 if (!string.IsNullOrEmpty(parts[8]))
                 {
                     snapshot.ParentShas = parts[8].Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
                 }
             }
 
-            // Dirty State (uncommitted changes)
             snapshot.IsDirty = IsWorkingTreeDirty();
 
-            // Changed Files Count
             if (snapshot.IsDirty)
             {
-                var changedFiles = ExecuteGitCommand("diff", "--name-only HEAD");
+                var changedFiles = RunGit("diff",
+                    new[] { "--name-only", "HEAD" }, "BF-10.2:dirty-files");
                 if (!string.IsNullOrWhiteSpace(changedFiles))
                 {
-                    snapshot.ChangedFiles = changedFiles.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                    snapshot.ChangedFiles = changedFiles
+                        .Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
                     snapshot.FilesChangedCount = snapshot.ChangedFiles.Count;
                 }
             }
 
-            // Tags on this commit
-            var tags = ExecuteGitCommand("tag", "--points-at HEAD");
+            var tags = RunGit("tag",
+                new[] { "--points-at", "HEAD" }, "BF-10.2:tags");
             if (!string.IsNullOrWhiteSpace(tags))
             {
-                snapshot.TagsOnThisCommit = tags.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                snapshot.TagsOnThisCommit = tags
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
             }
 
-            // Distance to main/master
             CalculateDistanceToMain(snapshot);
 
             return new RevisionSnapshotResult
@@ -115,8 +115,7 @@ public class RevisionService
     {
         try
         {
-            // FIXED: Combined arguments
-            var status = ExecuteGitCommand("status", "--porcelain");
+            var status = RunGit("status", new[] { "--porcelain" }, "BF-10.2:dirty-state");
             return !string.IsNullOrWhiteSpace(status);
         }
         catch
@@ -129,25 +128,25 @@ public class RevisionService
     {
         try
         {
-            string mainBranch = "main";
-            // FIXED: Combined arguments
-            var revParse = ExecuteGitCommand("rev-parse", "--verify main");
+            // NOTE: main/master are INTERNAL fixed candidates — never user input.
+            var revParse = RunGit("rev-parse", new[] { "--verify", "main" }, "BF-10.2:main-verify");
+            var mainBranch = "main";
             if (string.IsNullOrWhiteSpace(revParse))
             {
                 mainBranch = "master";
-                revParse = ExecuteGitCommand("rev-parse", "--verify master");
+                revParse = RunGit("rev-parse", new[] { "--verify", "master" }, "BF-10.2:master-verify");
                 if (string.IsNullOrWhiteSpace(revParse))
                 {
                     return;
                 }
             }
 
-            // FIXED: Combined arguments
-            var aheadBehind = ExecuteGitCommand("rev-list", "--left-right --count HEAD...main");
-            // Retry with master if main failed implicitly or returned empty
+            var aheadBehind = RunGit("rev-list",
+                new[] { "--left-right", "--count", $"HEAD...{mainBranch}" }, "BF-10.2:ahead-behind");
             if (string.IsNullOrWhiteSpace(aheadBehind) && mainBranch == "main")
             {
-                aheadBehind = ExecuteGitCommand("rev-list", "--left-right --count HEAD...master");
+                aheadBehind = RunGit("rev-list",
+                    new[] { "--left-right", "--count", "HEAD...master" }, "BF-10.2:ahead-behind-master");
             }
 
             if (!string.IsNullOrWhiteSpace(aheadBehind))
@@ -172,30 +171,18 @@ public class RevisionService
         }
     }
 
-    private string ExecuteGitCommand(string command, string arguments)
+    /// <summary>Structured invocation (5.1.2/5.1.5) with the legacy verdict contract.</summary>
+    private string RunGit(string verb, IReadOnlyList<string> arguments, string purpose)
     {
-        var startInfo = new ProcessStartInfo
+        var evidence = _git.Run(new GitCommandRequest
         {
-            FileName = "git",
-            Arguments = $"{command} {arguments}",
+            Verb = verb,
+            Arguments = arguments,
             WorkingDirectory = _repositoryRootPath ?? Directory.GetCurrentDirectory(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            Purpose = purpose
+        });
 
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0 && !string.IsNullOrEmpty(error))
-        {
-            throw new InvalidOperationException($"Git command failed: {error}");
-        }
-
-        return output.Trim();
+        GitCommandService.ThrowIfFailed(evidence);
+        return evidence.StdOut.Trim();
     }
 }

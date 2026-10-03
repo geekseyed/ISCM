@@ -1,16 +1,24 @@
-﻿using System.Diagnostics;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using ISCM.BugFinder.Core.Models;
-using Microsoft.VisualBasic.FileIO;
 
 namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
 /// BF-10.6: Git Diff Analysis Service
-/// Parses git diff output to extract detailed line-by-line changes
+/// Parses git diff output to extract detailed line-by-line changes.
+///
+/// H-05.1 migration (KBF-10-001): every git invocation goes through the
+/// structured GitCommandService layer — ProcessStartInfo.ArgumentList
+/// quoting, read-only verb whitelist, global option guard, and
+/// GitCommandEvidence provenance (stages 5.1.1-5.1.5). Raw string
+/// interpolation ("--full-index -U999999 {from}..{to}") is structurally
+/// gone; user-sourced revisions validate as hex SHAs through the H-01.2
+/// RevisionId contract BEFORE entering an argument list (5.1.4).
+/// Diff-output PARSING is unchanged (H-05.2 owns parser integrity).
 /// </summary>
 public class GitDiffAnalysisService
 {
+    private readonly GitCommandService _git = new();
     private readonly string? _repositoryRootPath;
 
     public GitDiffAnalysisService(string? workingDirectory = null)
@@ -34,17 +42,26 @@ public class GitDiffAnalysisService
             throw new InvalidOperationException("Not a Git repository");
         }
 
+        // Stage 5.1.4 — fail-fast on invalid revision input (BEFORE the try:
+        // invalid input is meaningless, not absence — it must not be wrapped
+        // into "Failed to analyze diff" by the catch below, KBF-10-001)
+        var from = GitCommandSafety.ValidateRevision(fromSha, nameof(fromSha));
+        var to = GitCommandSafety.ValidateRevision(toSha, nameof(toSha));
+
         var result = new GitDiffResult
         {
-            FromSha = fromSha,
-            ToSha = toSha
+            FromSha = from.Value,
+            ToSha = to.Value
         };
 
         try
         {
-            // Execute git diff with unified format and full index
-            // -U999999 ensures we get all context lines for accurate parsing
-            var diffOutput = ExecuteGitCommand("diff", $"--full-index -U999999 {fromSha}..{toSha}");
+            // Structured invocation: -U999999 ensures all context lines for
+            // accurate parsing; the range token is built from VALIDATED hex
+            // SHAs (5.1.4) — argument list quoting is owned by the OS layer
+            var diffOutput = RunGit("diff",
+                new[] { "--full-index", "-U999999", $"{from.Value}..{to.Value}" },
+                "BF-10.6:full-diff");
 
             if (string.IsNullOrWhiteSpace(diffOutput))
             {
@@ -240,33 +257,22 @@ public class GitDiffAnalysisService
     }
 
     /// <summary>
-    /// Helper: Execute git command
+    /// Structured git invocation (H-05.1.2/5.1.5) with the legacy verdict
+    /// contract preserved: non-zero exit WITH stderr throws, everything
+    /// else returns trimmed stdout.
     /// </summary>
-    private string ExecuteGitCommand(string command, string arguments)
+    private string RunGit(string verb, IReadOnlyList<string> arguments, string purpose)
     {
-        var startInfo = new ProcessStartInfo
+        var evidence = _git.Run(new GitCommandRequest
         {
-            FileName = "git",
-            Arguments = $"{command} {arguments}",
+            Verb = verb,
+            Arguments = arguments,
             WorkingDirectory = _repositoryRootPath ?? Directory.GetCurrentDirectory(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            Purpose = purpose
+        });
 
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0 && !string.IsNullOrEmpty(error))
-        {
-            throw new InvalidOperationException($"Git command failed: {error}");
-        }
-
-        return output.Trim();
+        GitCommandService.ThrowIfFailed(evidence);
+        return evidence.StdOut.Trim();
     }
 
     /// <summary>

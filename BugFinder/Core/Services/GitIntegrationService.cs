@@ -1,15 +1,22 @@
-﻿using System.Diagnostics;
+﻿using ISCM.BugFinder.Core.Contracts;
 using ISCM.BugFinder.Core.Models;
 
 namespace ISCM.BugFinder.Core.Services;
 
 /// <summary>
-/// BF-10.1: Git Integration Service
-/// Detects repository, branch, commit, and working tree state using 'git' CLI.
-/// No external dependencies (LibGit2Sharp) required.
+/// BF-10.1: Git Integration Service — H-05.1 migration to the structured
+/// Git command layer (KBF-10-001 / stages 5.1.1-5.1.5):
+///   every invocation goes through GitCommandService (ArgumentList,
+///   read-only verb whitelist, option guard) — raw string interpolation
+///   is structurally gone; user-sourced revisions validate as hex SHAs
+///   through the H-01.2 RevisionId contract BEFORE entering an argument
+///   list (5.1.4); every invocation records GitCommandEvidence (5.1.5).
+/// Parsing of git OUTPUT (the '|' separator fragility, KBF-10-002)
+/// belongs to H-05.2 and is deliberately untouched here.
 /// </summary>
 public class GitIntegrationService
 {
+    private readonly GitCommandService _git = new();
     private readonly string? _repositoryRootPath;
 
     public GitIntegrationService(string? workingDirectory = null)
@@ -17,26 +24,13 @@ public class GitIntegrationService
         _repositoryRootPath = FindRepositoryRoot(workingDirectory ?? Directory.GetCurrentDirectory());
     }
 
-    /// <summary>
-    /// BF-10.1 - Stage 1: Repository Detection
-    /// Returns true if a Git repository is found in the directory hierarchy.
-    /// </summary>
-    public bool IsGitRepository()
-    {
-        return !string.IsNullOrEmpty(_repositoryRootPath);
-    }
+    /// <summary>BF-10.1 - Stage 1: Repository Detection.</summary>
+    public bool IsGitRepository() => !string.IsNullOrEmpty(_repositoryRootPath);
 
-    /// <summary>
-    /// BF-10.1 - Stage 1 & 2: Get Repository Root Path
-    /// </summary>
-    public string? GetRepositoryRootPath()
-    {
-        return _repositoryRootPath;
-    }
+    /// <summary>BF-10.1 - Stage 1 &amp; 2: Get Repository Root Path.</summary>
+    public string? GetRepositoryRootPath() => _repositoryRootPath;
 
-    /// <summary>
-    /// BF-10.2 - Stage 1-4: Get Current Revision Info
-    /// </summary>
+    /// <summary>BF-10.2 - Stage 1-4: Get Current Revision Info.</summary>
     public GitRepositoryInfo GetCurrentRevisionInfo()
     {
         if (string.IsNullOrEmpty(_repositoryRootPath))
@@ -53,13 +47,17 @@ public class GitIntegrationService
         try
         {
             // Current Branch
-            info.CurrentBranch = ExecuteGitCommand("rev-parse", "--abbrev-ref HEAD");
+            info.CurrentBranch = RunGit("rev-parse",
+                new[] { "--abbrev-ref", "HEAD" }, "BF-10.2:current-branch");
 
             // Current Commit SHA
-            info.CurrentCommitSha = ExecuteGitCommand("rev-parse", "HEAD");
+            info.CurrentCommitSha = RunGit("rev-parse",
+                new[] { "HEAD" }, "BF-10.2:current-sha");
 
-            // Commit Metadata
-            var commitDetails = ExecuteGitCommand("show", "-s --format=%H|%an|%ae|%ai|%s HEAD");
+            // Commit Metadata (parsing itself is H-05.2 scope)
+            var commitDetails = RunGit("show",
+                new[] { "-s", "--format=%H|%an|%ae|%ai|%s", "HEAD" }, "BF-10.2:commit-metadata");
+
             var parts = commitDetails.Split('|');
             if (parts.Length >= 5)
             {
@@ -73,15 +71,13 @@ public class GitIntegrationService
         }
         catch
         {
-            // Gracefully handle git command failures
+            // Gracefully handle git command failures (diagnostics: H-05.2)
         }
 
         return info;
     }
 
-    /// <summary>
-    /// BF-10.5 - Stage 2: Enumerate commits between two revisions
-    /// </summary>
+    /// <summary>BF-10.5 - Stage 2: Enumerate commits between two revisions.</summary>
     public List<CommitInfo> GetCommitsBetween(string fromSha, string toSha)
     {
         var commits = new List<CommitInfo>();
@@ -91,11 +87,16 @@ public class GitIntegrationService
             return commits;
         }
 
+        // Stage 5.1.4 — fail-fast on invalid revision input (OUTSIDE the try:
+        // invalid input is not absence; it must not be swallowed, KBF-10-001)
+        var from = GitCommandSafety.ValidateRevision(fromSha, nameof(fromSha));
+        var to = GitCommandSafety.ValidateRevision(toSha, nameof(toSha));
+
         try
         {
-            // Get commit log with file changes
-            var logFormat = "%H|%an|%ai|%s";
-            var logOutput = ExecuteGitCommand("log", $"--pretty=format:{logFormat} {fromSha}..{toSha}");
+            var logOutput = RunGit("log",
+                new[] { "--pretty=format:%H|%an|%ai|%s", $"{from.Value}..{to.Value}" },
+                "BF-10.5:commit-log");
 
             if (string.IsNullOrWhiteSpace(logOutput))
             {
@@ -122,11 +123,18 @@ public class GitIntegrationService
                         commit.Timestamp = timestamp;
                     }
 
-                    // Get changed files for this commit
-                    var filesOutput = ExecuteGitCommand("diff-tree", $"--no-commit-id --name-only -r {sha}");
-                    if (!string.IsNullOrWhiteSpace(filesOutput))
+                    // Changed files — the SHA came from git output, but the
+                    // guard is applied anyway (defense in depth, 5.1.4)
+                    if (RevisionId.TryParse(sha, out var validatedSha))
                     {
-                        commit.ChangedFiles = filesOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                        var filesOutput = RunGit("diff-tree",
+                            new[] { "--no-commit-id", "--name-only", "-r", validatedSha.Value },
+                            "BF-10.5:commit-files");
+                        if (!string.IsNullOrWhiteSpace(filesOutput))
+                        {
+                            commit.ChangedFiles = filesOutput
+                                .Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+                        }
                     }
 
                     commits.Add(commit);
@@ -135,15 +143,13 @@ public class GitIntegrationService
         }
         catch
         {
-            // Handle errors gracefully
+            // Handle errors gracefully (diagnostics: H-05.2)
         }
 
         return commits;
     }
 
-    /// <summary>
-    /// BF-10.6 - Stage 1: Get diff between two commits
-    /// </summary>
+    /// <summary>BF-10.6 - Stage 1: Get diff between two commits.</summary>
     public string GetDiff(string fromSha, string toSha, string? filePath = null)
     {
         if (string.IsNullOrEmpty(_repositoryRootPath))
@@ -151,16 +157,19 @@ public class GitIntegrationService
             return string.Empty;
         }
 
+        var from = GitCommandSafety.ValidateRevision(fromSha, nameof(fromSha));
+        var to = GitCommandSafety.ValidateRevision(toSha, nameof(toSha));
+
         try
         {
-            var args = $"diff {fromSha}..{toSha}";
+            var args = new List<string> { $"{from.Value}..{to.Value}" };
             if (!string.IsNullOrEmpty(filePath))
             {
-                args += $" -- {filePath}";
+                args.Add("--");   // pathspec separator — the path can never be parsed as an option
+                args.Add(GitCommandSafety.ValidatePath(filePath, nameof(filePath)));
             }
 
-            var parts = args.Split(' ', 2);
-            return ExecuteGitCommand(parts[0], parts.Length > 1 ? parts[1] : "");
+            return RunGit("diff", args, "BF-10.6:diff");
         }
         catch
         {
@@ -168,9 +177,7 @@ public class GitIntegrationService
         }
     }
 
-    /// <summary>
-    /// Helper: Find repository root by traversing up the directory tree
-    /// </summary>
+    /// <summary>Helper: Find repository root by traversing up the directory tree.</summary>
     private string? FindRepositoryRoot(string startPath)
     {
         var currentDir = new DirectoryInfo(startPath);
@@ -188,32 +195,21 @@ public class GitIntegrationService
     }
 
     /// <summary>
-    /// Helper: Execute git command and return output
+    /// Structured invocation (5.1.2/5.1.5) preserving the legacy verdict:
+    /// non-zero exit WITH stderr throws (previous contract), everything
+    /// else returns trimmed stdout.
     /// </summary>
-    private string ExecuteGitCommand(string command, string arguments)
+    private string RunGit(string verb, IReadOnlyList<string> arguments, string purpose)
     {
-        var startInfo = new ProcessStartInfo
+        var evidence = _git.Run(new GitCommandRequest
         {
-            FileName = "git",
-            Arguments = $"{command} {arguments}",
+            Verb = verb,
+            Arguments = arguments,
             WorkingDirectory = _repositoryRootPath ?? Directory.GetCurrentDirectory(),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            Purpose = purpose
+        });
 
-        using var process = new Process { StartInfo = startInfo };
-        process.Start();
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0 && !string.IsNullOrEmpty(error))
-        {
-            throw new InvalidOperationException($"Git command failed: {error}");
-        }
-
-        return output.Trim();
+        GitCommandService.ThrowIfFailed(evidence);
+        return evidence.StdOut.Trim();
     }
 }
